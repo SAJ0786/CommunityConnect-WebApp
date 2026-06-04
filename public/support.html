@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Support | Community Events</title>
+  <style>
+    :root{--teal:#0f766e;--teal-dark:#0b5d57;--bg:#f4f7f7;--card:#fff;--text:#1f2933;--muted:#6b7280;--border:#e5e7eb}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
+    .hero{background:linear-gradient(135deg,var(--teal),var(--teal-dark));color:white;padding:56px 20px 80px;text-align:center}
+    .hero img{width:90px;border-radius:18px;margin-bottom:14px;background:white}
+    .hero h1{margin:0;font-size:36px}
+    .hero p{margin:8px 0 0;opacity:.9}
+    .container{max-width:860px;margin:-48px auto 48px;padding:0 20px;position:relative;z-index:2}
+    .card{background:var(--card);border-radius:20px;padding:36px;box-shadow:0 18px 48px rgba(15,118,110,.12);border:1px solid var(--border)}
+    h2{color:var(--teal);border-left:4px solid var(--teal);padding-left:12px;margin-top:32px}
+    .notice{background:#ecfeff;border-left:4px solid var(--teal);padding:14px;border-radius:10px;margin:20px 0}
+    .footer{margin-top:32px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:13px}
+    a{color:var(--teal);font-weight:700}
+    @media(max-width:600px){.hero h1{font-size:28px}.card{padding:22px}}
+  </style>
+</head>
+<body>
+<header class="hero">
+  <img src="/logo.png" alt="Community Events"/>
+  <h1>Support</h1>
+  <p>Community Events Australia – Create · Share · Connect</p>
+</header>
+<main class="container">
+  <section class="card">
+    <h2>Contact Us</h2>
+    <p>If you need help, have a question, or want to report an issue, please contact us at:</p>
+    <p><strong>communityeventssydney@gmail.com</strong></p>
+    <p>We aim to respond within 2 business days.</p>
+
+    <h2>Common Questions</h2>
+
+    <p><strong>How do I add an event?</strong><br/>
+    Log in and tap <em>Add</em> in the bottom navigation bar. Fill in the event details and submit. A dedicated live stream room is automatically created for your event.</p>
+
+    <p><strong>What is the difference between Centre and Private events?</strong><br/>
+    Centre events are public community events hosted by an organisation. Private events are hosted by individuals. Both are visible to all logged-in users, but private event full addresses and host phone numbers are only shared by the host or admins.</p>
+
+    <p><strong>Can I add an event on behalf of someone else?</strong><br/>
+    Yes. Tick "I am adding this event on behalf of someone else" when filling in the event form.</p>
+
+    <p><strong>How do I go live?</strong><br/>
+    Tap the 🔴 Go Live button on your event card. Your stream will automatically start broadcasting to the Community Events YouTube channel. Viewers will see a "Watch on YouTube" button appear on the event card.</p>
+
+    <p><strong>Why is my event still showing as LIVE after I stopped streaming?</strong><br/>
+    The app automatically detects when a stream ends and updates the status within a few minutes via our webhook system. If an event remains stuck as live, contact us and we can manually reset it.</p>
+
+    <p><strong>Can multiple events be live at the same time?</strong><br/>
+    Yes. Each event has its own dedicated live stream room, so multiple events can go live simultaneously without interfering with each other.</p>
+
+    <p><strong>How do I sync events to my calendar?</strong><br/>
+    Go to the <em>Calendar</em> tab, select a date range and tap <em>Download Calendar File</em>. Open the .ics file on your device to import into any calendar app.</p>
+
+    <p><strong>How do I turn off email reminders?</strong><br/>
+    Go to <em>Profile</em> and toggle <em>Email Reminders</em> off.</p>
+
+    <p><strong>How do I hide an event temporarily?</strong><br/>
+    In My Events, tap the eye icon on any event to toggle its visibility. Hidden events are not shown in the main list and are excluded from all reminders and notifications.</p>
+
+    <p><strong>How do I use AI Search?</strong><br/>
+    Tap the AI Search tab and type or speak your query. You can ask things like "Jumu'ah near me this Friday" or "events for sisters this weekend" and the AI will find matching events.</p>
+
+    <p><strong>How do I delete my account?</strong><br/>
+    Go to <em>Profile → Delete My Account</em>. This will permanently delete your account and all events you created. See also: <a href="/delete-account.html">Account Deletion Policy</a>.</p>
+
+    <div class="notice">
+      <strong>Reporting Inappropriate Content:</strong> If you see an event with inappropriate or misleading information, please contact us at <strong>communityeventssydney@gmail.com</strong> with the event details.
+    </div>
+
+    <h2>User Guide</h2>
+    <p><a href="/docs/user-guide.html">📘 Open Full User Guide</a></p>
+
+    <div class="footer">
+      © <span id="yr"></span> Community Events Australia. All rights reserved.<br/>
+      <a href="/">← Back to App</a> &nbsp;|&nbsp;
+      <a href="/privacy.html">Privacy Policy</a> &nbsp;|&nbsp;
+      <a href="/terms.html">Terms of Use</a> &nbsp;|&nbsp;
+      <a href="/delete-account.html">Account Deletion</a>
+    </div>
+  </section>
+</main>
+<script>document.getElementById('yr').textContent=new Date().getFullYear()</script>
+</body>
+</html>

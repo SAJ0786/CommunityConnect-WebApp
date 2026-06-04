@@ -1,0 +1,211 @@
+/* ── Google Fonts — Nunito ────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+
+/* ── Design tokens ───────────────────────────────────────────────────────── */
+:root {
+  --red:        #c0392b;
+  --red-d:      #a93226;
+  --red-l:      #fdf2f1;
+  --red-m:      #fadbd8;
+  --green:      #27ae60;
+  --green-l:    #eafaf1;
+  --bg:         #f8f9fa;
+  --card:       #ffffff;
+  --text:       #1a1a2e;
+  --muted:      #7f8c8d;
+  --border:     #e8ecef;
+  --gold:       #f39c12;
+  --danger:     #e74c3c;
+  --font:       'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Alias teal → red so legacy teal refs pick up red */
+  --teal:       #c0392b;
+  --teal-dark:  #a93226;
+  --teal-l:     #fdf2f1;
+  --teal-light: #e8685a;
+  --orange:     #c0392b;
+  --orange-l:   #fdf2f1;
+
+  --shadow-sm:  0 2px 8px rgba(26,26,46,0.07);
+  --shadow-md:  0 4px 16px rgba(26,26,46,0.10);
+  --shadow-lg:  0 8px 28px rgba(26,26,46,0.13);
+  --radius-sm:  10px;
+  --radius-md:  14px;
+  --radius-lg:  18px;
+  --radius-xl:  22px;
+}
+
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font);
+  color: var(--text);
+}
+
+a { color: var(--red); text-decoration: none; font-weight: 700; }
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 18px;
+  margin: 10px 16px;
+  box-shadow: var(--shadow-md);
+  transition: box-shadow 0.2s;
+}
+.card:hover { box-shadow: var(--shadow-lg); }
+
+/* ── Badges ──────────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: var(--red-l);
+  color: var(--red);
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--font);
+}
+
+/* ── Forms ───────────────────────────────────────────────────────────────── */
+input:not([type='checkbox']):not([type='radio']), select, textarea {
+  width: 100%;
+  padding: 13px 15px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-top: 6px;
+  margin-bottom: 12px;
+  font-size: 15px;
+  font-family: var(--font);
+  background: var(--card);
+  color: var(--text);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  appearance: none;
+}
+input:not([type='checkbox']):not([type='radio']):focus,
+select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px rgba(192,57,43,0.12);
+}
+label {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--text);
+  font-family: var(--font);
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+button, .btn {
+  background: var(--red);
+  color: white;
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  font-weight: 800;
+  font-family: var(--font);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 4px 4px 4px 0;
+  font-size: 14px;
+  transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 2px 8px rgba(192,57,43,0.28);
+}
+button:hover { opacity: 0.92; box-shadow: 0 4px 14px rgba(192,57,43,0.38); }
+button:active { transform: scale(0.97); }
+button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
+
+.btn-primary { background: var(--red); color: white; }
+
+.btn-light {
+  background: var(--red-l);
+  color: var(--red);
+  border: 1px solid var(--red-m);
+  box-shadow: none;
+}
+.btn-light:hover { background: var(--red-m); box-shadow: none; }
+
+.btn-danger {
+  background: var(--danger);
+  color: white;
+  box-shadow: 0 2px 8px rgba(231,76,60,0.28);
+}
+
+.btn-muted {
+  background: #f0f2f5;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+.btn-muted:hover { background: #e4e7eb; box-shadow: none; }
+
+/* ── Layout helpers ──────────────────────────────────────────────────────── */
+.row   { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.three { display: grid; grid-template-columns: 1fr 1fr auto; gap: 12px; align-items: start; }
+.small { color: var(--muted); font-size: 13px; font-family: var(--font); }
+.center { text-align: center; }
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+.notice {
+  background: var(--green-l);
+  border-left: 4px solid var(--green);
+  padding: 13px 15px;
+  border-radius: var(--radius-md);
+  margin: 12px 0;
+  font-size: 14px;
+  color: var(--green);
+}
+.error {
+  background: var(--red-l);
+  color: var(--red-d);
+  padding: 12px 15px;
+  border-radius: var(--radius-md);
+  margin: 10px 0;
+  border: 1px solid var(--red-m);
+  font-size: 14px;
+}
+.success {
+  background: var(--green-l);
+  color: var(--green);
+  padding: 12px 15px;
+  border-radius: var(--radius-md);
+  margin: 10px 0;
+  border: 1px solid #a9dfbf;
+  font-size: 14px;
+}
+
+/* ── Auth card ───────────────────────────────────────────────────────────── */
+.auth-card {
+  max-width: 480px;
+  margin: 24px auto;
+  background: var(--card);
+  border-radius: var(--radius-xl);
+  padding: 32px 28px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--red); }
+
+/* ── Live stream pulse animation ─────────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 2px 8px rgba(192,57,43,0.4); }
+  50%       { box-shadow: 0 2px 20px rgba(192,57,43,0.8); }
+}

@@ -1,0 +1,85 @@
+import {
+  addDoc, collection, deleteDoc, doc, getDocs,
+  orderBy, query, serverTimestamp, updateDoc, where
+} from 'firebase/firestore';
+import { db } from '../firebase/firebase';
+
+export async function createEvent(event, user, profile) {
+  return addDoc(collection(db, 'events'), {
+    ...event,
+    status: 'active',
+    hidden: false,
+    createdByUserId: user.uid,
+    createdByUserEmail: user.email,
+    submittedByName: profile?.fullName || user.displayName || user.email,
+    submittedByRole: profile?.role || 'user',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateEvent(id, event) {
+  return updateDoc(doc(db, 'events', id), {
+    ...event,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteEvent(id) {
+  return deleteDoc(doc(db, 'events', id));
+}
+
+// Home page + AI Search — exclude hidden events
+export async function getActiveEvents() {
+  const snap = await getDocs(
+    query(
+      collection(db, 'events'),
+      where('status', '==', 'active'),
+      orderBy('eventDate', 'asc')
+    )
+  );
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(e => !e.hidden);
+}
+
+// My Events — all events by this user including hidden ones
+export async function getMyEvents(uid) {
+  const snap = await getDocs(
+    query(
+      collection(db, 'events'),
+      where('status', '==', 'active'),
+      where('createdByUserId', '==', uid),
+      orderBy('eventDate', 'asc')
+    )
+  );
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function goLive(id, roomCode) {
+  return updateDoc(doc(db, 'events', id), {
+    isLive:        true,
+    liveUrl:       roomCode,
+    liveRoomCode:  roomCode,
+    liveStartedAt: new Date().toISOString(),
+    updatedAt:     serverTimestamp(),
+  });
+}
+
+export async function endLive(id) {
+  return updateDoc(doc(db, 'events', id), {
+    isLive:       false,
+    liveUrl:      null,
+    liveWatchUrl: null,
+    liveEndedAt:  new Date().toISOString(),
+    updatedAt:    serverTimestamp(),
+  });
+}
+
+export async function toggleEventVisibility(id, hidden) {
+  return updateDoc(doc(db, 'events', id), {
+    hidden,
+    hiddenAt: hidden ? serverTimestamp() : null,
+    updatedAt: serverTimestamp(),
+  });
+}

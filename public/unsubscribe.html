@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Unsubscribe — Community Events</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f0f9f7; min-height: 100vh; display: flex;
+      align-items: center; justify-content: center; padding: 24px; }
+    .card { background: white; border-radius: 20px; padding: 36px 28px;
+      max-width: 420px; width: 100%; box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+      text-align: center; }
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h1 { font-size: 22px; color: #1f2937; margin-bottom: 10px; }
+    p { font-size: 14px; color: #6b7280; line-height: 1.6; margin-bottom: 20px; }
+    button { width: 100%; padding: 13px; border-radius: 12px; font-size: 15px;
+      font-weight: 600; cursor: pointer; border: none; margin-bottom: 10px; }
+    .btn-unsub { background: #dc2626; color: white; }
+    .btn-back  { background: #f3f4f6; color: #374151; }
+    .success { background: #dcfce7; color: #15803d; padding: 14px;
+      border-radius: 12px; font-size: 14px; margin-top: 8px; display: none; }
+    .error { background: #fee2e2; color: #dc2626; padding: 14px;
+      border-radius: 12px; font-size: 14px; margin-top: 8px; display: none; }
+    a { color: #0f766e; text-decoration: none; font-size: 13px; }
+  </style>
+</head>
+<body>
+<div class="card" id="mainCard">
+  <div class="icon">🔕</div>
+  <h1>Unsubscribe from Reminders</h1>
+  <p>You will no longer receive event reminder emails from Community Events Australia. You can re-enable reminders anytime from your profile in the app.</p>
+  <button class="btn-unsub" onclick="unsubscribe()">Yes, Unsubscribe Me</button>
+  <button class="btn-back" onclick="window.location.href='https://communityevents.siza.info'">← Back to App</button>
+  <div class="success" id="successMsg">✅ You have been unsubscribed. You will no longer receive reminder emails.</div>
+  <div class="error"   id="errorMsg">❌ Something went wrong. Please try again or contact communityeventssydney@gmail.com</div>
+</div>
+
+<script>
+  const uid = new URLSearchParams(window.location.search).get('uid');
+
+  async function unsubscribe() {
+    if (!uid) {
+      document.getElementById('errorMsg').style.display = 'block';
+      document.getElementById('errorMsg').textContent = '❌ Invalid unsubscribe link. Please contact communityeventssydney@gmail.com';
+      return;
+    }
+    document.querySelector('.btn-unsub').textContent = 'Processing…';
+    document.querySelector('.btn-unsub').disabled = true;
+    try {
+      const res = await fetch(`https://australia-southeast1-community-event-8b639.cloudfunctions.net/unsubscribeEmail?uid=${uid}`);
+      if (res.ok) {
+        document.getElementById('successMsg').style.display = 'block';
+        document.querySelector('.btn-unsub').style.display  = 'none';
+        document.querySelector('.btn-back').textContent = '← Back to App';
+      } else throw new Error('Server error');
+    } catch (e) {
+      document.getElementById('errorMsg').style.display  = 'block';
+      document.querySelector('.btn-unsub').textContent   = 'Yes, Unsubscribe Me';
+      document.querySelector('.btn-unsub').disabled      = false;
+    }
+  }
+</script>
+</body>
+</html>

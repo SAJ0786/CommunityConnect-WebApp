@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Install Community Events App</title>
+  <style>
+    :root {
+      --teal: #0f766e;
+      --teal-dark: #0b5d57;
+      --bg: #f4f7f7;
+      --card: #fff;
+      --text: #1f2933;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Hero ── */
+    .hero {
+      background: linear-gradient(135deg, var(--teal), var(--teal-dark));
+      padding: 48px 24px 80px;
+      text-align: center;
+      color: white;
+    }
+    .hero img {
+      width: 100px; height: 100px;
+      border-radius: 24px;
+      background: white;
+      object-fit: contain;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.2);
+    }
+    .hero h1 { font-size: 32px; font-weight: 900; margin-bottom: 8px; }
+    .hero p  { font-size: 16px; opacity: .9; }
+
+    /* ── Container ── */
+    .container {
+      max-width: 520px;
+      margin: -48px auto 48px;
+      padding: 0 20px;
+    }
+
+    /* ── Card ── */
+    .card {
+      background: white;
+      border-radius: 24px;
+      padding: 28px;
+      box-shadow: 0 16px 48px rgba(15,118,110,.12);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      font-size: 18px; font-weight: 900;
+      color: var(--teal); margin-bottom: 6px;
+    }
+    .card p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+    /* ── QR code ── */
+    .qr-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      padding: 24px 0 8px;
+    }
+    #qrcode canvas, #qrcode img {
+      border-radius: 16px;
+      box-shadow: 0 4px 16px rgba(0,0,0,.1);
+    }
+    .qr-label {
+      font-size: 13px; color: var(--muted); text-align: center;
+    }
+
+    /* ── App URL ── */
+    .url-box {
+      display: flex; gap: 8px; margin: 14px 0 4px;
+    }
+    .url-box input {
+      flex: 1; padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px; font-size: 13px;
+      color: var(--text); background: #f9fafb;
+    }
+    .url-box button {
+      padding: 12px 18px;
+      background: var(--teal); color: white;
+      border: none; border-radius: 12px;
+      font-weight: 900; font-size: 13px;
+      cursor: pointer; white-space: nowrap;
+    }
+    .url-box button:active { opacity: .85; }
+
+    /* ── Open button ── */
+    .open-btn {
+      display: block; width: 100%;
+      padding: 16px; text-align: center;
+      background: var(--teal); color: white;
+      border: none; border-radius: 16px;
+      font-size: 16px; font-weight: 900;
+      text-decoration: none; cursor: pointer;
+      margin: 16px 0 0;
+      box-shadow: 0 4px 16px rgba(15,118,110,.3);
+    }
+
+    /* ── Steps ── */
+    .steps { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
+    .step  { display: flex; gap: 14px; align-items: flex-start; }
+    .step-num {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: var(--teal); color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 13px; flex-shrink: 0;
+    }
+    .step-text { font-size: 14px; line-height: 1.6; padding-top: 4px; }
+    .step-text strong { color: var(--text); }
+
+    /* ── Platform tabs ── */
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab {
+      flex: 1; padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 12px; font-size: 13px; font-weight: 700;
+      background: white; color: var(--muted);
+      cursor: pointer; text-align: center;
+    }
+    .tab.active { background: var(--teal); color: white; border-color: var(--teal); }
+
+    /* ── Features ── */
+    .features {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-top: 14px;
+    }
+    .feature {
+      background: #f0fdf4;
+      border-radius: 12px; padding: 12px;
+      font-size: 13px; color: var(--text);
+    }
+    .feature .icon { font-size: 20px; margin-bottom: 4px; }
+    .feature .name { font-weight: 800; }
+
+    .copied { color: #059669; font-size: 12px; margin-top: 4px; display: none; }
+    .copied.show { display: block; }
+
+    @media(max-width: 480px) {
+      .hero h1 { font-size: 26px; }
+      .card { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="hero">
+  <img src="/logo.png" alt="Community Events"/>
+  <h1>Community Events</h1>
+  <p>Create · Share · Connect</p>
+</div>
+
+<div class="container">
+
+  <!-- QR + URL card -->
+  <div class="card">
+    <h2>📲 Install the App</h2>
+    <p>Scan the QR code with your phone camera, or tap the button to open directly.</p>
+
+    <div class="qr-wrap">
+      <div id="qrcode"></div>
+      <p class="qr-label">Scan with your phone camera to open</p>
+    </div>
+
+    <div class="url-box">
+      <input type="text" id="appUrl" readonly/>
+      <button onclick="copyUrl()">Copy</button>
+    </div>
+    <p class="copied" id="copiedMsg">✓ Copied to clipboard!</p>
+
+    <a class="open-btn" id="openBtn" href="#" target="_blank">
+      Open App →
+    </a>
+  </div>
+
+  <!-- Install instructions -->
+  <div class="card">
+    <h2>⬇️ How to Install</h2>
+    <p>This app installs directly on your phone — no App Store needed.</p>
+
+    <div class="tabs" style="margin-top: 16px;">
+      <div class="tab active" onclick="showTab('ios', this)">🍎 iPhone</div>
+      <div class="tab"        onclick="showTab('android', this)">🤖 Android</div>
+    </div>
+
+    <!-- iOS steps -->
+    <div id="ios-steps" class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Open the app link in <strong>Safari</strong> (not Chrome)</div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Tap the <strong>Share button</strong> at the bottom of Safari (the box with an arrow pointing up)</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Scroll down and tap <strong>"Add to Home Screen"</strong></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Tap <strong>Add</strong> — the app icon appears on your home screen</div>
+      </div>
+    </div>
+
+    <!-- Android steps -->
+    <div id="android-steps" class="steps" style="display:none">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-text">Open the app link in <strong>Chrome</strong></div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-text">Tap the <strong>three-dot menu</strong> (⋮) at the top right</div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-text">Tap <strong>"Add to Home Screen"</strong> or <strong>"Install App"</strong></div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-text">Tap <strong>Install</strong> — the app icon appears on your home screen</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Features -->
+  <div class="card">
+    <h2>✨ What you get</h2>
+    <div class="features">
+      <div class="feature">
+        <div class="icon">🏠</div>
+        <div class="name">Browse Events</div>
+        <div>See all upcoming community events</div>
+      </div>
+      <div class="feature">
+        <div class="icon">✦</div>
+        <div class="name">AI Search</div>
+        <div>Find events by asking naturally</div>
+      </div>
+      <div class="feature">
+        <div class="icon">📅</div>
+        <div class="name">Calendar Sync</div>
+        <div>Add events to your phone calendar</div>
+      </div>
+      <div class="feature">
+        <div class="icon">🔔</div>
+        <div class="name">Reminders</div>
+        <div>Daily email for tomorrow's events</div>
+      </div>
+      <div class="feature">
+        <div class="icon">➕</div>
+        <div class="name">Add Events</div>
+        <div>Share your own events easily</div>
+      </div>
+      <div class="feature">
+        <div class="icon">📍</div>
+        <div class="name">Nearby</div>
+        <div>Find events close to you</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- QRCode.js library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  // Use current domain if deployed, fallback to Firebase URL
+  const APP_URL = window.location.hostname === 'localhost'
+    ? 'https://ce.sajjadzaheer.com'
+    : window.location.origin;
+
+  // Set URL input and open button
+  document.getElementById('appUrl').value = APP_URL;
+  document.getElementById('openBtn').href = APP_URL;
+
+  // Generate QR code
+  new QRCode(document.getElementById('qrcode'), {
+    text:           APP_URL,
+    width:          200,
+    height:         200,
+    colorDark:      '#0f766e',
+    colorLight:     '#ffffff',
+    correctLevel:   QRCode.CorrectLevel.H
+  });
+
+  function copyUrl() {
+    navigator.clipboard.writeText(APP_URL).then(() => {
+      const msg = document.getElementById('copiedMsg');
+      msg.classList.add('show');
+      setTimeout(() => msg.classList.remove('show'), 2500);
+    });
+  }
+
+  function showTab(platform, el) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('ios-steps').style.display     = platform === 'ios'     ? 'flex' : 'none';
+    document.getElementById('android-steps').style.display = platform === 'android' ? 'flex' : 'none';
+  }
+</script>
+</body>
+</html>
