@@ -95,3 +95,4 @@ EMAIL_FROM     noreply@yourdomain.com
 3. ✅ Test login, add event, search, calendar export, profile
 4. 🔜 Add app to Google Play Store (Capacitor/TWA)
 5. 🔜 Add app to Apple App Store (Capacitor)
+"# community-events-app" 
