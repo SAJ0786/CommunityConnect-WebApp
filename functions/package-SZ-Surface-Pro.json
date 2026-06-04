@@ -1,0 +1,10 @@
+{
+  "name": "community-events-functions",
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "latest",
+    "firebase-functions": "latest"
+"engines":   "node": "20"
+
+  }
+}
