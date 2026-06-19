@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { onAuthStateChanged, signInAnonymously, getRedirectResult, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
 import { auth, firebaseConfigured } from './firebase/firebase';
 import { ensureUserProfile } from './services/userService';
-import { deleteEvent, getActiveEvents } from './services/eventService';
+import { deleteEvent, getActiveEvents, listenLiveEvents } from './services/eventService';
 import { requestNotificationPermission } from './services/notificationService';
 import Header from './components/Header';
 import AuthPage from './pages/AuthPage';
@@ -19,6 +19,10 @@ import StreamCard from './pages/StreamCard';
 import Favourites from './pages/Favourites';
 import AddSeriesEvents from './pages/AddSeriesEvents';
 import BulkShare from './pages/BulkShare';
+import InstallApp from './pages/InstallApp';
+import CalendarView from './pages/CalendarView';
+import BottomNav from './components/BottomNav';
+import AppWalkthrough from './components/AppWalkthrough';
 import ToastContainer from './components/Toast';
 import OnboardingSlides from './components/OnboardingSlides';
 import ShareSheet from './components/ShareSheet';
@@ -38,6 +42,12 @@ function MissingConfig() {
 
 export default function App() {
   const [page, setPage]                 = useState('home');
+
+  // Scroll to top whenever the active page changes
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, [page]);
+  const [focusEventId, setFocusEventId] = useState(null);
   const [user, setUser]                 = useState(null);
   const [profile, setProfile]           = useState(null);
   const [events, setEvents]             = useState([]);
@@ -46,6 +56,9 @@ export default function App() {
   const [authMode, setAuthMode]         = useState(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [activeStream,   setActiveStream]   = useState(null); // { event, role }
+  const onStreamStart = useCallback((event, channel, role, hostUrl, nativeStream) => {
+    setActiveStream({ event, role, hostUrl, nativeStream, show: true });
+  }, []);
   const [savedIds,       setSavedIds]       = useState([]); // null | 'guest' | 'user'
   const [authError, setAuthError]       = useState('');
   const [redirectChecked, setRedirectChecked] = useState(false);
@@ -53,14 +66,14 @@ export default function App() {
   const processingUidRef       = useRef(null);
   const registrationInProgress = useRef(false); // true while AuthPage collects name/email
 
-  const loadEvents = useCallback(async () => {
+  const loadEvents = useCallback(async (guestMode = authMode === 'guest') => {
     try {
-      setEvents(await getActiveEvents());
+      setEvents(await getActiveEvents(guestMode));
     } catch (e) {
       console.error('Failed to load events:', e);
       setEvents([]);
     }
-  }, []);
+  }, [authMode]);
 
   const resetAuthState = useCallback(() => {
     setUser(null);
@@ -68,6 +81,36 @@ export default function App() {
     setEvents([]);
     setAuthMode(null);
   }, []);
+
+  // ── Real-time sync for isLive status ──────────────────────────────────────
+  // Keeps "LIVE NOW" / "Watch on YouTube" badges current across all open apps
+  // — e.g. when another host ends their stream, viewers see it disappear
+  // within seconds without needing to reload.
+  useEffect(() => {
+    if (authMode !== 'user') return undefined;
+    const unsub = listenLiveEvents((liveEvents) => {
+      const liveById = new Map(liveEvents.map(e => [e.id, e]));
+      setEvents(prev => prev.map(ev => {
+        if (liveById.has(ev.id)) {
+          return { ...ev, ...liveById.get(ev.id) }; // still live — sync latest fields
+        }
+        if (ev.isLive) {
+          // Was live, no longer in the live set — clear it
+          return { ...ev, isLive: false, liveUrl: null, liveWatchUrl: null };
+        }
+        return ev;
+      }));
+    });
+    return unsub;
+  }, [authMode]);
+
+  useEffect(() => {
+    if (authMode !== 'guest') return undefined;
+    const timer = window.setInterval(() => {
+      loadEvents(true);
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [authMode, loadEvents]);
 
   const buildFallbackProfile = useCallback((authenticatedUser) => ({
     uid: authenticatedUser.uid,
@@ -117,7 +160,7 @@ export default function App() {
       setProfile(p);
       setAuthMode('user');
       try { localStorage.removeItem('socialLoginStarted'); } catch (_) {}
-      await loadEvents();
+      await loadEvents(false);
       setPage('home');
       // Load saved event IDs
       try {
@@ -200,7 +243,7 @@ export default function App() {
         setProfile(null);
         setAuthMode('guest');
         setAuthError('');
-        await loadEvents();
+        await loadEvents(true);
         setLoading(false);
         // Show onboarding to guests on first visit
         try {
@@ -233,40 +276,8 @@ export default function App() {
       await processAuthenticatedUser(u);
     });
 
-    // Handle redirect result — onAuthStateChanged is the source of truth,
-    // this only supplements it for the redirect flow
-    getRedirectResult(auth)
-      .then(async (result) => {
-        if (cancelled) return;
-
-        if (result?.user) {
-          console.log('Redirect result user:', result.user.uid);
-          try { localStorage.removeItem('socialLoginStarted'); } catch (_) {}
-          await processAuthenticatedUser(result.user);
-          return;
-        }
-
-        // If a redirect was started but returned no user
-        try {
-          const raw = localStorage.getItem('socialLoginStarted');
-          if (raw && !auth.currentUser) {
-            const started = JSON.parse(raw);
-            if (Date.now() - Number(started.at || 0) < 10 * 60 * 1000) {
-              setAuthError(
-                'Social sign-in returned without a user. This usually means Firebase Auth redirect is not configured correctly for this domain.'
-              );
-            }
-          }
-        } catch (_) {}
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        console.warn('Redirect result error:', e.code, e.message);
-        setAuthError(e.message || 'Login failed after redirect.');
-      })
-      .finally(() => {
-        if (!cancelled) setRedirectChecked(true);
-      });
+    // Social login redirect handling removed — app now uses phone-only auth
+    setRedirectChecked(true);
 
     return () => {
       cancelled = true;
@@ -320,7 +331,7 @@ export default function App() {
       customEventType:     event.customEventType     || '',
       eventTypeDisplay:    event.eventTypeDisplay    || event.eventType || '',
       eventSubject:        event.eventSubject        || '',
-      audienceType:        event.audienceType        || 'Mixed Audience',
+      audienceType:        event.audienceType        || 'Family Event',
       organiserType:       event.organiserType       || 'private',
       isOnBehalfOf:        !!event.isOnBehalfOf,
       hostContactOptional: event.hostContactOptional || '',
@@ -348,14 +359,6 @@ export default function App() {
 
   if (loading) return (
     <div className="app-shell">
-      {/* ── Full-screen stream card ── */}
-      {activeStream && (
-        <StreamCard
-          event={activeStream.event}
-          role={activeStream.role}
-          onClose={() => setActiveStream(null)}
-        />
-      )}
       <Header />
       <div className="card center" style={{ marginTop: 40 }}>
         <p style={{ color: 'var(--muted)' }}>Loading…</p>
@@ -383,8 +386,7 @@ export default function App() {
   );
 
   const isGuest    = authMode === 'guest';
-  const onStreamStart = (event, channel, role, hostUrl) => setActiveStream({ event, role, hostUrl, show: true });
-  const shared     = { user, profile, events, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart };
+  const shared     = { user, profile, events, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId };
   const guestPage  = ['home','search','calendar'].includes(page) ? page : 'home';
   const activePage = isGuest ? guestPage : page;
 
@@ -392,14 +394,27 @@ export default function App() {
     <div className="app-shell">
       <ToastContainer />
 
-      {/* ── Full-screen stream card — persists across navigation ── */}
-      {activeStream?.show && (
+      {/* ── Full-screen stream card — stays MOUNTED while active so the   ── */}
+      {/* ── camera + WebSocket session persist when minimised.            ── */}
+      {activeStream && (
         <StreamCard
           event={activeStream.event}
           role={activeStream.role}
-          hostUrl={activeStream.hostUrl}
-          onClose={() => setActiveStream(null)}
+          nativeStream={activeStream.nativeStream}
+          hidden={!activeStream.show}
+          onClose={() => { setActiveStream(null); loadEvents(); }}
           onMinimise={() => setActiveStream(s => ({ ...s, show: false }))}
+          onEnded={async (endedId) => {
+            // Optimistically flip the card to "not live" instantly so the UI
+            // updates immediately, without waiting for Firestore to propagate.
+            setEvents(prev => prev.map(ev =>
+              ev.id === endedId
+                ? { ...ev, isLive: false, liveUrl: null, liveWatchUrl: null }
+                : ev
+            ));
+            // Then re-fetch from server to stay authoritative.
+            await loadEvents();
+          }}
         />
       )}
 
@@ -432,6 +447,8 @@ export default function App() {
         user={user} profile={profile}
         page={activePage} setPage={setPage}
         isGuest={isGuest}
+        events={events}
+        onOpenEvent={(id) => { setFocusEventId(id); setPage('home'); }}
       />
 
       {!isGuest && authError && (
@@ -444,6 +461,23 @@ export default function App() {
 
       <div style={{ display:'flex', alignItems:'flex-start', maxWidth:1200, margin:'0 auto' }}>
         <div style={{ flex:1, minWidth:0 }}>
+          {/* Prominent back button on all sub-pages (not Home) */}
+          {activePage !== 'home' && (
+            <div style={{ padding:'10px 16px 4px' }}>
+              <button onClick={() => setPage(activePage === 'edit' ? 'my' : 'home')}
+                style={{
+                  display:'inline-flex', alignItems:'center', gap:8,
+                  background:'white', border:'1px solid var(--border,#e8edec)',
+                  borderRadius:12, padding:'9px 16px 9px 12px', cursor:'pointer',
+                  fontSize:14, fontWeight:800, color:'var(--teal,#0f766e)',
+                  boxShadow:'0 2px 8px rgba(0,0,0,0.05)',
+                }}>
+                <span style={{ fontSize:20, lineHeight:1 }}>‹</span>
+                Back
+              </button>
+            </div>
+          )}
+
           {activePage === 'home'      && <Home      {...shared} />}
           {activePage === 'search'    && <AISearch   {...shared} />}
 
@@ -453,10 +487,10 @@ export default function App() {
                   <p style={{ fontSize: 40, margin: '0 0 12px' }}>🔒</p>
                   <h3 style={{ margin: '0 0 8px' }}>Login Required</h3>
                   <p className="small" style={{ margin: '0 0 16px', color: 'var(--muted)' }}>
-                    Please sign in to sync community events to your calendar.
+                    Please sign in to view and sync community events to your calendar.
                   </p>
                 </div>
-              : <CalendarSync user={user} />
+              : <CalendarView {...shared} />
           )}
 
           {!isGuest && activePage === 'add'        && <AddEvent      user={user} profile={profile} onSaved={afterSave} setPage={setPage} events={events} initialEvent={editingEvent?.id === undefined ? editingEvent : null} />}
@@ -467,6 +501,7 @@ export default function App() {
           {!isGuest && activePage === 'admin'      && <AdminDashboard {...shared} />}
           {!isGuest && activePage === 'series'     && <AddSeriesEvents user={user} profile={profile} setPage={setPage} />}
           {!isGuest && activePage === 'bulkshare'  && <BulkShare     events={events} profile={profile} user={user} />}
+          {!isGuest && activePage === 'install'    && <InstallApp />}
 
           {isGuest && !['home','search','calendar'].includes(page) && (
             <div className="card center" style={{ margin: '40px 16px' }}>
@@ -511,6 +546,11 @@ export default function App() {
         .desktop-sidebar { display: none; width: 280px; flex-shrink: 0; position: sticky; top: 88px; align-self: flex-start; }
         @media (min-width: 900px) { .desktop-sidebar { display: block; } }
       `}</style>
+
+      <BottomNav page={activePage} setPage={setPage} isGuest={isGuest} />
+
+      {/* First-time walkthrough */}
+      <AppWalkthrough isGuest={isGuest} userId={user?.uid} />
     </div>
   );
 }

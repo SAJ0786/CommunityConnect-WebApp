@@ -7,16 +7,13 @@ import { auth } from '../firebase/firebase';
 const AUTH_ITEMS = [
   { key: 'home',       label: '🏠 Home' },
   { key: 'search',     label: '🤖 AI Search' },
-  { key: 'add',        label: '➕ Add Event' },
   { key: 'series',     label: '📅 Add Series Events' },
-  { key: 'favourites', label: '⭐ Favourites' },
-  { key: 'calendar',   label: '📅 Calendar Sync' },
-  { key: 'my',         label: '📋 My Events' },
+  { key: 'bulkshare',  label: '📤 Bulk Share Events', adminOnly: true },
+  { key: 'calendar',   label: '📅 Calendar' },
   { key: 'profile',    label: '👤 Profile & Settings' },
 ];
 const ADMIN_ITEMS = [
   { key: 'admin',     label: '🛠 Admin Dashboard' },
-  { key: 'bulkshare', label: '📤 Bulk Share Events' },
 ];
 const GUEST_ITEMS = [
   { key: 'home',   label: '🏠 Home' },
@@ -50,11 +47,13 @@ function MinimalHeader() {
   );
 }
 
-export default function Header({ user, profile, page, setPage, isGuest, showOnly = false }) {
+export default function Header({ user, profile, page, setPage, isGuest, showOnly = false, events = [], onOpenEvent }) {
   if (showOnly) return <MinimalHeader />;
 
   const [open, setOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
   const menuRef = useRef(null);
+  const notifRef = useRef(null);
 
   const displayName = profile?.fullName || user?.displayName || '';
   const email       = user?.email || '';
@@ -62,99 +61,131 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
   useEffect(() => {
     const handler = e => {
       if (open && menuRef.current && !menuRef.current.contains(e.target)) setOpen(false);
+      if (notifOpen && notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [open]);
+  }, [open, notifOpen]);
 
   const navTo = key => { setPage(key); setOpen(false); };
 
+  // Tomorrow's events for the notification bell
+  const tomorrowStr = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  })();
+  const tomorrowEvents = (events || []).filter(e => e.eventDate === tomorrowStr);
+
+  const isAdmin = isAdminRole(profile?.role);
   const items = isGuest
     ? GUEST_ITEMS
-    : isAdminRole(profile?.role)
-      ? [...AUTH_ITEMS, ...ADMIN_ITEMS]
-      : AUTH_ITEMS;
+    : (isAdmin
+        ? [...AUTH_ITEMS, ...ADMIN_ITEMS]
+        : AUTH_ITEMS
+      ).filter(it => !it.adminOnly || isAdmin);
 
   return (
     <>
-      {/* ── Main header — same bg as page ── */}
+      {/* ── Main header — hamburger left · brand center · bell right ── */}
       <header style={{
         background: 'var(--bg,#f8f9fa)',
-        padding: '14px 18px 12px',
-        display: 'flex', alignItems: 'center', gap: 14,
+        padding: '12px 14px 10px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
         position: 'sticky', top: 0, zIndex: 20,
         borderBottom: '1px solid var(--border)',
         boxShadow: 'var(--shadow-sm)',
       }}>
-        {/* Logo — transparent background, shadow only */}
-        <img src="/logo-transparent.png" alt="logo" style={{
-          width: 56, height: 56,
-          objectFit: 'contain', flexShrink: 0,
-          filter: 'drop-shadow(0 3px 8px rgba(0,0,0,0.25))',
-        }} />
-
-        {/* Title block */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 20, fontWeight: 900, color: 'var(--text)',
-            letterSpacing: '-0.3px', lineHeight: 1.1, whiteSpace: 'nowrap',
+        {/* Hamburger (left) */}
+        {user ? (
+          <button onClick={() => setOpen(o => !o)} aria-label="Menu" style={{
+            background: 'white', border: '1px solid var(--border)',
+            borderRadius: 12, width: 42, height: 42, flexShrink: 0,
+            display: 'flex', flexDirection: 'column', alignItems: 'center',
+            justifyContent: 'center', gap: 4, cursor: 'pointer', boxShadow: 'none', padding: 0,
           }}>
-            Community Events
-          </div>
-          {/* Red divider line */}
-          <div style={{ height: 2, background: 'var(--red,#c0392b)', borderRadius: 2, margin: '3px 0' }} />
-          {/* Tagline — same width as title, small caps */}
-          <div style={{
-            fontSize: 10, fontWeight: 800, color: 'var(--muted)',
-            letterSpacing: '0.5px', textTransform: 'uppercase', whiteSpace: 'nowrap',
-          }}>
-            Create &nbsp;–&nbsp; Share &nbsp;–&nbsp; Connect
-          </div>
-          {/* User info line */}
-          {user && !isGuest && (
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {displayName ? <>{displayName} <span style={{ opacity: .7 }}>({email})</span></> : email}
-            </div>
-          )}
-          {isGuest && (
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-              👀 Guest —{' '}
-              <span style={{ cursor: 'pointer', color: 'var(--red)', fontWeight: 700, textDecoration: 'underline' }}
-                onClick={() => signOut(auth)}>
-                Login / Register
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Hamburger — red lines */}
-        {user && (
-          <button onClick={() => setOpen(o => !o)}
-            aria-label="Menu"
-            style={{
-              background: 'var(--red-l,#fdf2f1)',
-              border: '1.5px solid var(--red-m,#fadbd8)',
-              borderRadius: 12, width: 42, height: 42,
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center',
-              gap: 4, cursor: 'pointer', flexShrink: 0,
-              boxShadow: 'none', padding: 0,
-            }}>
             {[0,1,2].map(i => (
-              <div key={i} style={{
-                height: 2, background: 'var(--red,#c0392b)',
-                borderRadius: 2, width: i === 1 ? 14 : 18,
-              }} />
+              <div key={i} style={{ height: 2.5, background: 'var(--teal,#0f766e)',
+                borderRadius: 2, width: 18 }} />
             ))}
           </button>
-        )}
+        ) : <div style={{ width: 42 }} />}
+
+        {/* Brand (center) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, flex: 1.4, justifyContent: 'center', minWidth: 0 }}>
+          <img src="/logo-transparent.png" alt="logo" style={{
+            width: 50, height: 50, objectFit: 'contain', flexShrink: 0,
+            filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.2))',
+          }} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--text)',
+              lineHeight: 1.1, letterSpacing: '-0.2px', whiteSpace: 'nowrap' }}>
+              Community<br/>Events Australia
+            </div>
+          </div>
+        </div>
+
+        {/* Notification bell (right) */}
+        {user && !isGuest ? (
+          <button onClick={() => setNotifOpen(o => !o)} aria-label="Notifications" style={{
+            background: 'white', border: '1px solid var(--border)',
+            borderRadius: 12, width: 42, height: 42, flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', boxShadow: 'none', padding: 0, position: 'relative', fontSize: 18,
+          }}>
+            🔔
+            {tomorrowEvents.length > 0 && (
+              <span style={{ position: 'absolute', top: -4, right: -4,
+                background: 'var(--red,#c0392b)', color: 'white', fontSize: 9, fontWeight: 800,
+                minWidth: 16, height: 16, borderRadius: 8, display: 'flex',
+                alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
+                {tomorrowEvents.length}
+              </span>
+            )}
+          </button>
+        ) : <div style={{ width: 42 }} />}
       </header>
+
+      {/* ── Notification panel ── */}
+      {notifOpen && (
+        <div ref={notifRef} style={{
+          position: 'fixed', top: 70, right: 12, width: 270, zIndex: 30,
+          background: 'white', borderRadius: 16, border: '1px solid var(--border)',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.22)', overflow: 'hidden',
+        }}>
+          <div style={{ padding: '13px 15px', borderBottom: '1px solid var(--border)',
+            fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            Tomorrow's Events
+            <span style={{ color: 'var(--teal)', fontSize: 12 }}>{tomorrowEvents.length}</span>
+          </div>
+          {tomorrowEvents.length === 0 ? (
+            <div style={{ padding: '18px 15px', fontSize: 12.5, color: 'var(--muted)', textAlign: 'center' }}>
+              No events scheduled for tomorrow.
+            </div>
+          ) : tomorrowEvents.map(e => (
+            <div key={e.id} onClick={() => { onOpenEvent?.(e.id); setNotifOpen(false); }}
+              style={{ padding: '11px 15px', borderBottom: '1px solid #f1f5f4',
+                display: 'flex', gap: 10, cursor: 'pointer' }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%',
+                background: e.isLive ? 'var(--red)' : 'var(--green,#16a34a)', marginTop: 5, flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
+                  overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {(e.eventTypeDisplay || e.eventType)} — {e.hostName}
+                </div>
+                <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>
+                  {e.startTime}{e.address?.suburb ? ` · ${e.address.suburb}` : ''}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Dropdown menu ── */}
       {open && (
         <div ref={menuRef} style={{
-          position: 'fixed', top: 82, right: 14, width: 250,
+          position: 'fixed', top: 82, left: 14, width: 250,
           background: 'var(--card,white)', border: '1px solid var(--border)',
           borderRadius: 20,
           boxShadow: '0 20px 60px rgba(26,26,46,0.16), 0 2px 8px rgba(26,26,46,0.08)',

@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>User Guide | Community Events</title>
+  <title>User Guide | Community Events Australia</title>
   <style>
-    :root{--teal:#0f766e;--teal-dark:#0b5d57;--bg:#f4f7f7;--card:#fff;--text:#1f2933;--muted:#6b7280;--border:#e5e7eb}
+    :root{--teal:#0f766e;--teal-dark:#0b5d57;--bg:#f4f7f7;--card:#fff;--text:#1f2933;--muted:#6b7280;--border:#e5e7eb;--red:#c0392b}
     *{box-sizing:border-box}
     body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
     .hero{background:linear-gradient(135deg,var(--teal),var(--teal-dark));color:white;padding:56px 20px 80px;text-align:center}
@@ -14,105 +14,241 @@
     .hero p{margin:8px 0 0;opacity:.9}
     .container{max-width:860px;margin:-48px auto 48px;padding:0 20px;position:relative;z-index:2}
     .card{background:var(--card);border-radius:20px;padding:36px;box-shadow:0 18px 48px rgba(15,118,110,.12);border:1px solid var(--border)}
-    h2{color:var(--teal);border-left:4px solid var(--teal);padding-left:12px;margin-top:32px}
-    .flow{background:#ecfeff;border-radius:14px;padding:16px;margin:18px 0;font-weight:700;color:var(--teal);text-align:center;letter-spacing:.5px}
+    h2{color:var(--teal);border-left:4px solid var(--teal);padding-left:12px;margin-top:36px}
+    h3{margin:0 0 8px;color:var(--teal)}
+    .toc{background:#ecfeff;border-radius:14px;padding:18px 22px;margin:18px 0}
+    .toc h3{margin-top:0}
+    .toc ol{margin:0;padding-left:22px}
+    .toc li{margin:4px 0}
+    .toc a{text-decoration:none}
     .step{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:14px;padding:16px;margin:14px 0}
-    .step h3{margin:0 0 8px;color:var(--teal)}
+    .step.red{background:#fef2f2;border-color:#fecaca}
+    .step.amber{background:#fffbeb;border-color:#fde68a}
     .roles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin:14px 0}
     .role-card{background:var(--bg);border-radius:14px;padding:16px;border:1px solid var(--border)}
-    .role-card h3{margin:0 0 8px;color:var(--teal)}
+    .role-card h3{margin:0 0 8px}
     .footer{margin-top:32px;padding-top:20px;border-top:1px solid var(--border);color:var(--muted);font-size:13px}
     a{color:var(--teal);font-weight:700}
+    code{background:#f1f5f4;padding:2px 6px;border-radius:6px;font-size:.92em}
+    .shot{display:block;max-width:260px;width:100%;margin:14px auto 4px;border-radius:16px;border:1px solid var(--border);box-shadow:0 6px 24px rgba(0,0,0,.10)}
+    .shot-row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:14px 0 4px}
+    .shot-row .shot{margin:0;max-width:200px}
     @media(max-width:600px){.hero h1{font-size:28px}.card{padding:22px}}
   </style>
 </head>
 <body>
 <header class="hero">
-  <img src="/logo.png" alt="Community Events"/>
+  <img src="/logo.png" alt="Community Events Australia"/>
   <h1>User Guide</h1>
-  <p>Community Events – Create · Share · Connect</p>
+  <p>Community Events Australia – Create · Share · Connect</p>
 </header>
 <main class="container">
   <section class="card">
 
-    <h2>What is Community Events?</h2>
-    <p>Community Events helps you discover, share and manage local community events including Majlis, Milad, birthdays and informal gatherings.</p>
+    <h2 style="margin-top:0">What is Community Events Australia?</h2>
+    <p>Community Events Australia helps you discover, share and manage local community events — Majlis, Milad, lectures, Quran classes, programs and more — with full Hijri calendar support, private event sharing, and live streaming straight to YouTube.</p>
 
-    <div class="flow">
-      Login → View Events → Add Event → Search → Sync Calendar → Get Reminder
+    <div class="toc">
+      <h3>On this page</h3>
+      <ol>
+        <li><a href="#home">Home Screen</a></li>
+        <li><a href="#cards">Event Cards</a></li>
+        <li><a href="#add">Adding an Event</a></li>
+        <li><a href="#series">Series Events</a></li>
+        <li><a href="#myevents">My Events &amp; Hidden Events</a></li>
+        <li><a href="#stream">Live Streaming</a></li>
+        <li><a href="#bulkshare">Bulk Share</a></li>
+        <li><a href="#calendar">Calendar Sync &amp; Reminders</a></li>
+        <li><a href="#roles">User Roles</a></li>
+        <li><a href="#notes">Important Notes</a></li>
+      </ol>
     </div>
 
-    <!-- Steps -->
+    <!-- ───────────────────────── HOME ───────────────────────── -->
+    <h2 id="home">🏠 Home Screen</h2>
+    <img class="shot" src="/docs/screenshots/home-screen.png" alt="Home screen showing upcoming events list"/>
     <div class="step">
-      <h3>🔐 Step 1 – Login</h3>
-      <p>Sign in with Google or Email. First time users must accept the Privacy Policy and Terms of Use before accessing the app.</p>
+      <h3>Browsing events</h3>
+      <p>The Home screen shows all upcoming community events in order, with the current Hijri date shown at the top based on community moon-sighting decisions.</p>
     </div>
-
     <div class="step">
-      <h3>🏠 Step 2 – View Events</h3>
-      <p>The Home screen shows all upcoming events. Use the quick buttons — <strong>Today, This Week, This Weekend, Nearby</strong> — to filter instantly.</p>
+      <h3>Search &amp; filter</h3>
+      <p>Use the search bar to find events by keyword, suburb or organiser. Tap the filter icon to narrow results by audience type — <strong>Gents, Ladies, Family, Kids</strong>.</p>
     </div>
-
     <div class="step">
-      <h3>➕ Step 3 – Add an Event</h3>
-      <p>Tap <strong>Add</strong> in the bottom navigation. Fill in: Host Name, Date &amp; Time, Full Address, Event Type, Audience Type.</p>
-      <p>If the event type is <strong>Majlis or Milad</strong>, you can also add a Speaker and multiple Reciters (e.g. Soz, Salam, Noha, Manqebat).</p>
-      <p>After selecting the date, the <strong>Hijri calendar date</strong> is shown automatically.</p>
-      <p>Tick <strong>"Adding on behalf of someone else"</strong> if you're submitting for another host – you'll still own and manage that event.</p>
+      <h3>Notifications</h3>
+      <p>Tap the bell icon to see a quick preview of tomorrow's events.</p>
     </div>
-
     <div class="step">
-      <h3>🔍 Step 4 – Search Events</h3>
-      <p>Search and filter by: date range, host name, suburb, event type, and audience type. Enable <strong>Nearby (10km)</strong> to find events close to your current location.</p>
+      <h3>Navigation</h3>
+      <p>The bottom bar gives you: <strong>Home</strong>, <strong>My Events</strong>, the green <strong>＋</strong> button to add a new event, <strong>Favourites</strong>, and your <strong>Profile</strong>.</p>
     </div>
 
+    <!-- ───────────────────────── EVENT CARDS ───────────────────────── -->
+    <h2 id="cards">🗂 Event Cards</h2>
     <div class="step">
-      <h3>📅 Step 5 – Calendar Sync</h3>
-      <p>Go to <strong>Calendar</strong>, select a date range, then tap <strong>Download Calendar File</strong>. Open the .ics file to import into iPhone Calendar, Google Calendar, or Outlook.</p>
-      <p>Calendar entries include: host name, event type, date &amp; time, address and audience type. Speaker and reciter details are not included in calendar entries.</p>
+      <h3>Collapsed view</h3>
+      <p>Each card shows a date chip (day, month, weekday), a thumbnail (the event's poster if uploaded, otherwise the organiser's logo), an audience badge, and an organiser badge — <strong>Centre</strong> or <strong>Private</strong>.</p>
     </div>
-
+    <img class="shot" src="/docs/screenshots/event-card-expanded.png" alt="Expanded event card showing full details, share, directions and edit buttons"/>
     <div class="step">
-      <h3>🔔 Step 6 – Email Reminders</h3>
-      <p>A daily email is sent for events happening today, including full details with reciters. Toggle reminders on/off anytime in <strong>Profile</strong>.</p>
+      <h3>Expanded view</h3>
+      <p>Tap any card to expand it and see the Hijri date, full address, speaker/reciter names, and organiser details.</p>
+      <p>From the expanded card you can: <strong>Share</strong> the event (with poster image) via WhatsApp, SMS or any app; get <strong>Directions</strong> via Google Maps; or tap the heart icon to <strong>Save</strong> it to Favourites.</p>
     </div>
-
     <div class="step">
-      <h3>✏️ My Events</h3>
-      <p>Go to <strong>My Events</strong> to see and manage all events you created. You can edit or delete any of your own events at any time.</p>
+      <h3>Poster zoom</h3>
+      <p>If a poster image was uploaded, tap the thumbnail to view it full screen.</p>
     </div>
 
-    <h2>User Roles</h2>
+    <!-- ───────────────────────── ADD EVENT ───────────────────────── -->
+    <h2 id="add">➕ Adding an Event</h2>
+    <div class="step">
+      <h3>Step 1 — Open the form</h3>
+      <p>Tap the green <strong>＋</strong> button in the bottom navigation.</p>
+    </div>
+    <div class="step">
+      <h3>Step 2 — Basic details</h3>
+      <p>Choose an event type (Majlis, Milad, Lecture, Quran Class, Program, etc.), enter the title/subject, host name, and organiser. The organiser determines which logo appears on the card if no poster is uploaded — choose your centre, or mark the event as <strong>Private</strong>.</p>
+    </div>
+    <img class="shot" src="/docs/screenshots/add-event-poster.png" alt="Add Event form showing poster upload and organiser type"/>
+    <div class="step">
+      <h3>Step 3 — Date</h3>
+      <p>Enter the date as a regular calendar date, or toggle to <strong>Hijri date entry</strong> and pick the Islamic date directly — the app calculates the matching Gregorian date based on the community's moon-sighting overrides.</p>
+    </div>
+    <img class="shot" src="/docs/screenshots/add-event-date-address.png" alt="Add Event form showing date, time, address and event type fields"/>
+    <div class="step">
+      <h3>Step 4 — Audience, address &amp; poster</h3>
+      <p>Select the audience type — <strong>Gents, Ladies, Kids, or Family Event</strong>. Use the address field's Google Maps autocomplete to set the venue. Optionally upload a poster image — it will be used as the card thumbnail.</p>
+    </div>
+    <div class="step">
+      <h3>Step 5 — On behalf of someone else</h3>
+      <p>Tick <strong>"Adding on behalf of someone else"</strong> if you're submitting for another host — you'll still own and manage the event.</p>
+    </div>
+    <img class="shot" src="/docs/screenshots/add-event-reciters.png" alt="Add Event form showing speaker and reciters fields for Majlis events"/>
+    <div class="step">
+      <h3>Step 6 — Submit</h3>
+      <p>For Majlis events, you can also add a Speaker and multiple Reciters (e.g. Soz, Salam, Noha, Manqebat). Tap Submit and the event is immediately visible to the whole community on the home screen.</p>
+    </div>
+
+    <!-- ───────────────────────── SERIES EVENTS ───────────────────────── -->
+    <h2 id="series">📆 Series Events</h2>
+    <img class="shot" src="/docs/screenshots/series-events-form.png" alt="Add Series Events form with start and end date pickers"/>
+    <div class="step">
+      <h3>For multi-day programs</h3>
+      <p>Series Events extends the Add Event form for programs running on consecutive days — like a Muharram lecture series or a Ramadan program. Fill in the event details once, then set a <strong>start date</strong> and <strong>end date</strong>. A preview shows every date that will be created (Gregorian or Hijri).</p>
+      <p>Submitting creates one individual event for every date in the range — for example, a ten-night program becomes ten separate events, each on its correct date, in a single action.</p>
+    </div>
+    <img class="shot" src="/docs/screenshots/series-events-preview.png" alt="Series Events preview showing the list of dates that will be created"/>
+
+    <!-- ───────────────────────── MY EVENTS / HIDDEN ───────────────────────── -->
+    <h2 id="myevents">✏️ My Events &amp; Hidden Events</h2>
+    <div class="step">
+      <h3>Managing your events</h3>
+      <p>Go to <strong>My Events</strong> to see everything you've created. From here you can edit, copy, share or delete any of your own events.</p>
+    </div>
+    <div class="shot-row">
+      <img class="shot" src="/docs/screenshots/my-events-visible.png" alt="My Events showing a visible event with Hide Event button"/>
+      <img class="shot" src="/docs/screenshots/my-events-hidden.png" alt="My Events showing a hidden event with Make Visible button"/>
+    </div>
+    <div class="step amber">
+      <h3>Hiding an event</h3>
+      <p>Tap the eye icon to mark an event as <strong>hidden</strong>. Hidden events:</p>
+      <ul>
+        <li>Disappear from the home screen and search — nobody browsing the app can find them</li>
+        <li>Are excluded from all reminder emails and notifications</li>
+        <li>Remain visible to you in My Events</li>
+      </ul>
+    </div>
+    <div class="step amber">
+      <h3>Sharing a hidden event privately</h3>
+      <p>From My Events, tap <strong>Share</strong> on a hidden event to send its details directly to specific people via WhatsApp, SMS, or any message. The recipient can view full event details — but anyone else using the app will never see this event unless you specifically share it with them. This is ideal for ladies' programs, private gatherings, or anything where you need to control who knows about it.</p>
+    </div>
+
+    <!-- ───────────────────────── LIVE STREAMING ───────────────────────── -->
+    <h2 id="stream">🔴 Live Streaming</h2>
+    <img class="shot" src="/docs/screenshots/go-live-card.png" alt="Event card showing the Go Live button"/>
+    <div class="step red">
+      <h3>Going live</h3>
+      <p>Open one of your events and tap <strong>Go Live</strong>. A camera preview opens immediately — check your camera and microphone, and use <strong>Flip Camera</strong> to switch between front and back cameras. Nothing is broadcast yet at this stage.</p>
+    </div>
+    <img class="shot" src="/docs/screenshots/camera-check.png" alt="Camera Check screen with Flip and Mic On controls and Start Streaming button"/>
+    <div class="step red">
+      <h3>While you're live</h3>
+      <p>When you're ready, tap <strong>Start Streaming</strong>. The app creates a YouTube broadcast and starts streaming your camera directly to the Community Events YouTube channel — usually live within 15-20 seconds.</p>
+      <p>The streaming screen shows "YOU ARE LIVE" with your live duration and bitrate. A red <strong>LIVE NOW</strong> badge and a <strong>Watch on YouTube</strong> button appear on the event card for everyone in the community.</p>
+      <p>Your screen will stay awake automatically while streaming. Switching to another app or manually locking your phone will still pause the broadcast — keep the streaming screen open until you end the stream. If you switch apps, a <strong>Return to Stream</strong> button stays visible so you can jump straight back.</p>
+    </div>
+    <div class="shot-row">
+      <img class="shot" src="/docs/screenshots/event-live-card.png" alt="Event card showing LIVE badge and Watch on YouTube button"/>
+      <img class="shot" src="/docs/screenshots/return-to-stream.png" alt="Return to Stream floating button shown when app is minimised during a live stream"/>
+    </div>
+    <div class="step red">
+      <h3>Ending the stream</h3>
+      <p>Tap <strong>End Stream</strong> and confirm. The broadcast stops immediately, and the LIVE badge and Watch on YouTube button disappear from the event card for everyone within a few seconds.</p>
+    </div>
+    <img class="shot" src="/docs/screenshots/stream-ended.png" alt="Stream Ended confirmation screen"/>
+
+    <!-- ───────────────────────── BULK SHARE ───────────────────────── -->
+    <h2 id="bulkshare">📤 Bulk Share</h2>
+    <img class="shot" src="/docs/screenshots/bulk-share.png" alt="Bulk Share Events screen showing multiple selected events"/>
+    <div class="step">
+      <h3>Sharing multiple events at once</h3>
+      <p>Bulk Share lets organisers select several upcoming events and generate one neatly formatted message — with dates, times, locations and Hijri dates — ready to paste into a WhatsApp group. Great for sharing a full week's program in one go instead of sharing each event individually.</p>
+    </div>
+
+    <!-- ───────────────────────── CALENDAR ───────────────────────── -->
+    <h2 id="calendar">📅 Calendar Sync &amp; Reminders</h2>
+    <img class="shot" src="/docs/screenshots/calendar-sync.png" alt="Sync Calendar screen with Apple Calendar and Google Calendar quick sync buttons"/>
+    <div class="step">
+      <h3>Calendar Sync</h3>
+      <p>Go to the <strong>Calendar</strong> view, select a date range, then download the calendar file. Open the <code>.ics</code> file to import events into iPhone Calendar, Google Calendar, or Outlook. Calendar entries include host name, event type, date &amp; time, address and audience type — speaker and reciter details are not included.</p>
+    </div>
+    <div class="shot-row">
+      <img class="shot" src="/docs/screenshots/calendar-month-view.png" alt="Calendar month view"/>
+      <img class="shot" src="/docs/screenshots/calendar-week-view.png" alt="Calendar week view"/>
+    </div>
+    <div class="step">
+      <h3>Email reminders</h3>
+      <p>A daily email is sent for events happening today. Toggle reminders on or off anytime in <strong>Profile</strong>. Hidden events are never included in reminders or calendar sync.</p>
+    </div>
+
+    <!-- ───────────────────────── ROLES ───────────────────────── -->
+    <h2 id="roles">👥 User Roles</h2>
     <div class="roles">
       <div class="role-card">
         <h3>👤 User</h3>
-        <p>Add, edit and delete their own events. View all events and sync calendars.</p>
+        <p>Add, edit, hide and delete their own events. View all public events, go live, and sync calendars.</p>
       </div>
       <div class="role-card">
         <h3>🛠 Admin</h3>
-        <p>All User permissions plus: edit and delete any event, adjust Hijri calendar settings.</p>
+        <p>All User permissions plus: edit, hide or transfer ownership of any event, manage organisations, and adjust Hijri calendar settings.</p>
       </div>
       <div class="role-card">
         <h3>👑 Super Admin</h3>
-        <p>All Admin permissions plus: manage user roles, promote or demote users. Cannot remove themselves as the last Super Admin.</p>
+        <p>All Admin permissions plus: manage user roles, promote/demote or ban users. Cannot remove themselves as the last Super Admin.</p>
       </div>
     </div>
 
-    <h2>Important Notes</h2>
+    <!-- ───────────────────────── NOTES ───────────────────────── -->
+    <h2 id="notes">ℹ️ Important Notes</h2>
     <ul>
-      <li>Events are automatically removed from the app 7 days after their date.</li>
-      <li>Calendar entries show basic info only. Full details are always available in the app.</li>
+      <li>Events are automatically removed from the app after a set period following the event date.</li>
+      <li>Calendar entries show basic info only — full details are always available in the app.</li>
+      <li>Hidden events are excluded from search, the home screen, reminders and calendar sync — but can still be shared privately.</li>
+      <li>Live streams broadcast publicly to YouTube and are viewable by anyone with the link.</li>
       <li>Deleting your account permanently deletes all your events.</li>
     </ul>
 
     <h2>Need Help?</h2>
-    <p>Contact us at: <a href="/support.html">Support Page</a> or <strong>support@sajjadzaheer.com</strong></p>
+    <p>Contact us at: <a href="/support.html">Support Page</a> or <strong>communityeventssydney@gmail.com</strong></p>
 
     <div class="footer">
-      © <span id="yr"></span> Community Events. All rights reserved.<br/>
+      © <span id="yr"></span> Community Events Australia. All rights reserved.<br/>
       <a href="/">← Back to App</a> &nbsp;|&nbsp;
       <a href="/privacy.html">Privacy Policy</a> &nbsp;|&nbsp;
-      <a href="/terms.html">Terms of Use</a>
+      <a href="/terms.html">Terms of Use</a> &nbsp;|&nbsp;
+      <a href="/delete-account.html">Account Deletion</a>
     </div>
   </section>
 </main>

@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "info.siza.communityevents",
+    "sha256_cert_fingerprints": ["A5:BA:88:C1:A8:1B:75:A7:D8:B5:E7:82:4A:85:68:52:35:13:0D:B5:1A:E9:BA:55:AF:57:19:29:4D:5E:6D:24"]
+  }
+}]

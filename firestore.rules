@@ -22,12 +22,10 @@ service cloud.firestore {
     }
 
     // ── Events ─────────────────────────────────────────────────────────────────
-    // Guests (anonymous) can read events BUT Firestore cannot field-mask at the
-    // rules level. Privacy masking is enforced in the app layer and Cloud Functions.
-    // Registered users get full access; guests get the same document but the app
-    // strips sensitive fields before rendering.
+    // Registered users can read full event documents. Guests use the
+    // getPublicEvents Cloud Function, which returns a sanitized field set.
     match /events/{eventId} {
-      allow read:           if signedIn();
+      allow read:           if isRegistered();
       allow create:         if isRegistered()
                                && request.resource.data.createdByUserId == request.auth.uid;
       allow update, delete: if isRegistered()
@@ -56,6 +54,17 @@ service cloud.firestore {
     match /bannedUsers/{docId} {
       allow read:  if signedIn();
       allow write: if false;
+    }
+
+    // ── Organisations — public read, admin write ────────────────────────────
+    match /organisations/{orgId} {
+      allow read:  if true;           // anyone can read (needed for event card logos)
+      allow write: if isAdmin();      // only admins can add/edit/delete
+    }
+
+    // ── Native Stream Sessions ──────────────────────────────────────────────
+    match /nativeStreamSessions/{sessionId} {
+      allow read, write: if false;
     }
 
     // ── Edit OTPs — Cloud Function only ──────────────────────────────────────

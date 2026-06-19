@@ -1,6 +1,40 @@
+import { useEffect, useState } from 'react';
 import { canDeleteEvent, canEditEvent, isAdminRole, getSharePrivacy, getDisplayPrivacy } from '../utils/permissions';
 import { GoLiveButton, WatchLiveButton } from './LiveStream';
 import { RELIGIOUS_EVENT_TYPES } from '../utils/constants';
+import { getEventImage } from '../services/imageService';
+import { getHijriDisplay, hijriDisplayFromParts } from '../services/hijriService';
+import { getHijriSettings } from '../services/settingsService';
+
+let hijriOverridesCache = [];
+let hijriSettingsPromise = null;
+
+function loadHijriOverrides() {
+  if (!hijriSettingsPromise) {
+    hijriSettingsPromise = getHijriSettings()
+      .then(settings => {
+        hijriOverridesCache = settings.overrides || [];
+        return hijriOverridesCache;
+      })
+      .catch(() => hijriOverridesCache);
+  }
+  return hijriSettingsPromise;
+}
+
+// Display normaliser — old events stored as "Mixed Audience" show as "Family Event"
+const normAudience = (a) => (a === 'Mixed Audience' ? 'Family Event' : a);
+
+// Date chip parts from YYYY-MM-DD
+const dateChip = (d) => {
+  try {
+    const dt = new Date(d + 'T00:00:00');
+    return {
+      mo: dt.toLocaleDateString('en-AU', { month: 'short' }).toUpperCase(),
+      dy: dt.getDate(),
+      wd: dt.toLocaleDateString('en-AU', { weekday: 'short' }).toUpperCase(),
+    };
+  } catch { return { mo: '', dy: '', wd: '' }; }
+};
 
 // ── SVG icons ────────────────────────────────────────────────────────────────
 const WaIcon = ({ size = 17 }) => (
@@ -52,6 +86,12 @@ export default function EventCard({
   const showReligious = RELIGIOUS_EVENT_TYPES.includes(event.eventType);
   const canCopy       = isAdminRole(profile?.role);
   const isSaved       = savedIds.includes(event.id);
+  const [lightbox, setLightbox] = useState(false);
+  const [hijriOverrides, setHijriOverrides] = useState(hijriOverridesCache);
+
+  // Poster image — only show the zoom option when the host uploaded a real poster
+  const { src: posterSrc, isLogo: posterIsLogo } = getEventImage(event, isGuest);
+  const hasPoster = !posterIsLogo;
 
   const fmtDate = d => {
     try { return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', {
@@ -59,10 +99,40 @@ export default function EventCard({
     catch { return d; }
   };
 
+  useEffect(() => {
+    let alive = true;
+    loadHijriOverrides().then(overrides => {
+      if (alive) setHijriOverrides(overrides || []);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const storedHijriLooksValid = (value) => {
+    const match = String(value || '').trim().match(/^(\d{1,2})\b/);
+    if (!match) return false;
+    const day = Number(match[1]);
+    return day >= 1 && day <= 30;
+  };
+
+  const hijriDisplay = (() => {
+    if (event.enteredAsHijri === true && event.hijriDay && event.hijriMonth && event.hijriYear) {
+      const day = Number(event.hijriDay);
+      if (day >= 1 && day <= 30) {
+        return hijriDisplayFromParts(day, Number(event.hijriMonth), Number(event.hijriYear));
+      }
+    }
+
+    if (event.eventDate) {
+      const computed = getHijriDisplay(event.eventDate, hijriOverrides);
+      if (computed && storedHijriLooksValid(computed)) return computed;
+    }
+
+    return storedHijriLooksValid(event.hijriDate) ? event.hijriDate : '';
+  })();
+
   const handleShare = (ev) => {
     ev.stopPropagation();
     if (!window.__showShareSheet) return;
-    // Apply sharing privacy matrix
     const sharePrivacy = getSharePrivacy(profile, event, user?.uid);
     const loc = sharePrivacy.showFullAddress
       ? (a.fullAddress || suburbOnly)
@@ -72,18 +142,26 @@ export default function EventCard({
       try { return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short' }); }
       catch { return d; }
     };
-    window.__showShareSheet([
+    const text = [
       `📅 *${displayType}*`,
       `🏠 *Host:* ${event.hostName}`,
       `📆 *Date:* ${fmtD(event.eventDate)}`,
       `⏰ *Time:* ${event.startTime}${event.endTime ? ' – ' + event.endTime : ''}`,
       loc ? `📍 ${locLabel} ${loc}` : '',
       sharePrivacy.showPhone && event.hostPhone ? `📞 *Phone:* ${event.hostPhone}` : '',
-      event.hijriDate    ? `🌙 *Hijri:* ${event.hijriDate}`     : '',
-      event.speakerName  ? `🎤 *Speaker:* ${event.speakerName}`  : '',
-      event.audienceType ? `👥 ${event.audienceType}`             : '',
+      hijriDisplay       ? `🌙 *Hijri:* ${hijriDisplay}`       : '',
+      event.speakerName  ? `🎤 *Speaker:* ${event.speakerName}` : '',
+      event.audienceType ? `👥 ${normAudience(event.audienceType)}` : '',
       '', '_Shared via Community Events Australia_', '_communityevents.siza.info_',
-    ].filter(Boolean).join('\n'));
+    ].filter(Boolean).join('\n');
+
+    // Pass poster URL so ShareSheet can offer image sharing when available
+    // Guests never see the poster (imageService already handles this), so only
+    // pass imageUrl for logged-in users who can see the real poster.
+    window.__showShareSheet({
+      text,
+      imageUrl: (!isGuest && event.imageUrl) ? event.imageUrl : '',
+    });
   };
 
   const handleDirections = (ev) => {
@@ -122,70 +200,109 @@ export default function EventCard({
         marginBottom: 8,
       }}>
 
-      {/* ── COMPACT ROW ── */}
-      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-        <div style={{ flex:1, minWidth:0 }}>
-          {/* Badges */}
-          <div style={{ display:'flex', gap:5, flexWrap:'wrap', marginBottom:5 }}>
-            <span className="badge">{displayType}</span>
-            <span className="badge" style={{
-              background: isPrivate ? '#eafaf1' : 'var(--red-l,#fdf2f1)',
-              color:      isPrivate ? '#27ae60' : 'var(--red,#c0392b)',
-            }}>
-              {isPrivate ? '🔒 Private' : '🏛 Centre'}
-            </span>
-          </div>
+      {/* ── COMPACT ROW (image-led) ── */}
+      <div style={{ display:'flex', gap:12, alignItems:'stretch' }}>
+
+        {/* Thumbnail with date chip */}
+        {(() => {
+          const { src, isLogo } = getEventImage(event);
+          const chip = dateChip(event.eventDate);
+          return (
+            <div
+              onClick={hasPoster ? (e => { e.stopPropagation(); setLightbox(true); }) : undefined}
+              style={{
+                width:92, minWidth:92, height:92, borderRadius:14, overflow:'hidden',
+                position:'relative', background:'#f0f4f3', flexShrink:0,
+                display:'flex', alignItems:'center', justifyContent:'center',
+                cursor: hasPoster ? 'zoom-in' : 'default',
+              }}>
+              <img src={src} alt=""
+                style={{ width:'100%', height:'100%',
+                  objectFit: isLogo ? 'contain' : 'cover',
+                  // For logo fallbacks, pad so the centered logo sits clear of the date chip
+                  padding: isLogo ? '26px 8px 8px' : 0 }} />
+              <div style={{
+                position:'absolute', top:6, left:6, background:'white',
+                borderRadius:8, padding:'3px 6px', textAlign:'center',
+                boxShadow:'0 2px 8px rgba(0,0,0,0.18)', minWidth:34,
+              }}>
+                <div style={{ fontSize:8, fontWeight:900, color:'var(--green,#16a34a)', letterSpacing:'0.04em' }}>{chip.mo}</div>
+                <div style={{ fontSize:16, fontWeight:900, color:'var(--text)', lineHeight:1 }}>{chip.dy}</div>
+                <div style={{ fontSize:7, fontWeight:700, color:'var(--muted)' }}>{chip.wd}</div>
+              </div>
+              {event.isLive && (
+                <div style={{
+                  position:'absolute', bottom:0, left:0, right:0,
+                  background:'var(--red,#c0392b)', color:'white', fontSize:8,
+                  fontWeight:900, textAlign:'center', padding:'2px 0',
+                  animation:'pulse 2s infinite',
+                }}>🔴 LIVE</div>
+              )}
+              {/* Zoom hint — only on real posters, when not live */}
+              {hasPoster && !event.isLive && (
+                <div style={{
+                  position:'absolute', bottom:4, right:4,
+                  background:'rgba(0,0,0,0.55)', color:'white', borderRadius:'50%',
+                  width:20, height:20, display:'flex', alignItems:'center',
+                  justifyContent:'center', fontSize:11,
+                }}>🔍</div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Body */}
+        <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', justifyContent:'center' }}>
           {/* Title */}
-          <div style={{ fontWeight:800, fontSize:13, color:'var(--text)', fontFamily:'var(--font)',
-            whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+          <div style={{ fontWeight:800, fontSize:14, color:'var(--text)', fontFamily:'var(--font)',
+            whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginBottom:4 }}>
             {displayType} — {event.hostName}
           </div>
           {/* Meta */}
-          <div style={{ fontSize:12, color:'var(--muted)', marginTop:3, fontWeight:600, fontFamily:'var(--font)' }}>
-            📅 {fmtDate(event.eventDate)} &nbsp;·&nbsp; ⏰ {event.startTime}
-            {event.endTime ? ` – ${event.endTime}` : ''}
-            {suburb ? ` · 📍 ${suburb}` : ''}
+          <div style={{ fontSize:11.5, color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)', marginBottom:2 }}>
+            ⏰ {event.startTime}{event.endTime ? ` – ${event.endTime}` : ''}
+          </div>
+          {suburb && (
+            <div style={{ fontSize:11.5, color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)', marginBottom:6,
+              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+              📍 {suburb}
+            </div>
+          )}
+          {/* Footer: audience pill + organiser badge + heart */}
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display:'flex', alignItems:'center', gap:5, flex:1, minWidth:0, flexWrap:'wrap' }}>
+              <span className="pill-audience" style={{
+                fontSize:9.5, fontWeight:800, padding:'4px 10px', borderRadius:20,
+                background: normAudience(event.audienceType) === 'Family Event' ? '#dbeafe' : '#dcfce7',
+                color:      normAudience(event.audienceType) === 'Family Event' ? '#1d4ed8' : '#15803d',
+                letterSpacing:'0.02em', whiteSpace:'nowrap',
+              }}>
+                {(normAudience(event.audienceType) || 'All Welcome').toUpperCase()}
+              </span>
+              {/* Organiser badge — Centre or Private only */}
+              <span style={{
+                fontSize:9.5, fontWeight:800, padding:'4px 9px', borderRadius:20,
+                background: event.organiserType === 'private' ? '#f1f5f9' : '#fef9c3',
+                color:      event.organiserType === 'private' ? '#475569' : '#854d0e',
+                whiteSpace:'nowrap',
+              }}>
+                {event.organiserType === 'private' ? '🔒 Private' : '🏛 Centre'}
+              </span>
+            </div>
+            {onSaveToggle && (
+              <span onClick={ev => { ev.stopPropagation(); if (!isGuest) onSaveToggle(event.id, !isSaved); }}
+                style={{ fontSize:18, color: isSaved ? 'var(--red,#c0392b)' : '#cbd5d3',
+                  cursor: isGuest ? 'default' : 'pointer', lineHeight:1, flexShrink:0 }}>
+                {isSaved ? '❤️' : '🤍'}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Compact icon buttons */}
-        <div style={{ display:'flex', gap:6, flexShrink:0 }} onClick={e => e.stopPropagation()}>
-          {/* Share — green */}
-          {iconBtn(handleShare, 'Share via WhatsApp',
-            '#e8faf0', '#a9dfbf',
-            <WaIcon size={18} />
-          )}
-          {/* Directions — blue */}
-          {iconBtn(handleDirections, isGuest ? 'Login for directions' : 'Directions',
-            '#eaf2fc', '#85c1e9',
-            <MapIcon size={17} color="#4285f4" />,
-            isGuest
-          )}
-          {/* Favourite — gold outline */}
-          {onSaveToggle && iconBtn(
-            ev => { ev.stopPropagation(); onSaveToggle(event.id, !isSaved); },
-            isSaved ? 'Remove from Favourites' : 'Save to Favourites',
-            isSaved ? '#fef9e7' : 'white',
-            isSaved ? '#f39c12' : 'var(--red,#c0392b)',
-            <span style={{ fontSize:17, color: isSaved ? '#f39c12' : 'var(--red,#c0392b)', lineHeight:1 }}>
-              {isSaved ? '⭐' : '☆'}
-            </span>,
-            isGuest
-          )}
-        </div>
-
-        {/* Live badge in compact view */}
-        {event.isLive && (
-          <span style={{
-            background:'var(--red,#c0392b)', color:'white',
-            fontSize:9, fontWeight:900, padding:'3px 7px', borderRadius:99,
-            flexShrink:0, animation:'pulse 2s infinite', fontFamily:'var(--font)',
-          }}>🔴 LIVE</span>
-        )}
-
         {/* Chevron */}
         <span style={{
-          fontSize:10, color:'var(--red,#c0392b)', flexShrink:0,
+          fontSize:10, color:'var(--teal,#0f766e)', flexShrink:0, alignSelf:'center',
           transition:'transform 0.3s', display:'inline-block',
           transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
         }}>▼</span>
@@ -201,11 +318,11 @@ export default function EventCard({
       }}>
         <div style={{ borderTop:'1px solid var(--border)', paddingTop:10 }}>
           {/* Hijri badge */}
-          {event.hijriDate && (
+          {hijriDisplay && (
             <div style={{ marginBottom:8 }}>
               <span style={{ background:'#fef9e7', color:'#b7950b',
                 fontSize:11, padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
-                🌙 {event.hijriDate}
+                🌙 {hijriDisplay}
               </span>
             </div>
           )}
@@ -227,7 +344,7 @@ export default function EventCard({
           {/* Audience */}
           {event.audienceType && (
             <p style={{ margin:'0 0 5px', fontSize:13, color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)' }}>
-              👥 {event.audienceType}
+              👥 {normAudience(event.audienceType)}
             </p>
           )}
           {/* Speaker */}
@@ -323,6 +440,31 @@ export default function EventCard({
           </div>
         </div>
       </div>
+
+      {/* ── Poster lightbox ── */}
+      {lightbox && hasPoster && (
+        <div
+          onClick={e => { e.stopPropagation(); setLightbox(false); }}
+          style={{
+            position:'fixed', inset:0, zIndex:10000,
+            background:'rgba(0,0,0,0.9)', display:'flex',
+            alignItems:'center', justifyContent:'center', padding:20,
+          }}>
+          <button
+            onClick={e => { e.stopPropagation(); setLightbox(false); }}
+            aria-label="Close"
+            style={{
+              position:'absolute', top:16, right:16, width:44, height:44,
+              borderRadius:'50%', background:'rgba(255,255,255,0.15)', color:'white',
+              border:'none', cursor:'pointer', fontSize:24, lineHeight:1,
+              display:'flex', alignItems:'center', justifyContent:'center',
+            }}>×</button>
+          <img src={posterSrc} alt="Event poster"
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth:'100%', maxHeight:'90vh', objectFit:'contain',
+              borderRadius:12, boxShadow:'0 10px 50px rgba(0,0,0,0.5)' }} />
+        </div>
+      )}
     </div>
   );
 }

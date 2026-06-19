@@ -113,16 +113,30 @@ function excelDateToYYYYMMDD(val) {
 // ── JDN-based Hijri calendar (same algorithm as SIZA Calendar Religiously) ──
 function gregorianToJdn(y,m,d){const a=Math.floor((14-m)/12),yr=y+4800-a,mn=m+12*a-3;return d+Math.floor((153*mn+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045;}
 function jdnToGregorian(jdn){const a=jdn+32044,b=Math.floor((4*a+3)/146097),c=a-Math.floor((146097*b)/4),d=Math.floor((4*c+3)/1461),e=c-Math.floor((1461*d)/4),m=Math.floor((5*e+2)/153);return{day:e-Math.floor((153*m+2)/5)+1,month:m+3-12*Math.floor(m/10),year:100*b+d-4800+Math.floor(m/10)};}
-function islamicToJdn(y,m,d){return d+Math.ceil(29.5*(m-1))+(y-1)*354+Math.floor((3+11*y)/30)+1948439;}
-function jdnToIslamic(jdn){const y=Math.floor((30*(jdn-1948439)+10646)/10631),m=Math.min(12,Math.ceil((jdn-29-islamicToJdn(y,1,1))/29.5)+1);return{year:y,month:m,day:jdn-islamicToJdn(y,m,1)+1};}
-function cmpHijri(a,b){return a.year!==b.year?a.year-b.year:a.month!==b.month?a.month-b.month:a.day-b.day;}
-function addHMon(year,month,delta){const t=year*12+(month-1)+delta;return{year:Math.floor(t/12),month:((t%12)+12)%12+1};}
-function sortOv(arr){return[...arr].sort((a,b)=>cmpHijri({year:a.hYear,month:a.hMonth,day:1},{year:b.hYear,month:b.hMonth,day:1}));}
-function deltaForMonth(hYear,hMonth,overrides){let delta=0;for(const ov of sortOv(overrides||[])){if(cmpHijri({year:hYear,month:hMonth,day:1},{year:ov.hYear,month:ov.hMonth,day:1})>=0){const base=islamicToJdn(ov.hYear,ov.hMonth,1);const[yy,mm,dd]=ov.gDate.split("-").map(Number);delta=gregorianToJdn(yy,mm,dd)-base;}}return delta;}
-function adjIslToJdn(hY,hM,hD,ov){return islamicToJdn(hY,hM,hD)+deltaForMonth(hY,hM,ov);}
-function adjMonStart(hY,hM,ov){return adjIslToJdn(hY,hM,1,ov);}
-function hijriToGreg(hY,hM,hD,ov){return jdnToGregorian(adjIslToJdn(hY,hM,hD,ov||[]));}
-function gregToHijri(gY,gM,gD,ov){const t=gregorianToJdn(gY,gM,gD),ap=jdnToIslamic(t);for(let i=-3;i<=3;i++){const c=addHMon(ap.year,ap.month,i),s=adjMonStart(c.year,c.month,ov),n=addHMon(c.year,c.month,1),ns=adjMonStart(n.year,n.month,ov);if(t>=s&&t<ns)return{year:c.year,month:c.month,day:t-s+1};}return ap;}
+// ── Override-anchored 30-day cascade (matches client hijriService.js) ──
+const MONTH_DAYS_SERVER = 30;
+function islamicToJdnAstro(y,m,d){return d+Math.ceil(29.5*(m-1))+(y-1)*354+Math.floor((3+11*y)/30)+1948439;}
+function jdnToIslamicAstro(jdn){const y=Math.floor((30*(jdn-1948439)+10646)/10631),m=Math.min(12,Math.ceil((jdn-29-islamicToJdnAstro(y,1,1))/29.5)+1);return{year:y,month:m,day:jdn-islamicToJdnAstro(y,m,1)+1};}
+function monIdx(y,m){return y*12+(m-1);}
+function fromMonIdx(idx){return{year:Math.floor(idx/12),month:(idx%12)+1};}
+function cmpHijri(a,b){return a.year!==b.year?a.year-b.year:a.month!==b.month?a.month-b.month:(a.day||1)-(b.day||1);}
+function sortOv(arr){return[...(arr||[])].filter(o=>o&&o.hYear&&o.hMonth&&o.gDate).sort((a,b)=>cmpHijri({year:a.hYear,month:a.hMonth},{year:b.hYear,month:b.hMonth}));}
+function monthStartJdnServer(hY,hM,ov){
+  const sorted=sortOv(ov);const targetIdx=monIdx(hY,hM);
+  if(sorted.length===0)return islamicToJdnAstro(hY,hM,1);
+  let anchor=null;
+  for(const o of sorted){if(monIdx(o.hYear,o.hMonth)<=targetIdx)anchor=o;else break;}
+  if(anchor){const[ay,am,ad]=anchor.gDate.split("-").map(Number);const aj=gregorianToJdn(ay,am,ad);const fwd=targetIdx-monIdx(anchor.hYear,anchor.hMonth);return aj+fwd*MONTH_DAYS_SERVER;}
+  else{const e=sorted[0];const[ey,em,ed]=e.gDate.split("-").map(Number);const ej=gregorianToJdn(ey,em,ed);const back=monIdx(e.hYear,e.hMonth)-targetIdx;return ej-back*MONTH_DAYS_SERVER;}
+}
+function hijriToGreg(hY,hM,hD,ov){return jdnToGregorian(monthStartJdnServer(hY,hM,ov||[])+(hD-1));}
+function gregToHijri(gY,gM,gD,ov){
+  const so=sortOv(ov);const t=gregorianToJdn(gY,gM,gD);
+  if(so.length===0)return jdnToIslamicAstro(t);
+  const ap=jdnToIslamicAstro(t);const apIdx=monIdx(ap.year,ap.month);
+  for(let off=-4;off<=4;off++){const{year,month}=fromMonIdx(apIdx+off);const s=monthStartJdnServer(year,month,so);const nx=fromMonIdx(monIdx(year,month)+1);const ns=monthStartJdnServer(nx.year,nx.month,so);if(t>=s&&t<ns)return{year,month,day:t-s+1};}
+  return ap;
+}
 
 const HIJRI_MONTH_NAMES_SERVER = ["Muharram","Safar","Rabi al-Awwal","Rabi al-Thani","Jumada al-Awwal","Jumada al-Thani","Rajab","Sha'ban","Ramadan","Shawwal","Dhu al-Qi'dah","Dhu al-Hijjah"];
 
@@ -220,10 +234,75 @@ exports.getCalendarStats = onCall({ region: REGION }, async (request) => {
   const role = userDoc.data()?.role;
   if (role !== "admin" && role !== "superAdmin") throw new Error("Insufficient permissions");
   const snap = await db.collection("calendarSubscriptions").get();
-  return { count: snap.size };
+  const uids = snap.docs.map(d => d.id);
+  return { count: snap.size, uids };
 });
 
 // ─── AI EVENT SEARCH ──────────────────────────────────────────────────────────
+// Public event list for guests. Firestore rules cannot mask individual fields,
+// so anonymous users receive only this sanitized shape through Cloud Functions.
+exports.getPublicEvents = onCall(
+  { region: REGION },
+  async (request) => {
+    if (!request.auth) throw new Error("Unauthenticated");
+
+    const snap = await db.collection("events")
+      .where("status", "==", "active")
+      .orderBy("eventDate", "asc")
+      .get();
+
+    const events = snap.docs
+      .map(doc => {
+        const e = doc.data();
+        if (e.hidden) return null;
+
+        const isPrivate = (e.organiserType || "private") === "private";
+        const safeAddress = {
+          suburb:   e.address?.suburb   || "",
+          state:    e.address?.state    || "",
+          postcode: e.address?.postcode || "",
+        };
+
+        if (!isPrivate) {
+          safeAddress.fullAddress = e.address?.fullAddress || "";
+          safeAddress.street      = e.address?.street || "";
+          safeAddress.latitude    = e.address?.latitude || null;
+          safeAddress.longitude   = e.address?.longitude || null;
+        }
+
+        return {
+          id: doc.id,
+          status: e.status || "active",
+          hidden: false,
+          hostName: e.hostName || "",
+          eventDate: e.eventDate || "",
+          startTime: e.startTime || "",
+          endTime: e.endTime || "",
+          hijriDate: e.hijriDate || "",
+          hijriDay: e.hijriDay || null,
+          hijriMonth: e.hijriMonth || null,
+          hijriYear: e.hijriYear || null,
+          enteredAsHijri: e.enteredAsHijri === true,
+          eventType: e.eventType || "",
+          customEventType: e.customEventType || "",
+          eventTypeDisplay: e.eventTypeDisplay || e.eventType || "",
+          eventSubject: e.eventSubject || "",
+          audienceType: e.audienceType || "",
+          organiserType: e.organiserType || "private",
+          isOnBehalfOf: !!e.isOnBehalfOf,
+          address: safeAddress,
+          speakerName: e.speakerName || "",
+          reciters: Array.isArray(e.reciters) ? e.reciters : [],
+          isLive: e.isLive === true,
+          liveWatchUrl: e.liveWatchUrl || null,
+        };
+      })
+      .filter(Boolean);
+
+    return { events };
+  }
+);
+
 exports.aiEventSearch = onCall(
   { region: REGION, secrets: [ANTHROPIC_API_KEY], timeoutSeconds: 120, enforceAppCheck: false },
   async (request) => {
@@ -300,7 +379,7 @@ ${JSON.stringify(events)}`;
         "anthropic-version": "2023-06-01"
       },
       body: JSON.stringify({
-        model:      "claude-opus-4-5",
+        model:      "claude-haiku-4-5",
         max_tokens: 600,
         system:     systemPrompt,
         messages:   [{ role: "user", content: userQuery }]
@@ -343,12 +422,16 @@ exports.dailyEmailReminders = onSchedule(
 
     // Send reminder for TOMORROW so users can plan ahead
     const date = todaySydney(1);
-    const eventsSnap = await db.collection("events")
+    const eventsSnapRaw = await db.collection("events")
       .where("status", "==", "active")
       .where("eventDate", "==", date)
-      .where("hidden", "!=", true)
       .get();
-    if (eventsSnap.empty) return null;
+    // Filter hidden in JS — a Firestore "!= true" query drops docs with no
+    // `hidden` field at all, which would exclude every legacy/visible event.
+    const visibleDocs = eventsSnapRaw.docs.filter(d => d.data().hidden !== true);
+    if (visibleDocs.length === 0) return null;
+    // Lightweight shim so the rest of the function can keep using eventsSnap
+    const eventsSnap = { docs: visibleDocs, size: visibleDocs.length, empty: visibleDocs.length === 0 };
 
     const rows = eventsSnap.docs.map(d => {
       const e = d.data();
@@ -358,7 +441,7 @@ exports.dailyEmailReminders = onSchedule(
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.startTime || ""}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.hostName || ""}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.eventType || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.audienceType || ""}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${(e.audienceType === "Mixed Audience" ? "Family Event" : e.audienceType) || ""}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.address?.fullAddress || ""}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.speakerName || ""}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${reciters}</td>
@@ -398,6 +481,7 @@ exports.dailyEmailReminders = onSchedule(
 
     for (const doc of allUsers.docs) {
       const u = doc.data();
+      if (u.isActive === false || u.migratedToUid) continue;
 
       // Send email if user has email
       if (u.email && u.reminderEmailEnabled !== false) {
@@ -508,6 +592,7 @@ exports.monthlyHijriReminder = onSchedule(
 exports.deleteUserData = onCall({ region: REGION }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new Error("Unauthenticated");
+  const keepEvents = request.data?.keepEvents === true;
   const userDoc = await db.collection("users").doc(uid).get();
   if (userDoc.exists && userDoc.data().role === "superAdmin") {
     const saSnap = await db.collection("users")
@@ -516,17 +601,162 @@ exports.deleteUserData = onCall({ region: REGION }, async (request) => {
       "You are the only Super Admin. Assign another before deleting your account."
     );
   }
-  const eventsSnap = await db.collection("events")
-    .where("createdByUserId", "==", uid).get();
-  let batch = db.batch(); let count = 0;
-  for (const doc of eventsSnap.docs) {
-    batch.delete(doc.ref); count++;
-    if (count % 450 === 0) { await batch.commit(); batch = db.batch(); }
+  let count = 0;
+  let batch = db.batch();
+  if (!keepEvents) {
+    // Delete the user's events
+    const eventsSnap = await db.collection("events")
+      .where("createdByUserId", "==", uid).get();
+    for (const doc of eventsSnap.docs) {
+      batch.delete(doc.ref); count++;
+      if (count % 450 === 0) { await batch.commit(); batch = db.batch(); }
+    }
+  } else {
+    // Keep events, but mark them as orphaned (creator deleted)
+    const eventsSnap = await db.collection("events")
+      .where("createdByUserId", "==", uid).get();
+    for (const doc of eventsSnap.docs) {
+      batch.update(doc.ref, { creatorDeleted: true }); count++;
+      if (count % 450 === 0) { await batch.commit(); batch = db.batch(); }
+    }
   }
   batch.delete(db.collection("users").doc(uid));
   batch.delete(db.collection("calendarSubscriptions").doc(uid));
   await batch.commit();
-  return { deleted: count };
+  return { deleted: keepEvents ? 0 : count, kept: keepEvents ? count : 0 };
+});
+
+// Phone-only login migration support.
+// Lets a newly verified phone user find and migrate their old Google/Microsoft
+// Firestore profile without exposing the users collection to client queries.
+async function findUserByEmailForMigration(email, currentUid) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return null;
+
+  const candidates = [];
+  for (const field of ["emailLower", "email"]) {
+    const snap = await db.collection("users").where(field, "==", normalized).limit(3).get();
+    snap.docs.forEach(doc => candidates.push(doc));
+  }
+
+  const seen = new Set();
+  for (const docSnap of candidates) {
+    if (seen.has(docSnap.id)) continue;
+    seen.add(docSnap.id);
+    if (docSnap.id === currentUid) continue;
+    const data = docSnap.data() || {};
+    if (String(data.email || "").trim().toLowerCase() === normalized) {
+      return { id: docSnap.id, data };
+    }
+  }
+
+  const allUsers = await db.collection("users").get();
+  for (const docSnap of allUsers.docs) {
+    if (docSnap.id === currentUid) continue;
+    const data = docSnap.data() || {};
+    if (String(data.email || "").trim().toLowerCase() === normalized) {
+      return { id: docSnap.id, data };
+    }
+  }
+
+  return null;
+}
+
+exports.lookupPhoneAccountByEmail = onCall({ region: REGION }, async (request) => {
+  const { HttpsError } = require("firebase-functions/v2/https");
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+
+  const match = await findUserByEmailForMigration(request.data?.email, request.auth.uid);
+  if (!match) return { found: false };
+
+  const data = match.data;
+  return {
+    found: true,
+    profile: {
+      id: match.id,
+      fullName: data.fullName || data.displayName || "",
+      email: data.email || "",
+    },
+  };
+});
+
+exports.migratePhoneAccountByEmail = onCall({ region: REGION }, async (request) => {
+  const { HttpsError } = require("firebase-functions/v2/https");
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+
+  const phoneUid = request.auth.uid;
+  const phoneNumber = request.auth.token.phone_number || "";
+  const match = await findUserByEmailForMigration(request.data?.email, phoneUid);
+  if (!match) throw new HttpsError("not-found", "No existing account found for this email.");
+
+  const oldUid = match.id;
+  const oldData = match.data || {};
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const migratedProfile = {
+    ...oldData,
+    email: oldData.email || String(request.data?.email || "").trim().toLowerCase(),
+    emailLower: String(oldData.email || request.data?.email || "").trim().toLowerCase(),
+    phone: phoneNumber || oldData.phone || "",
+    phoneVerified: true,
+    migratedFromUid: oldUid,
+    migratedAt: now,
+    isActive: true,
+    updatedAt: now,
+  };
+
+  const phoneRef = db.collection("users").doc(phoneUid);
+  const oldRef = db.collection("users").doc(oldUid);
+  await phoneRef.set(migratedProfile, { merge: true });
+  await oldRef.set({
+    migratedToUid: phoneUid,
+    migratedAt: now,
+    isActive: false,
+    updatedAt: now,
+  }, { merge: true });
+
+  const eventsSnap = await db.collection("events").where("createdByUserId", "==", oldUid).get();
+  let batch = db.batch();
+  let count = 0;
+  for (const eventDoc of eventsSnap.docs) {
+    batch.update(eventDoc.ref, {
+      createdByUserId: phoneUid,
+      createdByUserEmail: migratedProfile.email || "",
+      createdByName: migratedProfile.fullName || migratedProfile.email || "",
+      migratedFromUid: oldUid,
+      updatedAt: now,
+    });
+    count++;
+    if (count % 450 === 0) {
+      await batch.commit();
+      batch = db.batch();
+    }
+  }
+  if (count % 450 !== 0) await batch.commit();
+
+  const oldCalRef = db.collection("calendarSubscriptions").doc(oldUid);
+  const oldCal = await oldCalRef.get();
+  if (oldCal.exists) {
+    await db.collection("calendarSubscriptions").doc(phoneUid).set({
+      ...oldCal.data(),
+      uid: phoneUid,
+      migratedFromUid: oldUid,
+      updatedAt: now,
+    }, { merge: true });
+  }
+
+  return {
+    migrated: true,
+    fromUid: oldUid,
+    toUid: phoneUid,
+    eventsTransferred: count,
+    profile: {
+      fullName: migratedProfile.fullName || "",
+      email: migratedProfile.email || "",
+      role: migratedProfile.role || "user",
+      phone: migratedProfile.phone || "",
+      isActive: true,
+    },
+  };
 });
 
 // ─── BULK IMPORT EVENTS (Callable) ────────────────────────────────────────────
@@ -713,7 +943,7 @@ exports.sendRemindersNow = onCall(
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.startTime || ""}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.hostName || ""}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.eventType || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.audienceType || ""}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${(e.audienceType === "Mixed Audience" ? "Family Event" : e.audienceType) || ""}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.address?.fullAddress || ""}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.speakerName || ""}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb">${reciters}</td>
@@ -754,6 +984,7 @@ exports.sendRemindersNow = onCall(
     const errors = [];
     for (const doc of usersSnap.docs) {
       const u = doc.data();
+      if (u.isActive === false || u.migratedToUid) continue;
       if (!u.email) continue;
       try {
         await transporter.sendMail({
@@ -807,12 +1038,8 @@ exports.recalculateHijriEvents = onCall(
     const newOverrides = settingsSnap.exists ? (settingsSnap.data().overrides || []) : [];
     console.log(`recalculate: using ${newOverrides.length} overrides from Firestore`);
 
-    // Fetch ALL active events — we update both types:
-    // 1. Hijri-entered: recalculate eventDate (Gregorian) + hijriDate tag
-    // 2. Gregorian-entered: recalculate hijriDate tag only (eventDate stays fixed)
-    const allSnap = await db.collection("events")
-      .where("status", "==", "active")
-      .get();
+    // Fetch ALL events regardless of status
+    const allSnap = await db.collection("events").get();
 
     console.log(`recalculate: processing ${allSnap.size} total events with ${newOverrides.length} overrides`);
 
@@ -824,8 +1051,8 @@ exports.recalculateHijriEvents = onCall(
 
     for (const doc of allSnap.docs) {
       const e = doc.data();
-      const { hijriDay, hijriMonth, hijriYear, eventDate } = e;
-      const isHijriEntered = !!(hijriDay && hijriMonth && hijriYear);
+      const { hijriDay, hijriMonth, hijriYear, eventDate, enteredAsHijri } = e;
+      const isHijriEntered = enteredAsHijri === true && !!(hijriDay && hijriMonth && hijriYear);
 
       if (isHijriEntered) {
         // ── Hijri-entered event ───────────────────────────────────────────────
@@ -967,7 +1194,33 @@ exports.adminDeleteUser = onCall(
   }
 );
 
-// ─── ADMIN UNBAN USER ────────────────────────────────────────────────────────
+// ─── TRANSFER EVENT OWNERSHIP ────────────────────────────────────────────────
+exports.transferEventOwnership = onCall({ region: REGION }, async (request) => {
+  const { HttpsError } = require("firebase-functions/v2/https");
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const callerDoc = await db.collection("users").doc(request.auth.uid).get();
+  const role = callerDoc.data()?.role || "user";
+  if (!["admin","superAdmin"].includes(role))
+    throw new HttpsError("permission-denied", "Admin access required.");
+  const { fromUid, toUid } = request.data;
+  if (!fromUid || !toUid) throw new HttpsError("invalid-argument", "fromUid and toUid required.");
+  const toDoc = await db.collection("users").doc(toUid).get();
+  if (!toDoc.exists) throw new HttpsError("not-found", "Target user not found.");
+  const toData = toDoc.data();
+  const snap = await db.collection("events").where("createdByUserId","==",fromUid).get();
+  let batch = db.batch(); let count = 0;
+  for (const doc of snap.docs) {
+    batch.update(doc.ref, {
+      createdByUserId: toUid,
+      createdByName:   toData.fullName || toData.email || "",
+      updatedAt:       admin.firestore.FieldValue.serverTimestamp(),
+    });
+    count++;
+    if (count % 450 === 0) { await batch.commit(); batch = db.batch(); }
+  }
+  if (count % 450 !== 0) await batch.commit();
+  return { transferred: count };
+});
 exports.adminUnbanUser = onCall(
   { region: REGION },
   async (request) => {
@@ -1080,42 +1333,6 @@ exports.onEventCreated = onDocumentCreated(
     const eventId  = event.params.eventId;
     if (!data || data.status !== 'active') return;
 
-    // Create a dedicated 100ms room for this event
-    try {
-      const token    = generateHMSManagementToken();
-      const roomName = `ce${eventId}`.replace(/[^a-zA-Z0-9]/g, '').slice(0, 50);
-      const res = await fetch(`${HMS_API}/rooms`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          name:        roomName,
-          description: `${data.eventType} — ${data.hostName}`,
-          template_id: HMS_TEMPLATE_ID,
-          region:      'in',
-        }),
-      });
-      const room = await res.json();
-      if (res.ok && room.id) {
-        await db.collection('events').doc(eventId).update({ liveRoomId: room.id });
-        console.log(`[HMS] Created room ${room.id} for event ${eventId}`);
-      } else if (room.message?.includes('already exists') || room.code === 'room_duplicate_name') {
-        // Room already exists — fetch it
-        const r2   = await fetch(`${HMS_API}/rooms?name=${roomName}`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        const d2   = await r2.json();
-        const existing = d2.data?.[0];
-        if (existing?.id) {
-          await db.collection('events').doc(eventId).update({ liveRoomId: existing.id });
-          console.log(`[HMS] Linked existing room ${existing.id} to event ${eventId}`);
-        }
-      } else {
-        console.error(`[HMS] Failed to create room for event ${eventId}:`, room.message);
-      }
-    } catch (e) {
-      console.error(`[HMS] Room creation error for event ${eventId}:`, e.message);
-    }
-
     await notifySuperAdmin(
       `📅 New event added: ${data.eventType} — ${data.hostName}`,
       `<div style="font-family:Arial,sans-serif;max-width:500px">
@@ -1143,29 +1360,7 @@ exports.onEventDeleted = onDocumentDeleted(
     secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM] },
   async (event) => {
     const data    = event.data?.data();
-    const eventId = event.params.eventId;
     if (!data) return;
-
-    // Stop any active stream and delete the 100ms room
-    if (data.liveRoomId) {
-      try {
-        const token = generateHMSManagementToken();
-        // Stop external stream if running
-        await fetch(`${HMS_API}/external-streams/room/${data.liveRoomId}/stop`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        }).catch(() => {});
-        // Disable the room (100ms doesn't delete rooms, disabling prevents new joins)
-        const res = await fetch(`${HMS_API}/rooms/${data.liveRoomId}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({ enabled: false }),
-        });
-        console.log(`[HMS] Disabled room ${data.liveRoomId} for deleted event ${eventId}: ${res.status}`);
-      } catch (e) {
-        console.error(`[HMS] Room cleanup error for event ${eventId}:`, e.message);
-      }
-    }
 
     await notifySuperAdmin(
       `🗑 Event deleted: ${data.eventType} — ${data.hostName}`,
@@ -1413,97 +1608,6 @@ exports.notifyEventLive = onCall({ region: REGION }, async (request) => {
   return { sent };
 });
 
-// ─── 100ms TOKEN GENERATION ──────────────────────────────────────────────────
-const HMS_ACCESS_KEY  = '6a1a128d3894cc965ea4d4ad';
-const HMS_APP_SECRET  = '1SsEdbdCC3Zxa88SElnygEQdjm6QDSPlXPWJ57-oeoy5-gLX4pq2CD9SuBawi-OGIzx5FAp2eNYmoUnhjvV69Y06Br0lcoPshYJAnawGpc3MyCn04SHcOXnKk5knG2-BvJEoR95PsRBMZpFM3rP0WjVw-39bZF6RHDpTKGRt0Yg=';
-const HMS_TEMPLATE_ID = '6a1aac6d6a2d2723ac9ef7fe'; // community-events template
-const HMS_API         = 'https://api.100ms.live/v2';
-
-function generateHMSManagementToken() {
-  // Pure Node.js JWT — no external dependency needed
-  const crypto = require('crypto');
-  const now    = Math.floor(Date.now() / 1000);
-  const header  = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({
-    access_key: HMS_ACCESS_KEY,
-    type: 'management',
-    version: 2,
-    iat: now,
-    exp: now + 86400,
-    jti: `${now}-${Math.random().toString(36).slice(2)}`,
-  })).toString('base64url');
-  const sig = crypto
-    .createHmac('sha256', HMS_APP_SECRET)
-    .update(`${header}.${payload}`)
-    .digest('base64url');
-  return `${header}.${payload}.${sig}`;
-}
-
-// Generate app auth token for a specific room and role
-function generateHMSAuthToken(userId, role, roomId) {
-  const crypto = require('crypto');
-  const now    = Math.floor(Date.now() / 1000);
-  const header  = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify({
-    access_key: HMS_ACCESS_KEY,
-    room_id:    roomId,
-    user_id:    userId,
-    role,
-    type:       'app',
-    version:    2,
-    iat:        now,
-    exp:        now + 21600,
-    jti:        `${now}-${Math.random().toString(36).slice(2)}`,
-  })).toString('base64url');
-  const sig = crypto
-    .createHmac('sha256', HMS_APP_SECRET)
-    .update(`${header}.${payload}`)
-    .digest('base64url');
-  return `${header}.${payload}.${sig}`;
-}
-
-exports.hmsCreateRoom = onCall({ region: REGION }, async (request) => {
-  const { eventId, title } = request.data || {};
-  if (!eventId) throw new Error('Missing eventId');
-  const token    = generateHMSManagementToken();
-  const roomName = `ce${eventId}`.replace(/[^a-zA-Z0-9]/g, '').slice(0, 50);
-  // Try to create room
-  let res = await fetch(`${HMS_API}/rooms`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({ name: roomName, description: title || 'Community Event', template_id: HMS_TEMPLATE_ID }),
-  });
-  let data = await res.json();
-  // If already exists, fetch it
-  if (!res.ok) {
-    if (data.message?.includes('already exists') || data.code === 'room_duplicate_name') {
-      const r2 = await fetch(`${HMS_API}/rooms?name=${roomName}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      const d2 = await r2.json();
-      data = d2.data?.[0];
-      if (!data) throw new Error('Room not found');
-    } else {
-      throw new Error(data.message || 'Failed to create room');
-    }
-  }
-  return { roomId: data.id, roomName: data.name };
-});
-
-exports.hmsGetAuthToken = onCall({ region: REGION }, async (request) => {
-  const { roomId, role, userId } = request.data || {};
-  if (!roomId || !role) throw new Error('Missing roomId or role');
-  const token = generateHMSManagementToken();
-  const res   = await fetch(`${HMS_API}/auth-token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({ room_id: roomId, role, user_id: userId || `u_${Date.now()}` }),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || 'Failed to get auth token');
-  return { token: data.token };
-});
-
 // ─── GUEST EVENT EDIT — OTP SEND ─────────────────────────────────────────────
 exports.sendEditOtp = onCall(
   { region: REGION, secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM] },
@@ -1633,212 +1737,6 @@ exports.verifyEditOtp = onCall(
   }
 );
 
-// ─── START YOUTUBE RTMP STREAM via 100ms ─────────────────────────────────────
-
-exports.startYouTubeStream = onCall(
-  { region: REGION, secrets: [YOUTUBE_RTMP_SECRET, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
-  async (request) => {
-    const { HttpsError } = require("firebase-functions/v2/https");
-    if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-
-    const { roomId, eventTitle } = request.data || {};
-    if (!roomId) throw new HttpsError("invalid-argument", "Missing roomId.");
-
-    const title = eventTitle || "Community Events Live Stream";
-    console.log(`[YouTube] Starting stream for room: ${roomId}, title: ${title}`);
-
-    // Step 1 — Create fresh YouTube broadcast via OAuth2
-    let rtmpUrl, watchUrl, broadcastId;
-    try {
-      const accessToken = await getYouTubeAccessToken();
-      const broadcast   = await createYouTubeBroadcast(accessToken, title);
-      rtmpUrl     = `${broadcast.rtmpUrl}/${broadcast.streamKey}`;
-      watchUrl    = broadcast.watchUrl;
-      broadcastId = broadcast.broadcastId;
-      console.log(`[YouTube] Broadcast created: ${broadcastId}, watch: ${watchUrl}`);
-      // Store for stopping later
-      // Store per-room so multiple simultaneous streams don't overwrite each other
-      await db.collection("system").doc(`youtube_active_${roomId}`).set({
-        broadcastId,
-        streamId:  broadcast.streamId,
-        startedAt: new Date().toISOString(),
-        roomId,
-      });
-    } catch (e) {
-      console.warn(`[YouTube] OAuth failed: ${e.message} — using static stream key`);
-      const streamKey = YOUTUBE_RTMP_SECRET.value();
-      rtmpUrl  = `rtmp://a.rtmp.youtube.com/live2/${streamKey}`;
-      watchUrl = `https://www.youtube.com/channel/UC9AvesDamQvU7idD2OD1R6w/live`;
-    }
-
-    // Step 2 — Push to YouTube via 100ms external-streams
-    const mgmtToken  = generateHMSManagementToken();
-    // Generate a proper auth token for the beam bot to join this specific room
-    const beamToken  = generateHMSAuthToken(`beam_${roomId}`, 'broadcaster', roomId);
-    // activespeaker mode ensures only the active speaker is captured, not a tile grid
-    const meetingUrl = `https://community-events-livestream.app.100ms.live/preview/${roomId}/broadcaster?skip_preview=true&auth_token=${beamToken}&name=YouTubeBot&ui_mode=activespeaker`;
-
-    console.log(`[YouTube] Starting 100ms external stream to YouTube`);
-    console.log(`[YouTube] Room: ${roomId}, Meeting URL: ${meetingUrl}`);
-    console.log(`[YouTube] RTMP: ${rtmpUrl.split('/').slice(0,-1).join('/')}/REDACTED`);
-    const res = await fetch(`${HMS_API}/external-streams/room/${roomId}/start`, {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${mgmtToken}`
-      },
-      body: JSON.stringify({
-        meeting_url: meetingUrl,
-        rtmp_urls:   [rtmpUrl],
-        recording:   false,
-        resolution:  { width: 1280, height: 720 }
-      })
-    });
-
-    const data = await res.json();
-    console.log(`[YouTube] External stream response ${res.status}:`, JSON.stringify(data));
-    if (!res.ok) throw new HttpsError("internal", data.message || `100ms error: ${res.status}`);
-
-    return { success: true, streamJobId: data.id, broadcastId, watchUrl };
-  }
-);
-
-// ─── STOP YOUTUBE RTMP STREAM ─────────────────────────────────────────────────
-exports.stopYouTubeStream = onCall(
-  { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
-  async (request) => {
-    const { HttpsError } = require("firebase-functions/v2/https");
-    if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-
-    const { roomId } = request.data || {};
-    if (!roomId) throw new HttpsError("invalid-argument", "Missing roomId.");
-
-    const mgmtToken = generateHMSManagementToken();
-
-    // Stop 100ms external stream
-    const res = await fetch(`${HMS_API}/external-streams/room/${roomId}/stop`, {
-      method: "POST",
-      headers: {
-        "Content-Type":  "application/json",
-        "Authorization": `Bearer ${mgmtToken}`
-      }
-    });
-    const data = await res.json().catch(() => ({}));
-    console.log(`[YouTube] Stop 100ms response ${res.status}:`, JSON.stringify(data));
-
-    // End YouTube broadcast via OAuth
-    try {
-      const accessToken = await getYouTubeAccessToken();
-      const activeSnap  = await db.collection("system").doc(`youtube_active_${roomId}`).get();
-      if (activeSnap.exists && activeSnap.data()?.broadcastId) {
-        const broadcastId = activeSnap.data().broadcastId;
-        // Transition broadcast to complete
-        await fetch(
-          `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=complete&id=${broadcastId}&part=status`,
-          {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${accessToken}` }
-          }
-        );
-        console.log(`[YouTube] Broadcast ${broadcastId} marked complete`);
-        await db.collection("system").doc(`youtube_active_${roomId}`).delete();
-      }
-    } catch (e) {
-      console.warn(`[YouTube] Could not end broadcast: ${e.message}`);
-    }
-
-    return { success: true };
-  }
-);
-
-// ─── START HLS STREAM (for in-app viewers) ───────────────────────────────────
-exports.startHLSStream = onCall(
-  { region: REGION },
-  async (request) => {
-    const { HttpsError } = require("firebase-functions/v2/https");
-    if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-
-    const { roomId, meetingUrl } = request.data || {};
-    if (!roomId) throw new HttpsError("invalid-argument", "Missing roomId.");
-
-    const mgmtToken = generateHMSManagementToken();
-    console.log(`[HLS] Starting HLS stream for room: ${roomId}, meeting: ${meetingUrl}`);
-
-    // 100ms beam API for HLS streaming — same beam endpoint, different config
-    const beamEndpoints = [
-      "https://prod-in2.100ms.live/api/v2/beam",
-      "https://prod-us2.100ms.live/api/v2/beam",
-      "https://prod-eu2.100ms.live/api/v2/beam",
-    ];
-
-    const beamBody = JSON.stringify({
-      operation:   "start",
-      room_id:     roomId,
-      meeting_url: meetingUrl,
-      hls:         { hls_vod: false }
-    });
-
-    let data, res;
-    for (const endpoint of beamEndpoints) {
-      res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type":  "application/json",
-          "Authorization": `Bearer ${mgmtToken}`
-        },
-        body: beamBody
-      });
-      data = await res.json();
-      console.log(`[HLS] ${endpoint} response ${res.status}:`, JSON.stringify(data));
-      if (res.status === 409) {
-        console.log("[HLS] Already started — OK");
-        return { success: true };
-      }
-      if (res.status !== 405) break;
-    }
-
-    if (!res.ok) throw new HttpsError("internal", data.message || `HLS error: ${res.status}`);
-    return { success: true, hlsUrl: data.hls_url || '' };
-  }
-);
-
-// ─── STOP HLS STREAM ─────────────────────────────────────────────────────────
-exports.stopHLSStream = onCall(
-  { region: REGION },
-  async (request) => {
-    const { HttpsError } = require("firebase-functions/v2/https");
-    if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
-
-    const { roomId } = request.data || {};
-    if (!roomId) throw new HttpsError("invalid-argument", "Missing roomId.");
-
-    const mgmtToken = generateHMSManagementToken();
-    console.log(`[HLS] Stopping HLS for room: ${roomId}`);
-
-    const beamEndpoints = [
-      "https://prod-in2.100ms.live/api/v2/beam",
-      "https://prod-us2.100ms.live/api/v2/beam",
-      "https://prod-eu2.100ms.live/api/v2/beam",
-    ];
-
-    let res, data;
-    for (const endpoint of beamEndpoints) {
-      res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type":  "application/json",
-          "Authorization": `Bearer ${mgmtToken}`
-        },
-        body: JSON.stringify({ operation: "stop", room_id: roomId })
-      });
-      data = await res.json().catch(() => ({}));
-      console.log(`[HLS] Stop ${endpoint} response ${res.status}:`, JSON.stringify(data));
-      if (res.status !== 405) break;
-    }
-    return { success: true };
-  }
-);
-
 // ─── YOUTUBE OAUTH2 FLOW ──────────────────────────────────────────────────────
 
 const YT_REDIRECT_URI = "https://australia-southeast1-community-event-8b639.cloudfunctions.net/youtubeOAuthCallback";
@@ -1953,15 +1851,17 @@ exports.youtubeOAuthCallback = onRequest(
       });
 
       res.send(`
-        <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#f8f9fa">
+        <html>
+        <head><meta http-equiv="refresh" content="3;url=https://communityevents.siza.info"></head>
+        <body style="font-family:sans-serif;text-align:center;padding:40px;background:#f8f9fa">
           <div style="max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1)">
             <div style="font-size:60px;margin-bottom:16px">✅</div>
             <h2 style="color:#27ae60;margin:0 0 12px">YouTube Connected!</h2>
-            <p style="color:#666;margin:0 0 24px">Community Events is now connected to the YouTube channel.</p>
-            <p style="color:#666;margin:0 0 24px">You can <strong>close this tab</strong> and return to the app.</p>
-            <button onclick="window.close()" style="background:#27ae60;color:white;border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:900;cursor:pointer">
-              Close This Tab
-            </button>
+            <p style="color:#666;margin:0 0 24px">Community Events is now connected to your YouTube channel.</p>
+            <p style="color:#666;margin:0 0 24px">Redirecting you back to the app in 3 seconds…</p>
+            <a href="https://communityevents.siza.info" style="background:#27ae60;color:white;border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-block">
+              Return to App Now
+            </a>
           </div>
         </body></html>
       `);
@@ -2039,6 +1939,9 @@ async function createYouTubeBroadcast(accessToken, title) {
           enableDvr:       true,
           recordFromStart: true,
           latencyPreference: "ultraLow",
+          monitorStream: {
+            enableMonitorStream: false,
+          },
         },
       }),
     }
@@ -2083,8 +1986,9 @@ async function createYouTubeBroadcast(accessToken, title) {
 
   const streamKey = stream.cdn?.ingestionInfo?.streamName;
   const rtmpUrl   = stream.cdn?.ingestionInfo?.ingestionAddress;
+  const rtmpsUrl  = stream.cdn?.ingestionInfo?.rtmpsIngestionAddress;
 
-  console.log(`[YouTube] Stream ID: ${stream.id}, streamKey present: ${!!streamKey}, rtmpUrl: ${rtmpUrl}`);
+  console.log(`[YouTube] Stream ID: ${stream.id}, streamKey present: ${!!streamKey}, rtmpUrl: ${rtmpUrl}, rtmpsUrl: ${rtmpsUrl}`);
 
   if (!streamKey || !rtmpUrl) {
     // Fetch stream again to get ingestion info
@@ -2094,12 +1998,13 @@ async function createYouTubeBroadcast(accessToken, title) {
     );
     const streamFetchData = await streamFetchRes.json();
     const fetchedStream = streamFetchData.items?.[0];
-    console.log(`[YouTube] Fetched stream:`, JSON.stringify(fetchedStream?.cdn?.ingestionInfo).slice(0, 200));
+    console.log(`[YouTube] Fetched stream:`, JSON.stringify(fetchedStream?.cdn?.ingestionInfo).slice(0, 300));
     return {
       broadcastId: broadcast.id,
       streamId:    stream.id,
       streamKey:   fetchedStream?.cdn?.ingestionInfo?.streamName,
       rtmpUrl:     fetchedStream?.cdn?.ingestionInfo?.ingestionAddress,
+      rtmpsUrl:    fetchedStream?.cdn?.ingestionInfo?.rtmpsIngestionAddress,
       watchUrl:    `https://www.youtube.com/watch?v=${broadcast.id}`,
     };
   }
@@ -2109,6 +2014,7 @@ async function createYouTubeBroadcast(accessToken, title) {
     streamId:    stream.id,
     streamKey,
     rtmpUrl,
+    rtmpsUrl,
     watchUrl:    `https://www.youtube.com/watch?v=${broadcast.id}`,
   };
 }
@@ -2125,209 +2031,324 @@ exports.youtubeConnectionStatus = onCall(
   }
 );
 
-// ─── 100ms WEBHOOK — Auto-end stale live events ───────────────────────────────
-// Set this URL in 100ms Dashboard → Developer → Webhooks:
-// https://australia-southeast1-community-event-8b639.cloudfunctions.net/hmsWebhook
-exports.hmsWebhook = onRequest(
-  { region: REGION },
-  async (req, res) => {
-    if (req.method !== 'POST') { res.status(405).send('Method not allowed'); return; }
+// --- SHARED: Stale live event cleanup logic ──────────────────────────────────
+async function runStaleLiveCleanup() {
+  const snap = await db.collection('events').where('isLive', '==', true).get();
+  if (snap.empty) return 0;
+  let ended = 0;
+  for (const docSnap of snap.docs) {
+    const data = docSnap.data();
+    const sessionId = data.liveUrl; // liveUrl stores the nativeStream sessionId
+    const startedAt = data.liveStartedAt ? new Date(data.liveStartedAt) : null;
+    const hoursLive = startedAt ? (Date.now() - startedAt.getTime()) / 3600000 : 999;
 
-    const body = req.body;
-    const type = body?.type;
-    console.log(`[HMS Webhook] Event type: ${type}`, JSON.stringify(body).slice(0, 500));
-
-    // Helper to end live events for a room
-    async function endLiveForRoom(roomId, reason) {
-      if (!roomId) return;
-      const snap = await db.collection('events')
-        .where('liveRoomId', '==', roomId)
-        .where('isLive', '==', true)
-        .get();
-      if (!snap.empty) {
-        const batch = db.batch();
-        snap.docs.forEach(d => {
-          console.log(`[HMS Webhook] ${reason} — ending event ${d.id} (room: ${roomId})`);
-          batch.update(d.ref, {
-            isLive:       false,
-            liveUrl:      null,
-            liveWatchUrl: null,
-            liveEndedAt:  new Date().toISOString(),
-            updatedAt:    new Date().toISOString(),
-          });
-        });
-        await batch.commit();
-        console.log(`[HMS Webhook] Ended ${snap.size} event(s) for room ${roomId}`);
-      }
+    // Safety net — force end if live for more than 3 hours, or no session at all
+    if (!sessionId || hoursLive > 3) {
+      await docSnap.ref.update({ isLive: false, liveUrl: null, liveWatchUrl: null,
+        liveEndedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      ended++; continue;
     }
 
     try {
-      // Extract roomId from all possible locations in the payload
-      const roomId = body?.data?.room_id || body?.room_id || body?.data?.roomId;
-
-      // These events all mean the stream has ended
-      const streamEndEvents = [
-        'beam.stopped',      // YouTube/external stream stopped
-        'beam.failure',      // YouTube stream failed
-        'session.close',     // All peers left, room closed
-        'hls.stopped',       // HLS stream stopped
-        'hls.failure',       // HLS stream failed
-      ];
-
-      if (streamEndEvents.includes(type)) {
-        await endLiveForRoom(roomId, type);
-      }
-
-      // peer.leave — check if it was the broadcaster
-      if (type === 'peer.leave') {
-        const role = body?.data?.role || body?.role;
-        console.log(`[HMS Webhook] peer.leave — role: ${role}, room: ${roomId}`);
-
-        if (role === 'broadcaster' && roomId) {
-          // Immediately check if any other broadcaster is still in the room
-          const token    = generateHMSManagementToken();
-          const sessRes  = await fetch(`${HMS_API}/sessions?room_id=${roomId}&active=true`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-          });
-          const sessData = await sessRes.json();
-          console.log(`[HMS Webhook] Active sessions for room ${roomId}:`, JSON.stringify(sessData).slice(0, 300));
-
-          const sessions = sessData.data || [];
-          const hasActiveBroadcaster = sessions.some(s =>
-            s.peers?.some(p => p.role === 'broadcaster' && p.joined_at)
-          );
-
-          if (!hasActiveBroadcaster) {
-            console.log(`[HMS Webhook] No active broadcaster in room ${roomId} — ending live`);
-            await endLiveForRoom(roomId, 'broadcaster.left');
-          } else {
-            console.log(`[HMS Webhook] Another broadcaster still active in room ${roomId} — keeping live`);
-          }
-        }
-      }
-
-    } catch (e) {
-      console.error('[HMS Webhook] Error:', e.message, e.stack);
-    }
-
-    res.status(200).send('ok');
-  }
-);
-
-// ─── SCHEDULED: Clean up stale live events older than 4 hours ────────────────
-exports.cleanupStaleLiveEvents = onSchedule(
-  { schedule: 'every 10 minutes', region: REGION },
-  async () => {
-    // Find all events marked as live
-    const snap = await db.collection('events')
-      .where('isLive', '==', true)
-      .get();
-
-    if (snap.empty) return;
-
-    const token = generateHMSManagementToken();
-    let ended = 0;
-
-    for (const doc of snap.docs) {
-      const data = doc.data();
-      const roomId = data.liveRoomId;
-      if (!roomId) {
-        // No room ID — definitely stale
-        await doc.ref.update({
-          isLive: false, liveUrl: null, liveWatchUrl: null,
-          liveEndedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
+      const sessDoc = await db.collection('nativeStreamSessions').doc(sessionId).get();
+      const status  = sessDoc.exists ? sessDoc.data().status : 'ended';
+      // 'pending' or 'connected' or 'streaming' = still active; 'ended'/'stopped'/missing = stale
+      if (status === 'ended' || status === 'stopped') {
+        await docSnap.ref.update({ isLive: false, liveUrl: null, liveWatchUrl: null,
+          liveEndedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
         ended++;
-        continue;
       }
+    } catch (e) { console.error(`[Cleanup] Error checking session ${sessionId}:`, e.message); }
+  }
+  if (ended > 0) console.log(`[Cleanup] Ended ${ended} stale live event(s)`);
+  return ended;
+}
 
-      try {
-        // Check if room has an active session with a broadcaster
-        const sessRes  = await fetch(`${HMS_API}/sessions?room_id=${roomId}&active=true`, {
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-        const sessData = await sessRes.json();
-        const sessions = sessData.data || [];
-        const hasActiveBroadcaster = sessions.some(s =>
-          s.peers?.some(p => p.role === 'broadcaster')
-        );
-
-        if (!hasActiveBroadcaster) {
-          console.log(`[Cleanup] No active broadcaster in room ${roomId} — ending event ${doc.id}`);
-          await doc.ref.update({
-            isLive: false, liveUrl: null,
-            liveEndedAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-          ended++;
-        } else {
-          console.log(`[Cleanup] Room ${roomId} has active broadcaster — keeping live`);
-        }
-      } catch (e) {
-        console.error(`[Cleanup] Error checking room ${roomId}:`, e.message);
-      }
-    }
-
-    if (ended > 0) console.log(`[Cleanup] Ended ${ended} stale live event(s)`);
+// ─── CALLABLE: Immediate cleanup (called from client on stream end) ───────────
+// Named differently from the scheduled version to avoid Firebase trigger-type conflict
+exports.cleanupStaleLiveEventsNow = onCall(
+  { region: REGION },
+  async () => {
+    const ended = await runStaleLiveCleanup();
+    return { ended };
   }
 );
 
-// ─── BACKFILL: Assign rooms to existing events that don't have one ─────────────
-exports.backfillEventRooms = onCall(
+// ─── SCHEDULED: Clean up stale live events every 10 minutes ──────────────────
+exports.cleanupStaleLiveEvents = onSchedule(
+  { schedule: 'every 2 minutes', region: REGION },
+  async () => { await runStaleLiveCleanup(); }
+);
+
+
+// ─── NATIVE STREAM: Start session ────────────────────────────────────────────
+// Returns a Cloud Run WebSocket URL for the native streaming relay.
+// The Cloud Run container (deployed separately) accepts WebSocket connections,
+// receives binary MediaRecorder chunks, and pipes them through FFmpeg to YouTube RTMP.
+//
+// This function:
+//   1. Creates a YouTube broadcast via OAuth (or uses a manual stream key)
+//   2. Returns the Cloud Run WebSocket URL + YouTube watch URL to the client
+//
+// NOTE: Cloud Run container must be deployed separately — see /streaming-relay/README.md
+// Until deployed, this returns a mock URL so the frontend test UI can be developed.
+exports.nativeStreamStart = onCall(
+  { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+    const { useOAuth, manualRtmpKey, eventTitle } = request.data || {};
+
+    let rtmpUrl   = null;
+    let watchUrl  = null;
+    let broadcastId = null;
+
+    // ── Get RTMP target ──────────────────────────────────────────────────────
+    if (useOAuth) {
+      try {
+        const accessToken = await getYouTubeAccessToken();
+        const broadcast   = await createYouTubeBroadcast(accessToken, eventTitle || 'Community Events Live Stream');
+        // Use RTMPS (port 443) — Cloud Run blocks outbound port 1935 (plain RTMP)
+        const ingestBase = broadcast.rtmpsUrl || broadcast.rtmpUrl;
+        rtmpUrl     = `${ingestBase}/${broadcast.streamKey}`;
+        watchUrl    = broadcast.watchUrl;
+        broadcastId = broadcast.broadcastId;
+        console.log(`[NativeStream] YouTube broadcast created: ${broadcastId}, using ${broadcast.rtmpsUrl ? 'RTMPS:443' : 'RTMP:1935'}`);
+      } catch (e) {
+        console.error('[NativeStream] OAuth/broadcast failed:', e.message);
+        console.error('[NativeStream] Stack:', e.stack?.slice(0, 500));
+        throw new HttpsError('internal',
+          `YouTube setup failed: ${e.message}. If this mentions token/auth, go to Admin Dashboard → Settings → reconnect YouTube.`);
+      }
+    } else if (manualRtmpKey) {
+      // RTMPS on port 443 — Cloud Run blocks outbound port 1935 (plain RTMP)
+      rtmpUrl  = `rtmps://a.rtmps.youtube.com/live2/${manualRtmpKey}`;
+      watchUrl = `https://www.youtube.com/channel/UC9AvesDamQvU7idD2OD1R6w/live`;
+    } else {
+      throw new HttpsError('invalid-argument', 'Either useOAuth=true or manualRtmpKey required.');
+    }
+
+    // ── Get Cloud Run WebSocket URL ──────────────────────────────────────────
+    const RELAY_URL = process.env.NATIVE_STREAM_RELAY_URL
+      || 'wss://native-stream-relay-209723097611.australia-southeast1.run.app';
+
+    const sessionId = `ns_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    // Store session in Firestore so relay can validate it
+    try {
+      await db.collection('nativeStreamSessions').doc(sessionId).set({
+        uid:        request.auth.uid,
+        rtmpUrl,
+        broadcastId: broadcastId || null,
+        watchUrl:    watchUrl || null,
+        createdAt:   new Date().toISOString(),
+        status:      'pending',
+      });
+    } catch (e) {
+      console.error('[NativeStream] Firestore session write failed:', e.message, e.code);
+      throw new HttpsError('internal', 'Failed to create session in Firestore: ' + e.message);
+    }
+
+    const wsUrl = `${RELAY_URL}/stream?session=${sessionId}`;
+    console.log(`[NativeStream] Session ${sessionId} created for uid ${request.auth.uid}`);
+    return { wsUrl, watchUrl, sessionId, rtmpTarget: rtmpUrl.replace(/\/[^/]+$/, '/REDACTED') };
+  }
+);
+
+// ─── NATIVE STREAM: Stop session ─────────────────────────────────────────────
+exports.nativeStreamStop = onCall(
   { region: REGION },
   async (request) => {
-    const { HttpsError } = require("firebase-functions/v2/https");
-    if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+    const { sessionId } = request.data || {};
+    if (!sessionId) throw new HttpsError('invalid-argument', 'sessionId required.');
 
-    // Only superadmin can run this
-    const userSnap = await db.collection("users").doc(request.auth.uid).get();
-    if (userSnap.data()?.role !== "superAdmin") {
-      throw new HttpsError("permission-denied", "SuperAdmin only.");
+    const sessRef = db.collection('nativeStreamSessions').doc(sessionId);
+    const sess    = await sessRef.get();
+    if (!sess.exists) throw new HttpsError('not-found', 'Session not found.');
+    if (sess.data().uid !== request.auth.uid) throw new HttpsError('permission-denied', 'Not your session.');
+
+    await sessRef.update({ status: 'stopped', stoppedAt: new Date().toISOString() });
+    console.log(`[NativeStream] Session ${sessionId} stopped`);
+    return { ok: true };
+  }
+);
+
+// ─── NATIVE STREAM: Check YouTube stream health (diagnostic) ────────────────
+// Returns the streamStatus of the bound liveStream — tells us if YouTube
+// is receiving valid data ('active') or not ('ready'/'error'/'inactive').
+exports.nativeStreamCheckHealth = onCall(
+  { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+    const { sessionId } = request.data || {};
+    if (!sessionId) throw new HttpsError('invalid-argument', 'sessionId required.');
+
+    const sess = await db.collection('nativeStreamSessions').doc(sessionId).get();
+    if (!sess.exists) throw new HttpsError('not-found', 'Session not found.');
+    const { broadcastId } = sess.data();
+    if (!broadcastId) return { error: 'No broadcastId — manual key mode, cannot check health' };
+
+    const accessToken = await getYouTubeAccessToken();
+
+    // Get the broadcast to find the bound stream ID
+    const bRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/liveBroadcasts?part=contentDetails,status&id=${broadcastId}`,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } }
+    );
+    const bData = await bRes.json();
+    const item = bData.items?.[0];
+    const streamId = item?.contentDetails?.boundStreamId;
+    const broadcastStatus = item?.status?.lifeCycleStatus;
+
+    if (!streamId) return { broadcastStatus, streamStatus: 'no-bound-stream', healthStatus: null };
+
+    // Get the stream's health status
+    const sRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/liveStreams?part=status&id=${streamId}`,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } }
+    );
+    const sData = await sRes.json();
+    const streamStatus = sData.items?.[0]?.status?.streamStatus;
+    const healthStatus = sData.items?.[0]?.status?.healthStatus;
+
+    console.log(`[NativeStream] Health check — broadcast: ${broadcastStatus}, stream: ${streamStatus}, health:`, JSON.stringify(healthStatus));
+
+    // If stream is active but broadcast hasn't transitioned, manually transition it
+    if (streamStatus === 'active' && broadcastStatus !== 'live' && broadcastStatus !== 'complete') {
+      let nextStatus = broadcastStatus;
+      let transitioned = false;
+
+      if (broadcastStatus === 'ready') {
+        console.log('[NativeStream] Stream active but broadcast is ready - transitioning to testing');
+        const testingRes = await fetch(
+          `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=testing&id=${broadcastId}&part=status`,
+          { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+        const testingData = await testingRes.json();
+        console.log('[NativeStream] Testing transition result:', JSON.stringify(testingData).slice(0, 300));
+        if (testingData.status?.lifeCycleStatus) {
+          nextStatus = testingData.status.lifeCycleStatus;
+          transitioned = true;
+        }
+      }
+
+      if (nextStatus === 'testing' || broadcastStatus === 'testing') {
+        console.log('[NativeStream] Stream active - transitioning broadcast to live');
+        const liveRes = await fetch(
+          `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=live&id=${broadcastId}&part=status`,
+          { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+        const liveData = await liveRes.json();
+        console.log('[NativeStream] Live transition result:', JSON.stringify(liveData).slice(0, 300));
+        if (liveData.status?.lifeCycleStatus) {
+          nextStatus = liveData.status.lifeCycleStatus;
+          transitioned = true;
+        }
+      }
+
+      return { broadcastStatus: nextStatus, streamStatus, healthStatus, transitioned };
     }
 
-    const snap = await db.collection("events").get();
+    if (streamStatus === 'active' && broadcastStatus === 'ready') {
+      console.log('[NativeStream] Stream active but broadcast not live — transitioning to live');
+      const tRes = await fetch(
+        `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=live&id=${broadcastId}&part=status`,
+        { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}` } }
+      );
+      const tData = await tRes.json();
+      console.log('[NativeStream] Transition result:', JSON.stringify(tData).slice(0, 300));
+      return { broadcastStatus: tData.status?.lifeCycleStatus || broadcastStatus, streamStatus, healthStatus, transitioned: true };
+    }
 
-    let created = 0, skipped = 0;
-    const token = generateHMSManagementToken();
+    return { broadcastStatus, streamStatus, healthStatus, transitioned: false };
+  }
+);
 
-    for (const doc of snap.docs) {
-      const data = doc.data();
-      if (data.liveRoomId) { skipped++; continue; }
+// ─── NATIVE STREAM: End event (robust server-side cleanup) ───────────────────
+// Called by the host when confirming "End Stream". Directly clears isLive on
+// the event AND marks the relay session as stopped — bypasses any client-side
+// race conditions between session-status checks and Firestore writes.
+exports.nativeStreamEndEvent = onCall(
+  { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+    const { eventId, sessionId } = request.data || {};
+    if (!eventId) throw new HttpsError('invalid-argument', 'eventId required.');
 
-      try {
-        const roomName = `ce${doc.id}`.replace(/[^a-zA-Z0-9]/g, '').slice(0, 50);
-        let res = await fetch(`${HMS_API}/rooms`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify({
-            name:        roomName,
-            description: `${data.eventType} — ${data.hostName}`,
-            template_id: HMS_TEMPLATE_ID,
-            region:      'in',
-          }),
-        });
-        let room = await res.json();
+    const eventRef = db.collection('events').doc(eventId);
+    const eventSnap = await eventRef.get();
+    if (!eventSnap.exists) throw new HttpsError('not-found', 'Event not found.');
 
-        // If already exists, fetch it
-        if (!res.ok && (room.message?.includes('already exists') || room.code === 'room_duplicate_name')) {
-          const r2 = await fetch(`${HMS_API}/rooms?name=${roomName}`, {
-            headers: { 'Authorization': `Bearer ${token}` },
-          });
-          const d2 = await r2.json();
-          room = d2.data?.[0];
-        }
-
-        if (room?.id) {
-          await db.collection("events").doc(doc.id).update({ liveRoomId: room.id });
-          created++;
-          console.log(`[Backfill] Room ${room.id} → event ${doc.id}`);
-        }
-      } catch (e) {
-        console.error(`[Backfill] Failed for event ${doc.id}:`, e.message);
+    const eventData = eventSnap.data();
+    const isOwner = eventData.createdByUserId === request.auth.uid;
+    if (!isOwner) {
+      const userDoc = await db.collection('users').doc(request.auth.uid).get();
+      const role = userDoc.data()?.role;
+      if (role !== 'admin' && role !== 'superAdmin') {
+        throw new HttpsError('permission-denied', 'Not your event.');
       }
     }
 
-    return { created, skipped, total: snap.size, message: `${created} rooms created, ${skipped} already had rooms, ${snap.size - created - skipped} failed` };
+    // 1. Get broadcastId from session so we can end the YouTube broadcast cleanly
+    let broadcastId = null;
+    if (sessionId) {
+      const sessRef = db.collection('nativeStreamSessions').doc(sessionId);
+      const sessSnap = await sessRef.get().catch(() => null);
+      if (sessSnap?.exists) {
+        broadcastId = sessSnap.data().broadcastId || null;
+        // Mark session stopped
+        await sessRef.update({ status: 'stopped', stoppedAt: new Date().toISOString() })
+          .catch(e => console.warn('[NativeStream] Session update failed:', e.message));
+      }
+    }
+
+    // 2. Transition YouTube broadcast to 'complete' — this cleanly ends the
+    //    YouTube stream for all viewers, replacing the endless buffering state
+    //    that occurs when the RTMP connection is simply dropped without a proper
+    //    broadcast end signal. Fire-and-forget with error logging.
+    if (broadcastId) {
+      try {
+        const accessToken = await getYouTubeAccessToken();
+        // First check current lifecycle status — can only transition from 'live'
+        const statusRes = await fetch(
+          `https://www.googleapis.com/youtube/v3/liveBroadcasts?part=status&id=${broadcastId}`,
+          { headers: { 'Authorization': `Bearer ${accessToken}` } }
+        );
+        const statusData = await statusRes.json();
+        const lifeCycle = statusData.items?.[0]?.status?.lifeCycleStatus;
+        console.log(`[NativeStream] Broadcast ${broadcastId} lifecycle: ${lifeCycle}`);
+
+        if (lifeCycle === 'live' || lifeCycle === 'liveStarting') {
+          const transRes = await fetch(
+            `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=complete&id=${broadcastId}&part=status`,
+            { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Length': '0' } }
+          );
+          const transData = await transRes.json();
+          if (transData.error) {
+            console.error(`[NativeStream] Broadcast transition failed: ${JSON.stringify(transData.error)}`);
+          } else {
+            console.log(`[NativeStream] Broadcast ${broadcastId} transitioned to complete`);
+          }
+        } else {
+          console.log(`[NativeStream] Broadcast ${broadcastId} already in state ${lifeCycle} — no transition needed`);
+        }
+      } catch (e) {
+        // Don't fail the whole end-event call if YouTube transition fails —
+        // the Firestore update below is the critical piece for the app UI
+        console.error('[NativeStream] YouTube transition error (non-fatal):', e.message);
+      }
+    }
+
+    // 3. Force-clear isLive on the event — source of truth for the app UI
+    await eventRef.update({
+      isLive:       false,
+      liveUrl:      null,
+      liveWatchUrl: null,
+      liveEndedAt:  new Date().toISOString(),
+      updatedAt:    new Date().toISOString(),
+    });
+
+    console.log(`[NativeStream] Event ${eventId} ended by ${request.auth.uid}`);
+    return { ok: true };
   }
 );

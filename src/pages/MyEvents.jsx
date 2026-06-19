@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import EventCard from '../components/EventCard';
 import { getMyEvents, toggleEventVisibility } from '../services/eventService';
 
-export default function MyEvents({ user, profile, setPage, setEditingEvent, handleDelete, handleCopy }) {
+export default function MyEvents({ user, profile, setPage, setEditingEvent, handleDelete, handleCopy, onStreamStart }) {
   const [myEvents,  setMyEvents]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [expandedId, setExpandedId] = useState(null);
@@ -95,6 +95,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
               onCopy={handleCopy}
               isExpanded={expandedId === e.id}
               onExpand={setExpandedId}
+              onStreamStart={onStreamStart}
             />
           </div>
         </div>

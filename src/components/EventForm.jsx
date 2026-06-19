@@ -3,8 +3,10 @@ import ReciterFields from './ReciterFields';
 import HijriDatePicker from './HijriDatePicker';
 import AddressAutocomplete from './AddressAutocomplete';
 import { AUDIENCE_TYPES, EVENT_TYPES, RELIGIOUS_EVENT_TYPES } from '../utils/constants';
-import { getHijriDisplay, getHijriParts } from '../services/hijriService';
+import { getHijriDisplay, getHijriParts, hijriDisplayFromParts } from '../services/hijriService';
 import { getHijriSettings } from '../services/settingsService';
+import { getOrganisations } from '../services/organisationsService';
+import { uploadEventImage, getFallbackImage } from '../services/imageService';
 
 export default function EventForm({
   initialEvent, onSubmit, submitLabel = null,
@@ -23,7 +25,7 @@ export default function EventForm({
     eventType:           'Majlis',
     customEventType:     '',
     eventSubject:        '',
-    audienceType:        'Mixed Audience',
+    audienceType:        'Family Event',
     isOnBehalfOf:        false,
     organiserType:       'private',   // 'private' | 'centre' — default always private
     hostContactOptional: '',
@@ -35,22 +37,37 @@ export default function EventForm({
 
   const [form, setForm]             = useState(initialEvent || blank());
   const [overrides, setOverrides]   = useState([]);
+  const [dynamicOrgs, setDynamicOrgs] = useState([]);
   const [duplicates, setDuplicates] = useState([]);
   const [calendarMode, setCalendarMode] = useState('gregorian'); // 'gregorian' | 'hijri'
   const [hijriInput, setHijriInput]     = useState({});
+  // Photo upload
+  const [imagePreview, setImagePreview] = useState(initialEvent?.imageUrl || '');
+  const [uploadingImg,  setUploadingImg] = useState(false);
+  const [pendingFile,   setPendingFile]  = useState(null);
 
   const isCustom      = form.eventType === 'Custom';
   const showReligious = RELIGIOUS_EVENT_TYPES.includes(form.eventType);
 
   useEffect(() => {
     getHijriSettings().then(s => setOverrides(s.overrides || [])).catch(() => {});
+    getOrganisations().then(orgs => {
+      // Filter out built-ins — they are already hardcoded as static options above
+      const custom = (orgs || []).filter(o => !o.builtIn);
+      setDynamicOrgs(custom);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
     if (form.eventDate) {
-      setForm(p => ({ ...p, hijriDate: getHijriDisplay(p.eventDate, overrides) }));
+      setForm(p => ({
+        ...p,
+        hijriDate: p.enteredAsHijri && p.hijriDay && p.hijriMonth && p.hijriYear
+          ? hijriDisplayFromParts(p.hijriDay, p.hijriMonth, p.hijriYear)
+          : getHijriDisplay(p.eventDate, overrides),
+      }));
     }
-  }, [form.eventDate, overrides]);
+  }, [form.eventDate, form.enteredAsHijri, form.hijriDay, form.hijriMonth, form.hijriYear, overrides]);
 
   useEffect(() => {
     if (!form.eventDate || !form.startTime) { setDuplicates([]); return; }
@@ -74,15 +91,51 @@ export default function EventForm({
     setForm(p => ({ ...p, eventType: val, customEventType: val === 'Custom' ? p.customEventType : '' }));
   };
 
-  const submit = e => {
+  // Handle photo selection — preview immediately, upload on submit
+  const handlePhotoPick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return;
+    setPendingFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setImagePreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const removePhoto = () => {
+    setPendingFile(null);
+    setImagePreview('');
+    setForm(p => ({ ...p, imageUrl: '', imagePath: '' }));
+  };
+
+  const submit = async e => {
     e.preventDefault();
     // Resolve the display event type
     const resolvedType = isCustom && form.customEventType.trim()
       ? form.customEventType.trim()
       : form.eventType;
 
+    // Upload the photo first if a new one was picked
+    let imageUrl = form.imageUrl || '';
+    let imagePath = form.imagePath || '';
+    if (pendingFile) {
+      setUploadingImg(true);
+      try {
+        const eventId = initialEvent?.id || `${user?.uid || 'anon'}_${Date.now()}`;
+        const res = await uploadEventImage(pendingFile, eventId, user?.uid);
+        imageUrl = res.url;
+        imagePath = res.path;
+      } catch (err) {
+        console.error('Image upload failed:', err);
+        // Continue without image — fallback logo will be used
+      }
+      setUploadingImg(false);
+    }
+
     onSubmit({
       ...form,
+      imageUrl,
+      imagePath,
       eventTypeDisplay: resolvedType,    // human-readable label (e.g. "Aqeeqa")
       speakerName: showReligious ? form.speakerName : '',
       reciters:    showReligious ? (form.reciters || []).filter(r => r.name?.trim()) : [],
@@ -93,6 +146,37 @@ export default function EventForm({
     <form className="card" onSubmit={submit}>
       <h2>{initialEvent ? 'Edit Event' : 'Add Event'}</h2>
 
+      {/* ── Event Poster ── */}
+      <label>Upload Event Poster <span className="small" style={{ fontWeight: 400 }}>(optional)</span></label>
+      {imagePreview ? (
+        <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden',
+          marginBottom: 14, marginTop: 4 }}>
+          <img src={imagePreview} alt="Event"
+            style={{ width: '100%', height: 180, objectFit: 'cover', display: 'block' }} />
+          <button type="button" onClick={removePhoto} style={{
+            position: 'absolute', top: 8, right: 8, width: 32, height: 32,
+            borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: 'white',
+            border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>×</button>
+        </div>
+      ) : (
+        <label style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+          background: 'var(--bg,#f4f7f6)', border: '2px dashed #b9ccc8',
+          borderRadius: 14, padding: 22, cursor: 'pointer',
+          color: 'var(--teal,#0f766e)', marginTop: 4, marginBottom: 14,
+        }}>
+          <span style={{ fontSize: 30 }}>📷</span>
+          <span style={{ fontSize: 13, fontWeight: 800 }}>Upload your event poster</span>
+          <span style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+            Optional — if you don't, your organisation logo will be shown
+          </span>
+          <input type="file" accept="image/*" onChange={handlePhotoPick}
+            style={{ display: 'none' }} />
+        </label>
+      )}
+
       {/* On behalf of */}
       <label className="checkbox" style={{ marginBottom: 10 }}>
         <input type="checkbox" checked={!!form.isOnBehalfOf}
@@ -100,39 +184,25 @@ export default function EventForm({
         <span>I am adding this event on behalf of someone else</span>
       </label>
 
-      {/* Organiser Type toggle — always shown, default private */}
+      {/* Organiser Type — private or specific organisation */}
       <div style={{ marginBottom: 14 }}>
         <label style={{ display: 'block', marginBottom: 6 }}>
           Organiser Type
           <span className="small" style={{ marginLeft: 6, fontWeight: 400 }}>
-            (Private = individual host · Centre = organisation or centre)
+            (Used to show the correct logo when no poster is uploaded)
           </span>
         </label>
-        <div style={{
-          display: 'inline-flex', borderRadius: 12,
-          border: '1px solid var(--border)', overflow: 'hidden',
-          background: 'var(--bg,#f3f4f6)'
-        }}>
-          {['private', 'centre'].map(opt => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => update('organiserType', opt)}
-              style={{
-                padding: '9px 22px',
-                border: 'none', cursor: 'pointer',
-                fontWeight: form.organiserType === opt ? 900 : 500,
-                fontSize: 14,
-                background: form.organiserType === opt ? 'var(--teal)' : 'transparent',
-                color:      form.organiserType === opt ? 'white'       : 'var(--muted)',
-                transition: 'all .15s',
-                textTransform: 'capitalize'
-              }}
-            >
-              {opt === 'private' ? '🔒 Private' : '🏛 Centre'}
-            </button>
+        <select value={form.organiserType}
+          onChange={e => update('organiserType', e.target.value)}>
+          <option value="private">🔒 Private (individual host)</option>
+          <option value="muhammadi">🏛 Muhammadi Welfare Association</option>
+          <option value="imamhasan">🏛 Imam Hasan Centre</option>
+          <option value="alamdar">🏛 Alamdar Granville</option>
+          {dynamicOrgs.map(org => (
+            <option key={org.id} value={org.slug}>🏛 {org.name}{org.location ? ` — ${org.location}` : ''}</option>
           ))}
-        </div>
+          <option value="centre">🏛 Other Centre / Organisation</option>
+        </select>
       </div>
 
       {/* Host name */}
@@ -184,7 +254,13 @@ export default function EventForm({
             <input type="date" value={form.eventDate}
               onChange={e => {
                 update('eventDate', e.target.value);
-                setForm(p => ({ ...p, enteredAsHijri: false }));
+                setForm(p => ({
+                  ...p,
+                  enteredAsHijri: false,
+                  hijriDay: null,
+                  hijriMonth: null,
+                  hijriYear: null,
+                }));
               }} />
             {form.eventDate && (
               <p className="small" style={{ marginTop: -8 }}>Hijri: {form.hijriDate}</p>
@@ -304,8 +380,8 @@ export default function EventForm({
           Cancel
         </button>
       )}
-      <button type="submit" disabled={saving}>
-        {saving ? 'Saving…' : submitLabel || (initialEvent?.id ? 'Update Event' : 'Add Event')}
+      <button type="submit" disabled={saving || uploadingImg}>
+        {uploadingImg ? 'Uploading photo…' : saving ? 'Saving…' : submitLabel || (initialEvent?.id ? 'Update Event' : 'Add Event')}
       </button>
     </form>
   );

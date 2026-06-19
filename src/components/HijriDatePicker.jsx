@@ -1,15 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { HIJRI_MONTHS, hijriToGregorian, hijriDisplayFromParts, getHijriParts } from '../services/hijriService';
+import { getHijriSettings } from '../services/settingsService';
 
-// Generates day options 1-30 (Hijri months are 29 or 30 days)
 const DAYS = Array.from({ length: 30 }, (_, i) => i + 1);
-
-// Sensible Hijri year range
-const currentHijriYear = (() => {
-  try { return getHijriParts(new Date()).year || 1448; }
-  catch { return 1448; }
-})();
-const YEARS = Array.from({ length: 10 }, (_, i) => currentHijriYear - 2 + i);
 
 const SEL_STYLE = {
   flex: 1, padding: '10px 8px', fontSize: 14,
@@ -18,15 +11,87 @@ const SEL_STYLE = {
   marginTop: 0, marginBottom: 0,
 };
 
-export default function HijriDatePicker({ value = {}, onChange, overrides = [] }) {
-  const [day,   setDay]   = useState(value.hDay   || '');
-  const [month, setMonth] = useState(value.hMonth || '');
-  const [year,  setYear]  = useState(value.hYear  || currentHijriYear);
-  const [gregResult, setGregResult] = useState('');
-  const [error, setError] = useState('');
+export default function HijriDatePicker({ value = {}, onChange, overrides: overridesProp = [] }) {
 
+  // ── Load overrides from Firestore (merge with any prop overrides) ────────
+  const [overrides, setOverrides] = useState(overridesProp || []);
   useEffect(() => {
-    if (day && month && year && overrides !== undefined) {
+    getHijriSettings()
+      .then(s => setOverrides(s.overrides || []))
+      .catch(() => setOverrides(overridesProp || []));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Today's Hijri — recomputed whenever overrides are ready ─────────────
+  const today = useMemo(() => {
+    try {
+      const h = getHijriParts(new Date(), overrides);
+      return { d: h.day || 1, m: h.month || 1, y: h.year || 1447 };
+    } catch { return { d: 1, m: 1, y: 1447 }; }
+  }, [overrides]); // re-runs when overrides load
+
+  const YEARS = useMemo(() =>
+    Array.from({ length: 10 }, (_, i) => today.y - 2 + i),
+  [today.y]);
+
+  // ── State — initialise to today if no value passed ───────────────────────
+  const [day,        setDay]        = useState(value.hDay   ? String(value.hDay)   : '');
+  const [month,      setMonth]      = useState(value.hMonth ? String(value.hMonth) : '');
+  const [year,       setYear]       = useState(value.hYear  ? String(value.hYear)  : '');
+  const [gregResult, setGregResult] = useState('');
+  const [error,      setError]      = useState('');
+  const [todayReady, setTodayReady] = useState(false);
+
+  // Once overrides load, set initial day/month/year to today if not provided
+  useEffect(() => {
+    if (overrides.length >= 0 && !todayReady) {
+      setTodayReady(true);
+      if (!value.hDay)   setDay(String(today.d));
+      if (!value.hMonth) setMonth(String(today.m));
+      if (!value.hYear)  setYear(String(today.y));
+    }
+  }, [today]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Core year-calc: given day+month what year should it be? ─────────────
+  function calcYear(d, m) {
+    if (m > today.m) return today.y;
+    if (m < today.m) return today.y + 1;
+    if (d >= today.d) return today.y;
+    return today.y + 1;
+  }
+
+  // ── Day change ────────────────────────────────────────────────────────────
+  function handleDayChange(e) {
+    const selD = parseInt(e.target.value);
+    if (isNaN(selD)) { setDay(e.target.value); return; }
+    const selM = parseInt(month);
+
+    let newM = selM;
+    let newY = calcYear(selD, selM);
+
+    // day < today AND in today's month → bump month forward
+    if (selD < today.d && selM === today.m) {
+      newM = today.m < 12 ? today.m + 1 : 1;
+      newY = today.m === 12 ? today.y + 1 : today.y;
+    }
+
+    setDay(String(selD));
+    setMonth(String(newM));
+    setYear(String(newY));
+  }
+
+  // ── Month change ──────────────────────────────────────────────────────────
+  function handleMonthChange(e) {
+    const selM = parseInt(e.target.value);
+    if (isNaN(selM)) { setMonth(e.target.value); return; }
+    const selD = day ? parseInt(day) : today.d;
+    const newY = calcYear(selD, selM);
+    setMonth(String(selM));
+    setYear(String(newY));
+  }
+
+  // ── Gregorian conversion + onChange ──────────────────────────────────────
+  useEffect(() => {
+    if (day && month && year) {
       const greg = hijriToGregorian(Number(day), Number(month), Number(year), overrides);
       if (greg) {
         setGregResult(new Date(greg + 'T00:00:00').toLocaleDateString('en-AU', {
@@ -38,7 +103,6 @@ export default function HijriDatePicker({ value = {}, onChange, overrides = [] }
           hMonth:        Number(month),
           hYear:         Number(year),
           gregorianDate: greg,
-          // Display string built directly from user input — exact, not recomputed
           displayStr:    hijriDisplayFromParts(Number(day), Number(month), Number(year))
         });
       } else {
@@ -48,19 +112,19 @@ export default function HijriDatePicker({ value = {}, onChange, overrides = [] }
     } else {
       setGregResult('');
     }
-  }, [day, month, year, overrides]);
+  }, [day, month, year, overrides]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div>
       <div style={{ display: 'flex', gap: 8, marginTop: 6, marginBottom: 6 }}>
         {/* Day */}
-        <select value={day} onChange={e => setDay(e.target.value)} style={SEL_STYLE} required>
+        <select value={day} onChange={handleDayChange} style={SEL_STYLE} required>
           <option value="">Day</option>
           {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
 
-        {/* Month — shows name */}
-        <select value={month} onChange={e => setMonth(e.target.value)} style={{ ...SEL_STYLE, flex: 2 }} required>
+        {/* Month */}
+        <select value={month} onChange={handleMonthChange} style={{ ...SEL_STYLE, flex: 2 }} required>
           <option value="">Month</option>
           {HIJRI_MONTHS.map(m => (
             <option key={m.value} value={m.value}>{m.name}</option>
@@ -73,7 +137,6 @@ export default function HijriDatePicker({ value = {}, onChange, overrides = [] }
         </select>
       </div>
 
-      {/* Converted Gregorian date */}
       {gregResult && (
         <p style={{ fontSize: 12, color: 'var(--teal)', margin: '2px 0 8px', fontWeight: 700 }}>
           📅 Gregorian: {gregResult}

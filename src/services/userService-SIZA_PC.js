@@ -1,0 +1,111 @@
+import {
+  collection, doc, getDoc, getDocs, query,
+  serverTimestamp, setDoc, updateDoc, where
+} from 'firebase/firestore';
+import { deleteUser } from 'firebase/auth';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { getApp } from 'firebase/app';
+import { db } from '../firebase/firebase';
+import { ROLES } from '../utils/constants';
+
+// ── IMPORTANT: Set your Super Admin email here ─────────────────────────────────
+// On first login this email will automatically get superAdmin role.
+const SUPER_ADMIN_EMAIL = 'sajjadzaheer@gmail.com';
+
+export async function ensureUserProfile(user, extraData = {}) {
+  const ref  = doc(db, 'users', user.uid);
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    const role = user.email === SUPER_ADMIN_EMAIL ? ROLES.SUPER_ADMIN : ROLES.USER;
+    // extraData contains name/email from registration form — use them first
+    const p = {
+      fullName: extraData.fullName || user.displayName || user.email?.split('@')[0] || '',
+      email:    extraData.email    || user.email || '',
+      phone:    user.phoneNumber   || extraData.phone || '',
+      role,
+      isActive: true,
+      reminderEmailEnabled: true,
+      privacyAccepted: true,
+      privacyAcceptedAt: serverTimestamp(),
+      termsAccepted: true,
+      termsAcceptedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    };
+    await setDoc(ref, p);
+    return p;
+  }
+
+  // Update phone/email if missing
+  const existingData = snap.data();
+  const updates = {};
+  if (!existingData.phone?.trim() && user.phoneNumber) updates.phone = user.phoneNumber;
+  if (!existingData.email && extraData.email)  updates.email = extraData.email;
+  if (!existingData.fullName && extraData.fullName) updates.fullName = extraData.fullName;
+  if (Object.keys(updates).length > 0) {
+    await updateDoc(ref, { ...updates, updatedAt: serverTimestamp() });
+    return { ...existingData, ...updates };
+  }
+
+  // If existing user with superAdmin email somehow got downgraded, fix it
+  const data = existingData;
+  if (user.email === SUPER_ADMIN_EMAIL && data.role !== ROLES.SUPER_ADMIN) {
+    await updateDoc(ref, { role: ROLES.SUPER_ADMIN, updatedAt: serverTimestamp() });
+    return { ...data, role: ROLES.SUPER_ADMIN };
+  }
+
+  return data;
+}
+
+export async function listUsers() {
+  const snap = await getDocs(collection(db, 'users'));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function updateUserRole(id, role) {
+  if (role !== ROLES.SUPER_ADMIN) {
+    const existing = await getDocs(
+      query(collection(db, 'users'), where('role', '==', ROLES.SUPER_ADMIN))
+    );
+    const currentIsSA = existing.docs.some(d => d.id === id && d.data().role === ROLES.SUPER_ADMIN);
+    if (currentIsSA && existing.docs.length <= 1) {
+      throw new Error('At least one Super Admin must remain in the system.');
+    }
+  }
+  return updateDoc(doc(db, 'users', id), { role, updatedAt: serverTimestamp() });
+}
+
+export async function updateReminderPreference(uid, enabled) {
+  return updateDoc(doc(db, 'users', uid), {
+    reminderEmailEnabled: enabled,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateProfile(uid, data) {
+  return updateDoc(doc(db, 'users', uid), { ...data, updatedAt: serverTimestamp() });
+}
+
+export async function getSavedEvents(uid) {
+  try {
+    const snap = await getDoc(doc(db, 'users', uid));
+    return snap.exists() ? (snap.data()?.savedEvents || []) : [];
+  } catch { return []; }
+}
+
+export async function toggleSavedEvent(uid, eventId, save) {
+  const ref  = doc(db, 'users', uid);
+  const snap = await getDoc(ref);
+  const current = snap.exists() ? (snap.data()?.savedEvents || []) : [];
+  const updated = save
+    ? [...new Set([...current, eventId])]
+    : current.filter(id => id !== eventId);
+  return updateDoc(ref, { savedEvents: updated, updatedAt: serverTimestamp() });
+}
+
+export async function deleteMyAccountAndEvents(currentUser) {
+  const fns = getFunctions(getApp(), 'australia-southeast1');
+  await httpsCallable(fns, 'deleteUserData')();
+  await deleteUser(currentUser);
+}

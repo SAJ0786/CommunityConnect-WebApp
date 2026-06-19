@@ -1,0 +1,17 @@
+{
+  "name": "native-stream-relay",
+  "version": "1.0.0",
+  "description": "WebSocket to FFmpeg to RTMP relay for Community Events Australia",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev":   "node --watch server.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "ws":             "^8.18.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

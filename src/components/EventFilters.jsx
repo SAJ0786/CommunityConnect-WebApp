@@ -43,7 +43,13 @@ export default function EventFilters({ events, onChange }) {
     if (o)   filtered = filtered.filter(e => e.organiserType === o);
     if (s)   filtered = filtered.filter(e => e.address?.suburb === s);
     if (h)   filtered = filtered.filter(e => e.hostName === h);
-    if (at)  filtered = filtered.filter(e => e.audienceType === at);
+    if (at)  filtered = filtered.filter(e => {
+      const stored = e.audienceType || '';
+      // "Family Event" and legacy "Mixed Audience" are the same — match both
+      if (at === 'Family Event') return stored === 'Family Event' || stored === 'Mixed Audience';
+      if (at === 'Mixed Audience') return stored === 'Family Event' || stored === 'Mixed Audience';
+      return stored === at;
+    });
     if (p === 'today')  filtered = filtered.filter(e => e.eventDate === today);
     if (p === 'week')   filtered = filtered.filter(e => e.eventDate >= today && e.eventDate <= weekEnd);
     if (p === 'month')  filtered = filtered.filter(e => e.eventDate >= today && e.eventDate <= monthEnd);
@@ -88,14 +94,7 @@ export default function EventFilters({ events, onChange }) {
     <div style={{ padding: '0 16px 8px' }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
 
-        {/* Sort — left side */}
-        <select value={sortBy} onChange={e => set('sortBy', e.target.value, setSortBy)} style={FILTER_STYLE}>
-          <option value="date">📅 By date</option>
-          <option value="added">🆕 Recently added</option>
-          <option value="live">🔴 Live first</option>
-        </select>
-
-        {/* Filters toggle — centre, takes remaining space */}
+        {/* Filters toggle — takes remaining space */}
         <button onClick={() => setOpen(o => !o)}
           className={activeCount ? '' : 'btn-light'}
           style={{
@@ -160,11 +159,10 @@ export default function EventFilters({ events, onChange }) {
             <label style={{ fontSize: 11, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Audience type</label>
             <select value={audienceType} onChange={e => set('audienceType', e.target.value, setAudienceType)} style={{ ...FILTER_STYLE, width: '100%' }}>
               <option value="">All audiences</option>
-              <option value="Gents">Gents</option>
-              <option value="Ladies">Ladies</option>
-              <option value="Kids">Kids</option>
-              <option value="Mixed">Mixed</option>
-              <option value="Family">Family</option>
+              <option value="Gents only">Gents only</option>
+              <option value="Ladies only">Ladies only</option>
+              <option value="Kids only">Kids only</option>
+              <option value="Family Event">Family Event</option>
             </select>
           </div>
 

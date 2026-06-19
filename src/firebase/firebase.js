@@ -2,6 +2,7 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
+import { getStorage } from 'firebase/storage';
 import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -29,6 +30,7 @@ export const auth           = getAuth(app);
 export const db             = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
 export const functions      = getFunctions(app, 'australia-southeast1');
+export const storage        = getStorage(app);
 
 // Set auth persistence globally
 setPersistence(auth, browserLocalPersistence).catch(() => {});

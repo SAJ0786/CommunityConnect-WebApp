@@ -1,0 +1,115 @@
+import React, { useEffect, useState } from 'react';
+import { HIJRI_MONTHS, hijriToGregorian, hijriDisplayFromParts, getHijriParts } from '../services/hijriService';
+
+// Generates day options 1-30 (Hijri months are 29 or 30 days)
+const DAYS = Array.from({ length: 30 }, (_, i) => i + 1);
+
+// Sensible Hijri year range
+const currentHijriYear = (() => {
+  try { return getHijriParts(new Date()).year || 1448; }
+  catch { return 1448; }
+})();
+const YEARS = Array.from({ length: 10 }, (_, i) => currentHijriYear - 2 + i);
+
+const SEL_STYLE = {
+  flex: 1, padding: '10px 8px', fontSize: 14,
+  border: '1px solid var(--border)', borderRadius: 10,
+  background: 'white', color: 'var(--text)',
+  marginTop: 0, marginBottom: 0,
+};
+
+export default function HijriDatePicker({ value = {}, onChange, overrides = [] }) {
+  // Auto-fill current Hijri month/year if not provided
+  const curHijri = (() => { try { return getHijriParts(new Date(), overrides); } catch { return null; } })();
+  const [day,   setDay]   = useState(value.hDay   || '');
+  const [month, setMonth] = useState(value.hMonth || (curHijri?.month ? String(curHijri.month) : ''));
+  const [year,  setYear]  = useState(value.hYear  || (curHijri?.year  ? String(curHijri.year)  : currentHijriYear));
+  const [gregResult, setGregResult] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (day && month && year && overrides !== undefined) {
+      const greg = hijriToGregorian(Number(day), Number(month), Number(year), overrides);
+      if (greg) {
+        setGregResult(new Date(greg + 'T00:00:00').toLocaleDateString('en-AU', {
+          weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
+        }));
+        setError('');
+        onChange({
+          hDay:          Number(day),
+          hMonth:        Number(month),
+          hYear:         Number(year),
+          gregorianDate: greg,
+          // Display string built directly from user input — exact, not recomputed
+          displayStr:    hijriDisplayFromParts(Number(day), Number(month), Number(year))
+        });
+      } else {
+        setGregResult('');
+        setError('Could not convert this Hijri date. Please check the day/month/year.');
+      }
+    } else {
+      setGregResult('');
+    }
+  }, [day, month, year, overrides]);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 6, marginBottom: 6 }}>
+        {/* Day */}
+        <select value={day} onChange={e => {
+          const d = e.target.value;
+          setDay(d);
+          // If selected day > today's Hijri day in same month → bump month (and year if month 12)
+          if (curHijri && month && parseInt(month) === curHijri.month) {
+            const selD = parseInt(d);
+            const curD = curHijri.day || 1;
+            if (selD > curD) {
+              const newM = curHijri.month < 12 ? curHijri.month + 1 : 1;
+              const newY = curHijri.month === 12 ? curHijri.year + 1 : curHijri.year;
+              setMonth(String(newM));
+              setYear(String(newY));
+            }
+          }
+        }} style={SEL_STYLE} required>
+          <option value="">Day</option>
+          {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+
+        {/* Month — shows name with smart year logic */}
+        <select value={month} onChange={e => {
+          const m = e.target.value;
+          setMonth(m);
+          // If selected month is before current month → bump to next Hijri year
+          const curParts = (() => { try { return getHijriParts(new Date()); } catch { return null; } })();
+          if (curParts && parseInt(m) < curParts.month) {
+            setYear(String(curParts.year + 1));
+          } else if (curParts && !year) {
+            setYear(String(curParts.year));
+          }
+        }} style={{ ...SEL_STYLE, flex: 2 }} required>
+          <option value="">Month</option>
+          {HIJRI_MONTHS.map(m => (
+            <option key={m.value} value={m.value}>{m.name}</option>
+          ))}
+        </select>
+
+        {/* Year */}
+        <select value={year} onChange={e => setYear(e.target.value)} style={SEL_STYLE} required>
+          {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+        </select>
+      </div>
+
+      {/* Converted Gregorian date */}
+      {gregResult && (
+        <p style={{ fontSize: 12, color: 'var(--teal)', margin: '2px 0 8px', fontWeight: 700 }}>
+          📅 Gregorian: {gregResult}
+        </p>
+      )}
+      {error && (
+        <p style={{ fontSize: 12, color: 'var(--danger)', margin: '2px 0 8px' }}>
+          ⚠️ {error}
+        </p>
+      )}
+    </div>
+  );
+}

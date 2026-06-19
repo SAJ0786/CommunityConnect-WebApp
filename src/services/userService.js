@@ -16,12 +16,40 @@ export async function ensureUserProfile(user, extraData = {}) {
   const ref  = doc(db, 'users', user.uid);
   const snap = await getDoc(ref);
 
+  // ── Account linking: phone user matched to existing Google/Microsoft account ──
+  // extraData._linkedFrom = the old UID (Google/Microsoft account)
+  // We copy the old profile to the new phone UID, preserving role/events/etc.
+  if (extraData._linkedFrom && extraData._linkedFrom !== user.uid) {
+    const oldRef  = doc(db, 'users', extraData._linkedFrom);
+    const oldSnap = await getDoc(oldRef);
+    if (oldSnap.exists()) {
+      const oldData = oldSnap.data();
+      const merged  = {
+        ...oldData,
+        phone:     user.phoneNumber || '',
+        updatedAt: serverTimestamp(),
+        linkedFrom: extraData._linkedFrom,
+      };
+      // Write new profile under phone UID
+      await setDoc(ref, merged, { merge: true });
+      // Mark the old profile as migrated (so it still exists but is inactive)
+      await updateDoc(oldRef, {
+        migratedToUid: user.uid,
+        migratedAt:    serverTimestamp(),
+        isActive:      false,
+      }).catch(() => {});
+      return merged;
+    }
+  }
+
   if (!snap.exists()) {
-    const role = user.email === SUPER_ADMIN_EMAIL ? ROLES.SUPER_ADMIN : ROLES.USER;
+    const profileEmail = (extraData.email || user.email || '').trim().toLowerCase();
+    const role = profileEmail === SUPER_ADMIN_EMAIL ? ROLES.SUPER_ADMIN : ROLES.USER;
     // extraData contains name/email from registration form — use them first
     const p = {
       fullName: extraData.fullName || user.displayName || user.email?.split('@')[0] || '',
-      email:    extraData.email    || user.email || '',
+      email:    profileEmail,
+      emailLower: profileEmail,
       phone:    user.phoneNumber   || extraData.phone || '',
       role,
       isActive: true,
@@ -41,7 +69,12 @@ export async function ensureUserProfile(user, extraData = {}) {
   const existingData = snap.data();
   const updates = {};
   if (!existingData.phone?.trim() && user.phoneNumber) updates.phone = user.phoneNumber;
-  if (!existingData.email && extraData.email)  updates.email = extraData.email;
+  if (!existingData.email && extraData.email) {
+    updates.email = extraData.email.trim().toLowerCase();
+    updates.emailLower = updates.email;
+  } else if (existingData.email && !existingData.emailLower) {
+    updates.emailLower = String(existingData.email).trim().toLowerCase();
+  }
   if (!existingData.fullName && extraData.fullName) updates.fullName = extraData.fullName;
   if (Object.keys(updates).length > 0) {
     await updateDoc(ref, { ...updates, updatedAt: serverTimestamp() });
@@ -50,7 +83,8 @@ export async function ensureUserProfile(user, extraData = {}) {
 
   // If existing user with superAdmin email somehow got downgraded, fix it
   const data = existingData;
-  if (user.email === SUPER_ADMIN_EMAIL && data.role !== ROLES.SUPER_ADMIN) {
+  const existingEmail = String(data.email || user.email || '').trim().toLowerCase();
+  if (existingEmail === SUPER_ADMIN_EMAIL && data.role !== ROLES.SUPER_ADMIN) {
     await updateDoc(ref, { role: ROLES.SUPER_ADMIN, updatedAt: serverTimestamp() });
     return { ...data, role: ROLES.SUPER_ADMIN };
   }
@@ -60,7 +94,9 @@ export async function ensureUserProfile(user, extraData = {}) {
 
 export async function listUsers() {
   const snap = await getDocs(collection(db, 'users'));
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() }))
+    .filter(u => u.isActive !== false && !u.migratedToUid);
 }
 
 export async function updateUserRole(id, role) {
@@ -104,8 +140,8 @@ export async function toggleSavedEvent(uid, eventId, save) {
   return updateDoc(ref, { savedEvents: updated, updatedAt: serverTimestamp() });
 }
 
-export async function deleteMyAccountAndEvents(currentUser) {
+export async function deleteMyAccountAndEvents(currentUser, keepEvents = false) {
   const fns = getFunctions(getApp(), 'australia-southeast1');
-  await httpsCallable(fns, 'deleteUserData')();
+  await httpsCallable(fns, 'deleteUserData')({ keepEvents });
   await deleteUser(currentUser);
 }

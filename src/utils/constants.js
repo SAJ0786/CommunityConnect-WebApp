@@ -13,7 +13,7 @@ export const AUDIENCE_TYPES = [
   'Gents only',
   'Ladies only',
   'Kids only',
-  'Mixed Audience'
+  'Family Event'
 ];
 
 export const RECITER_TYPES = [

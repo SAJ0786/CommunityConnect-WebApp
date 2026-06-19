@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; background: white; color: #1f2937; padding: 16px 20px; font-size: 10px; }
+
+  h1 { text-align: center; font-size: 18px; font-weight: 900; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .subtitle { text-align: center; color: #6b7280; font-size: 10px; margin-bottom: 14px; }
+
+  /* TABLE-BASED LAYOUT for wkhtmltopdf compatibility */
+  .row { width: 100%; border-collapse: separate; border-spacing: 8px 0; table-layout: fixed; }
+  .row td { vertical-align: top; }
+
+  /* Phase cards */
+  .phase { border-radius: 10px; padding: 12px; border: 1.5px solid #e5e7eb; background: white; height: 100%; }
+  .phase-hdr { display: table; width: 100%; margin-bottom: 8px; }
+  .phase-circle { display: table-cell; width: 26px; height: 26px; border-radius: 50%; text-align: center; vertical-align: middle; font-weight: 900; font-size: 12px; color: white; }
+  .phase-meta { display: table-cell; vertical-align: middle; padding-left: 6px; }
+  .phase-tag { font-size: 8.5px; font-weight: 800; display: block; }
+  .phase-name { font-size: 11px; font-weight: 900; display: block; line-height: 1.2; }
+  .phase ul { list-style: none; padding: 0; margin: 0 0 8px 0; }
+  .phase li { font-size: 9.5px; color: #374151; padding: 2px 0 2px 13px; position: relative; line-height: 1.35; }
+  .phase li:before { position: absolute; left: 0; top: 3px; font-size: 8px; }
+  .status-bar { border-radius: 5px; padding: 4px 0; text-align: center; font-size: 9.5px; font-weight: 700; margin-top: auto; }
+
+  /* Colours */
+  .c1 .phase-circle { background: #16a34a; }
+  .c1 .phase-tag { color: #16a34a; }
+  .c1 li:before { content: '✓'; color: #16a34a; font-weight: 900; }
+  .c1 .status-bar { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+  .c2 .phase-circle { background: #2563eb; }
+  .c2 .phase-tag { color: #2563eb; }
+  .c2 li:before { content: '✓'; color: #16a34a; font-weight: 900; }
+  .c2 .status-bar { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+  .c3 .phase-circle { background: #7c3aed; }
+  .c3 .phase-tag { color: #7c3aed; }
+  .c3 li:before { content: '✓'; color: #16a34a; font-weight: 900; }
+  .c3 .status-bar { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+  .c4 .phase-circle { background: #c0392b; }
+  .c4 .phase-tag { color: #c0392b; }
+  .c4 li:before { content: '✓'; color: #16a34a; font-weight: 900; }
+  .c4 .status-bar { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+
+  .c5 .phase-circle { background: #f59e0b; }
+  .c5 .phase-tag { color: #f59e0b; }
+  .c5 li:before { content: '●'; color: #f59e0b; font-size: 6px; top: 5px; }
+  .c5 .status-bar { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+
+  /* Middle section */
+  .card { border-radius: 10px; padding: 12px; border: 1.5px solid #e5e7eb; background: white; }
+  .sec-title { font-size: 11px; font-weight: 900; text-align: center; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; color: #1f2937; }
+  .app-name { font-size: 16px; font-weight: 900; text-align: center; margin-bottom: 2px; }
+  .tagline { font-size: 8.5px; font-weight: 800; color: #c0392b; letter-spacing: 1.5px; text-align: center; margin-bottom: 10px; }
+  .info { font-size: 9.5px; color: #6b7280; text-align: center; line-height: 1.8; }
+  .note { font-size: 9.5px; font-weight: 700; color: #c0392b; text-align: center; margin-top: 8px; }
+
+  /* Checklist */
+  .chk-table { width: 100%; border-collapse: collapse; }
+  .chk-table td { vertical-align: top; width: 50%; padding: 0 8px; }
+  .chk-table td:first-child { border-right: 1px solid #e5e7eb; }
+  .chk-item { display: table; width: 100%; padding: 5px 0; border-bottom: 1px solid #f3f4f6; }
+  .chk-item:last-child { border-bottom: none; }
+  .chk-dot { display: table-cell; width: 16px; vertical-align: top; padding-top: 1px; }
+  .dot { width: 15px; height: 15px; border-radius: 50%; display: inline-block; text-align: center; line-height: 15px; font-size: 9px; font-weight: 900; color: white; }
+  .dot-done { background: #16a34a; }
+  .dot-next { background: #f59e0b; color: white; }
+  .dot-future { background: white; border: 2px solid #d1d5db; }
+  .chk-txt { display: table-cell; padding-left: 5px; }
+  .chk-label { font-size: 10px; font-weight: 700; line-height: 1.2; }
+  .chk-label-done { color: #16a34a; }
+  .chk-label-next { color: #b45309; }
+  .chk-label-future { color: #6b7280; }
+  .chk-desc { font-size: 9px; color: #6b7280; line-height: 1.3; }
+
+  /* Next steps */
+  .step-row { display: table; width: 100%; margin-bottom: 7px; }
+  .step-num { display: table-cell; width: 20px; vertical-align: top; }
+  .step-circle { width: 19px; height: 19px; border-radius: 50%; background: #c0392b; color: white; font-size: 10px; font-weight: 900; text-align: center; line-height: 19px; display: inline-block; }
+  .step-txt { display: table-cell; padding-left: 7px; font-size: 9.5px; color: #374151; line-height: 1.45; vertical-align: top; }
+
+  /* Tech stack */
+  .tech-table { width: 100%; border-collapse: separate; border-spacing: 4px; }
+  .tech-item { background: #f9fafb; border-radius: 5px; padding: 5px 7px; border-left: 3px solid #c0392b; }
+  .tech-label { font-size: 8.5px; font-weight: 800; color: #c0392b; }
+  .tech-val { font-size: 9px; color: #374151; }
+
+  .footer { text-align: center; font-size: 8.5px; color: #9ca3af; margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb; }
+</style>
+</head>
+<body>
+
+<h1>COMMUNITY EVENTS APP — ROADMAP TO COMPLETE</h1>
+<p class="subtitle">We have successfully deployed the app. Here is everything completed and what comes next. · communityevents.siza.info · June 2026</p>
+
+<!-- PHASES ROW -->
+<table class="row" style="margin-bottom:12px;">
+  <tr>
+    <!-- Phase 1 -->
+    <td width="20%">
+      <div class="phase c1">
+        <div class="phase-hdr">
+          <div class="phase-circle">✓</div>
+          <div class="phase-meta"><span class="phase-tag">1. COMPLETED</span><span class="phase-name">Foundation & Core</span></div>
+        </div>
+        <ul>
+          <li>React 18 + Vite + PWA setup</li>
+          <li>Firebase project & hosting live</li>
+          <li>Firestore database structure</li>
+          <li>Google Authentication</li>
+          <li>Role management (User/Admin/SuperAdmin)</li>
+          <li>Basic pages & navigation</li>
+          <li>Install as app (PWA)</li>
+        </ul>
+        <div class="status-bar">Status: Completed</div>
+      </div>
+    </td>
+    <!-- Phase 2 -->
+    <td width="20%">
+      <div class="phase c2">
+        <div class="phase-hdr">
+          <div class="phase-circle">2</div>
+          <div class="phase-meta"><span class="phase-tag">2. COMPLETED</span><span class="phase-name">Events & Features</span></div>
+        </div>
+        <ul>
+          <li>Event creation & editing</li>
+          <li>Centre & Private event types</li>
+          <li>Hijri calendar auto-calculation</li>
+          <li>Google Maps address autocomplete</li>
+          <li>Filters, sorting & audience types</li>
+          <li>Calendar sync (.ics export)</li>
+          <li>Bulk share & series events</li>
+          <li>Excel bulk import</li>
+          <li>Privacy matrix for sharing</li>
+        </ul>
+        <div class="status-bar">Status: Completed</div>
+      </div>
+    </td>
+    <!-- Phase 3 -->
+    <td width="20%">
+      <div class="phase c3">
+        <div class="phase-hdr">
+          <div class="phase-circle">3</div>
+          <div class="phase-meta"><span class="phase-tag">3. COMPLETED</span><span class="phase-name">AI, Search & Notifications</span></div>
+        </div>
+        <ul>
+          <li>AI Event Search (Claude API)</li>
+          <li>Voice search via microphone</li>
+          <li>Push notifications (FCM)</li>
+          <li>Daily 8AM email reminders</li>
+          <li>Monthly Hijri date reminders</li>
+          <li>Community update broadcast</li>
+          <li>Full admin dashboard</li>
+          <li>User management & roles</li>
+          <li>Hidden events management</li>
+        </ul>
+        <div class="status-bar">Status: Completed</div>
+      </div>
+    </td>
+    <!-- Phase 4 -->
+    <td width="20%">
+      <div class="phase c4">
+        <div class="phase-hdr">
+          <div class="phase-circle">4</div>
+          <div class="phase-meta"><span class="phase-tag">4. COMPLETED</span><span class="phase-name">Live Streaming</span></div>
+        </div>
+        <ul>
+          <li>Native relay video streaming</li>
+          <li>Per-event dedicated rooms</li>
+          <li>Multiple simultaneous streams</li>
+          <li>YouTube OAuth2 auto-connection</li>
+          <li>Auto-create YouTube broadcasts</li>
+          <li>Event title on YouTube stream</li>
+          <li>Watch on YouTube button</li>
+          <li>Stream persistence</li>
+          <li>Auto-end stale events (webhook)</li>
+        </ul>
+        <div class="status-bar">Status: Completed</div>
+      </div>
+    </td>
+    <!-- Phase 5 -->
+    <td width="20%">
+      <div class="phase c5">
+        <div class="phase-hdr">
+          <div class="phase-circle">5</div>
+          <div class="phase-meta"><span class="phase-tag">NEXT</span><span class="phase-name">Android & iOS Apps</span></div>
+        </div>
+        <ul>
+          <li>TWA APK for Android</li>
+          <li>Google Play Store listing</li>
+          <li>Native push notifications</li>
+          <li>iOS App Store submission</li>
+          <li>Native camera for streaming</li>
+          <li>Offline mode support</li>
+          <li>Separate OAuth keys per platform</li>
+          <li>App analytics integration</li>
+        </ul>
+        <div class="status-bar">Status: Next Phase</div>
+      </div>
+    </td>
+  </tr>
+</table>
+
+<!-- MIDDLE ROW: Logo + Checklist -->
+<table class="row" style="margin-bottom:12px;">
+  <tr>
+    <!-- Logo -->
+    <td width="18%">
+      <div class="card" style="text-align:center;">
+        <img src="/home/claude/public/logo-transparent.png" style="width:80px;height:80px;object-fit:contain;margin-bottom:6px;" onerror="this.style.display='none'"/><div class="app-name">Community<br/>Events</div>
+        <div class="tagline">CREATE · SHARE · CONNECT</div>
+        <div class="info">
+          🌐 communityevents.siza.info<br/>
+          📧 communityeventssydney@gmail.com<br/>
+          📍 Sydney, Australia
+        </div>
+        <div class="note">Built for the<br/>Australian Shia Muslim Community</div>
+      </div>
+    </td>
+    <!-- Checklist -->
+    <td width="82%">
+      <div class="card">
+        <div class="sec-title">Features Checklist</div>
+        <table class="chk-table">
+          <tr>
+            <td>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Google Authentication</div><div class="chk-desc">Secure login with Google account for all users</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Role Management</div><div class="chk-desc">User / Admin / SuperAdmin with full permissions</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Event Creation & Management</div><div class="chk-desc">Centre & Private events with Hijri calendar support</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">AI-Powered Event Search</div><div class="chk-desc">Natural language + voice search powered by Claude API</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Live Streaming (Native relay)</div><div class="chk-desc">Per-event rooms supporting multiple simultaneous streams</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">YouTube Live Integration</div><div class="chk-desc">Auto broadcast with event title via OAuth2 API</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Privacy & Sharing Controls</div><div class="chk-desc">Role-based sharing matrix for all event types</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Auto Cleanup & Webhooks</div><div class="chk-desc">Stale live events auto-ended, 10-minute scheduled cleanup</div></div></div>
+            </td>
+            <td>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Email Reminders (8:00 AM)</div><div class="chk-desc">Daily event reminders for opted-in users</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Push Notifications (FCM)</div><div class="chk-desc">Live stream alerts sent to all subscribed users</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Calendar Sync Export</div><div class="chk-desc">Export events to any calendar app (.ics format)</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Admin Dashboard</div><div class="chk-desc">Full event & user management, bulk import tools</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Hijri Calendar Integration</div><div class="chk-desc">Auto Hijri dates calculated and displayed on all events</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-done">✓</span></div><div class="chk-txt"><div class="chk-label chk-label-done">Stream Persistence</div><div class="chk-desc">Return to stream button when navigating away</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-next">→</span></div><div class="chk-txt"><div class="chk-label chk-label-next">Android App (Play Store)</div><div class="chk-desc">TWA / Native APK for Google Play Store</div></div></div>
+              <div class="chk-item"><div class="chk-dot"><span class="dot dot-future"></span></div><div class="chk-txt"><div class="chk-label chk-label-future">iOS App (App Store)</div><div class="chk-desc">Native iOS app for Apple App Store</div></div></div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </td>
+  </tr>
+</table>
+
+<!-- BOTTOM ROW: Next Steps + Tech Stack -->
+<table class="row">
+  <tr>
+    <!-- Next Steps -->
+    <td width="62%">
+      <div class="card">
+        <div class="sec-title">Next Steps — Android App (Implement in Order)</div>
+        <div class="step-row"><div class="step-num"><span class="step-circle">1</span></div><div class="step-txt"><strong>Install Tools</strong> — Android Studio, Bubblewrap CLI (<code>npm install -g @bubblewrap/cli</code>) and Java JDK 11+. All free.</div></div>
+        <div class="step-row"><div class="step-num"><span class="step-circle">2</span></div><div class="step-txt"><strong>Initialize TWA</strong> — Run <code>bubblewrap init --manifest=https://communityevents.siza.info/manifest.json</code> to configure the Android wrapper using your existing web app.</div></div>
+        <div class="step-row"><div class="step-num"><span class="step-circle">3</span></div><div class="step-txt"><strong>Build & Sign APK</strong> — Run <code>bubblewrap build</code> to generate a signed APK/AAB. Keep the signing keystore safe — required for all future updates.</div></div>
+        <div class="step-row"><div class="step-num"><span class="step-circle">4</span></div><div class="step-txt"><strong>Play Store Listing</strong> — Create Google Play developer account ($25 one-time). Upload AAB, fill store listing with screenshots and privacy policy URL, submit for review (3–7 days).</div></div>
+        <div class="step-row"><div class="step-num"><span class="step-circle">5</span></div><div class="step-txt"><strong>Add Android OAuth</strong> — In Google Cloud Console, create OAuth client ID for Android with package name and SHA-1 fingerprint so Google login works in the native app.</div></div>
+        <div class="step-row" style="margin-bottom:0"><div class="step-num"><span class="step-circle">6</span></div><div class="step-txt"><strong>Deploy Updates</strong> — After launch, run <code>firebase deploy --only hosting</code> to update the app. TWA automatically serves the latest version — no app store resubmission needed.</div></div>
+      </div>
+    </td>
+    <!-- Tech Stack -->
+    <td width="38%">
+      <div class="card">
+        <div class="sec-title">Tech Stack</div>
+        <table class="tech-table">
+          <tr>
+            <td><div class="tech-item"><div class="tech-label">Frontend</div><div class="tech-val">React 18 + Vite + PWA</div></div></td>
+            <td><div class="tech-item"><div class="tech-label">Database</div><div class="tech-val">Firebase Firestore</div></div></td>
+          </tr>
+          <tr>
+            <td><div class="tech-item"><div class="tech-label">Auth</div><div class="tech-val">Firebase Authentication</div></div></td>
+            <td><div class="tech-item"><div class="tech-label">Backend</div><div class="tech-val">Firebase Cloud Functions</div></div></td>
+          </tr>
+          <tr>
+            <td><div class="tech-item"><div class="tech-label">Hosting</div><div class="tech-val">Firebase Hosting</div></div></td>
+            <td><div class="tech-item"><div class="tech-label">Live Stream</div><div class="tech-val">Native relay</div></div></td>
+          </tr>
+          <tr>
+            <td><div class="tech-item"><div class="tech-label">YouTube</div><div class="tech-val">Data API v3 + OAuth2</div></div></td>
+            <td><div class="tech-item"><div class="tech-label">AI Search</div><div class="tech-val">Claude API (Anthropic)</div></div></td>
+          </tr>
+          <tr>
+            <td><div class="tech-item"><div class="tech-label">Maps</div><div class="tech-val">Google Places API</div></div></td>
+            <td><div class="tech-item"><div class="tech-label">Notifications</div><div class="tech-val">Firebase FCM + SMTP</div></div></td>
+          </tr>
+          <tr>
+            <td><div class="tech-item"><div class="tech-label">Source Code</div><div class="tech-val">GitHub (Private repo)</div></div></td>
+            <td><div class="tech-item"><div class="tech-label">Current Version</div><div class="tech-val">v52 · June 2026</div></div></td>
+          </tr>
+        </table>
+      </div>
+    </td>
+  </tr>
+</table>
+
+<div class="footer">Community Events Australia &nbsp;·&nbsp; React · Firebase · Native relay · YouTube API · Claude AI &nbsp;·&nbsp; communityevents.siza.info &nbsp;·&nbsp; June 2026</div>
+
+</body>
+</html>

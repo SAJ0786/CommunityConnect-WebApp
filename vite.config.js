@@ -22,6 +22,10 @@ function stampServiceWorker() {
 
 export default defineConfig({
   plugins: [react(), stampServiceWorker()],
+  define: {
+    // Injected at build time — used to show "Build Number" in Profile > About
+    __APP_BUILD_TIME__: JSON.stringify(Date.now()),
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

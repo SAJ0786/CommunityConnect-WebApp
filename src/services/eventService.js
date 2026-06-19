@@ -1,8 +1,20 @@
 import {
   addDoc, collection, deleteDoc, doc, getDocs,
-  orderBy, query, serverTimestamp, updateDoc, where
+  orderBy, query, serverTimestamp, updateDoc, where, onSnapshot
 } from 'firebase/firestore';
-import { db } from '../firebase/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../firebase/firebase';
+
+// ── Real-time listener for events currently marked isLive ────────────────────
+// Fires immediately when a stream starts/ends — keeps "LIVE NOW" / "Watch on
+// YouTube" badges in sync across all open apps without needing a full reload.
+export function listenLiveEvents(callback) {
+  const q = query(collection(db, 'events'), where('isLive', '==', true));
+  return onSnapshot(q, (snap) => {
+    const liveEvents = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    callback(liveEvents);
+  }, (err) => console.warn('[listenLiveEvents] error:', err.message));
+}
 
 export async function createEvent(event, user, profile) {
   return addDoc(collection(db, 'events'), {
@@ -30,7 +42,13 @@ export async function deleteEvent(id) {
 }
 
 // Home page + AI Search — exclude hidden events
-export async function getActiveEvents() {
+export async function getActiveEvents(isGuest = false) {
+  if (isGuest) {
+    const fn = httpsCallable(functions, 'getPublicEvents');
+    const result = await fn();
+    return result.data?.events || [];
+  }
+
   const snap = await getDocs(
     query(
       collection(db, 'events'),
