@@ -149,7 +149,7 @@ export default function EventForm({
           <button type="button" onClick={removePhoto} style={{
             position: 'absolute', top: 8, right: 8, width: 32, height: 32,
             borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: 'white',
-            border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1,
+            border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>×</button>
         </div>
@@ -160,9 +160,9 @@ export default function EventForm({
           borderRadius: 14, padding: 22, cursor: 'pointer',
           color: 'var(--teal,#0f766e)', marginTop: 4, marginBottom: 14,
         }}>
-          <span style={{ fontSize: 30 }}>📷</span>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>Upload your event poster</span>
-          <span style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+          <span style={{ fontSize: '1.875rem' }}>📷</span>
+          <span style={{ fontSize: '0.8125rem', fontWeight: 800 }}>Upload your event poster</span>
+          <span style={{ fontSize: '0.6875rem', color: 'var(--muted)', textAlign: 'center' }}>
             Optional — if you don't, your organisation logo will be shown
           </span>
           <input type="file" accept="image/*" onChange={handlePhotoPick}
@@ -199,7 +199,7 @@ export default function EventForm({
                 padding: '9px 22px',
                 border: 'none', cursor: 'pointer',
                 fontWeight: form.organiserType === opt ? 900 : 500,
-                fontSize: 14,
+                fontSize: '0.875rem',
                 background: form.organiserType === opt ? 'var(--teal)' : 'transparent',
                 color:      form.organiserType === opt ? 'white'       : 'var(--muted)',
                 transition: 'all .15s',
@@ -246,7 +246,7 @@ export default function EventForm({
               onClick={() => setCalendarMode(mode)}
               style={{
                 padding: '7px 16px', border: 'none', cursor: 'pointer',
-                fontWeight: calendarMode === mode ? 900 : 500, fontSize: 13,
+                fontWeight: calendarMode === mode ? 900 : 500, fontSize: '0.8125rem',
                 background: calendarMode === mode ? 'var(--teal)' : 'transparent',
                 color:      calendarMode === mode ? 'white' : 'var(--muted)',
                 transition: 'all .15s'
@@ -316,12 +316,12 @@ export default function EventForm({
             ⚠️ {duplicates.length} event{duplicates.length > 1 ? 's' : ''} already exist{duplicates.length === 1 ? 's' : ''} at this date and time:
           </div>
           {duplicates.map(e => (
-            <div key={e.id} style={{ fontSize: 13, color: '#78350f', marginBottom: 3 }}>
+            <div key={e.id} style={{ fontSize: '0.8125rem', color: '#78350f', marginBottom: 3 }}>
               · <strong>{e.eventTypeDisplay || e.eventType}</strong> by <strong>{e.hostName}</strong>
               {e.address?.suburb ? ` · ${e.address.suburb}` : ''} · {e.audienceType}
             </div>
           ))}
-          <div style={{ fontSize: 12, color: '#92400e', marginTop: 6 }}>You can still save — this is a notice only.</div>
+          <div style={{ fontSize: '0.75rem', color: '#92400e', marginTop: 6 }}>You can still save — this is a notice only.</div>
         </div>
       )}
 

@@ -46,28 +46,28 @@ function CardContent({ e, isGuest }) {
         {/* Badges */}
         <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
           <span style={{ background:'var(--red-l,#fdf2f1)', color:'var(--red,#c0392b)',
-            fontSize:11, padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
+            fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
             {e.eventTypeDisplay || e.eventType}
           </span>
           <span style={{
             background: isPrivate ? '#eafaf1' : 'var(--red-l,#fdf2f1)',
             color: isPrivate ? '#27ae60' : 'var(--red,#c0392b)',
-            fontSize:11, padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
+            fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
             {isPrivate ? '🔒 Private' : '🏛 Centre'}
           </span>
           {e.hijriDate && (
             <span style={{ background:'#fef9e7', color:'#b7950b',
-              fontSize:11, padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
+              fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
               🌙 {e.hijriDate}
             </span>
           )}
         </div>
         {/* Title */}
-        <h2 style={{ margin:'0 0 4px', fontSize:18, fontWeight:900, color:'var(--text,#1a1a2e)',
+        <h2 style={{ margin:'0 0 4px', fontSize:'1.125rem', fontWeight:900, color:'var(--text,#1a1a2e)',
           lineHeight:1.25, fontFamily:'var(--font)' }}>
           {e.eventTypeDisplay || e.eventType} Programme
         </h2>
-        <p style={{ margin:'0 0 14px', fontSize:13, color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)' }}>
+        <p style={{ margin:'0 0 14px', fontSize:'0.8125rem', color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)' }}>
           🏠 {e.hostName}
         </p>
         {/* Detail rows */}
@@ -80,15 +80,15 @@ function CardContent({ e, isGuest }) {
                 : null },
             e.audienceType && { icon:'👥', text: e.audienceType },
             e.speakerName  && { icon:'🎤', text: e.speakerName  },
-            ...(e.reciters||[]).filter(r=>r.name).map(r => ({ icon:'🎵', text: r.name, sub: r.customType || r.type })),
+            ...(e.reciters||[]).filter(r=>r.name).map(r => ({ icon:'🎙️', text: r.name, sub: r.customType || r.type })),
           ].filter(Boolean).map((row, i) => (
             <div key={i} style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
-              <span style={{ fontSize:16, flexShrink:0, marginTop:1 }}>{row.icon}</span>
+              <span style={{ fontSize:'1rem', flexShrink:0, marginTop:1 }}>{row.icon}</span>
               <div>
-                <div style={{ fontSize:13, color:'var(--text)', fontWeight:600, lineHeight:1.4, fontFamily:'var(--font)' }}>
+                <div style={{ fontSize:'0.8125rem', color:'var(--text)', fontWeight:600, lineHeight:1.4, fontFamily:'var(--font)' }}>
                   {row.text}
                 </div>
-                {row.sub && <div style={{ fontSize:11, color:'var(--muted)', marginTop:1, fontWeight:600, fontFamily:'var(--font)' }}>{row.sub}</div>}
+                {row.sub && <div style={{ fontSize:'0.6875rem', color:'var(--muted)', marginTop:1, fontWeight:600, fontFamily:'var(--font)' }}>{row.sub}</div>}
               </div>
             </div>
           ))}
@@ -178,6 +178,9 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
       try { return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short' }); }
       catch { return d; }
     };
+    const reciterLines = (cur.reciters || [])
+      .filter(reciter => reciter?.name?.trim())
+      .map(reciter => `🎙️ *${reciter.customType || reciter.type || 'Reciter'}:* ${reciter.name.trim()}`);
     window.__showShareSheet([
       `📅 *${cur.eventTypeDisplay || cur.eventType}*`,
       `🏠 *Host:* ${cur.hostName}`,
@@ -186,8 +189,10 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
       loc ? `📍 ${showFull ? '*Location:*' : '*Suburb:*'} ${loc}` : '',
       cur.hijriDate    ? `🌙 *Hijri:* ${cur.hijriDate}` : '',
       cur.speakerName  ? `🎤 *Speaker:* ${cur.speakerName}` : '',
+      ...reciterLines,
       cur.audienceType ? `👥 ${cur.audienceType}` : '',
       (showFull && cur.hostPhone) ? `📞 *Contact:* ${cur.hostPhone}` : '',
+      cur.notes?.trim() ? `📝 *Notes:* ${cur.notes.trim()}` : '',
       '', '_Shared via Community Events Australia_', '_communityevents.siza.info_',
     ].filter(Boolean).join('\n'));
   };
@@ -197,7 +202,10 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
     const a = cur.address || {};
     const q = encodeURIComponent(a.fullAddress || a.suburb || '');
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    window.open(isIOS ? `maps://maps.apple.com/?q=${q}` : `https://maps.google.com/?q=${q}`, '_blank');
+    const url = isIOS
+      ? `https://maps.apple.com/?daddr=${q}&dirflg=d`
+      : `https://www.google.com/maps/dir/?api=1&destination=${q}`;
+    window.location.assign(url);
   };
 
   const isSaved = cur ? savedIds.includes(cur.id) : false;
@@ -234,7 +242,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
             )}>
             <ChevL color={index === 0 ? 'var(--muted)' : 'white'} />
           </button>
-          <span style={{ fontSize:9, fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Prev</span>
+          <span style={{ fontSize:'0.5625rem', fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Prev</span>
         </div>
 
         {/* Share */}
@@ -243,7 +251,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
             style={actBtn('#25d366', '0 4px 16px rgba(37,211,102,0.45)')}>
             <WaIcon />
           </button>
-          <span style={{ fontSize:9, fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Share</span>
+          <span style={{ fontSize:'0.5625rem', fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Share</span>
         </div>
 
         {/* Save */}
@@ -254,9 +262,9 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
                 isSaved ? '#f39c12' : 'var(--red,#c0392b)',
                 isSaved ? '0 4px 16px rgba(243,156,18,0.45)' : '0 4px 16px rgba(192,57,43,0.35)'
               )}>
-              <span style={{ fontSize:22, lineHeight:1 }}>{isSaved ? '⭐' : '☆'}</span>
+              <span style={{ fontSize:'1.375rem', lineHeight:1 }}>{isSaved ? '⭐' : '☆'}</span>
             </button>
-            <span style={{ fontSize:9, fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Save</span>
+            <span style={{ fontSize:'0.5625rem', fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Save</span>
           </div>
         )}
 
@@ -266,7 +274,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
             style={actBtn('#4285f4', '0 4px 16px rgba(66,133,244,0.45)', isGuest)}>
             <MapIcon />
           </button>
-          <span style={{ fontSize:9, fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Directions</span>
+          <span style={{ fontSize:'0.5625rem', fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Directions</span>
         </div>
 
         {/* Next */}
@@ -278,7 +286,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
             )}>
             <ChevR color={index >= total - 1 ? 'var(--muted)' : 'white'} />
           </button>
-          <span style={{ fontSize:9, fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Next</span>
+          <span style={{ fontSize:'0.5625rem', fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Next</span>
         </div>
 
       </div>
@@ -331,14 +339,14 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
           <div style={{
             position:'absolute', top:16, right:16, zIndex:10,
             background:'var(--red,#c0392b)', color:'white', padding:'5px 13px',
-            borderRadius:9, fontSize:13, fontWeight:900, fontFamily:'var(--font)',
+            borderRadius:9, fontSize:'0.8125rem', fontWeight:900, fontFamily:'var(--font)',
             border:'2.5px solid white', opacity: hintNext, pointerEvents:'none',
           }}>NEXT ›</div>
           {/* PREV hint */}
           <div style={{
             position:'absolute', top:16, left:16, zIndex:10,
             background:'var(--red,#c0392b)', color:'white', padding:'5px 13px',
-            borderRadius:9, fontSize:13, fontWeight:900, fontFamily:'var(--font)',
+            borderRadius:9, fontSize:'0.8125rem', fontWeight:900, fontFamily:'var(--font)',
             border:'2.5px solid white', opacity: hintPrev, pointerEvents:'none',
           }}>‹ PREV</div>
           <CardContent e={cur} isGuest={isGuest} />
@@ -347,7 +355,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
 
       {/* ── Dots + counter ── */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, marginTop:12 }}>
-        <span style={{ fontSize:11, color:'var(--muted)', fontWeight:800, marginRight:6, fontFamily:'var(--font)' }}>
+        <span style={{ fontSize:'0.6875rem', color:'var(--muted)', fontWeight:800, marginRight:6, fontFamily:'var(--font)' }}>
           {index+1} / {total}
         </span>
         {Array.from({ length: Math.min(7, total) }, (_, i) => {
@@ -362,7 +370,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
           );
         })}
       </div>
-      <p style={{ textAlign:'center', fontSize:10, color:'var(--muted)', margin:'6px 0 0',
+      <p style={{ textAlign:'center', fontSize:'0.625rem', color:'var(--muted)', margin:'6px 0 0',
         fontWeight:700, fontFamily:'var(--font)' }}>
         ← Drag or swipe to browse →
       </p>

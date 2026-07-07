@@ -1,9 +1,25 @@
 import {
   addDoc, collection, deleteDoc, doc, getDocs,
-  orderBy, query, serverTimestamp, updateDoc, where, onSnapshot
+  orderBy, query, serverTimestamp, updateDoc, where, onSnapshot, limit
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase/firebase';
+import { localDateStr } from './dateUtils';
+import { classifyMetroArea } from '../utils/cities';
+
+export function validateRequiredEventFields(event) {
+  const eventDate = String(event?.eventDate || '').trim();
+  const startTime = String(event?.startTime || '').trim();
+  const address = typeof event?.address === 'string'
+    ? event.address.trim()
+    : String(event?.address?.fullAddress || '').trim();
+  const missing = [
+    !eventDate ? 'date' : '',
+    !startTime ? 'start time' : '',
+    address.length < 5 ? 'address' : '',
+  ].filter(Boolean);
+  if (missing.length) throw new Error(`Event cannot be saved without ${missing.join(', ')}.`);
+}
 
 // ── Real-time listener for events currently marked isLive ────────────────────
 // Fires immediately when a stream starts/ends — keeps "LIVE NOW" / "Watch on
@@ -17,8 +33,10 @@ export function listenLiveEvents(callback) {
 }
 
 export async function createEvent(event, user, profile) {
+  validateRequiredEventFields(event);
   return addDoc(collection(db, 'events'), {
     ...event,
+    metroArea: classifyMetroArea(event.address),
     status: 'active',
     hidden: false,
     createdByUserId: user.uid,
@@ -31,8 +49,10 @@ export async function createEvent(event, user, profile) {
 }
 
 export async function updateEvent(id, event) {
+  validateRequiredEventFields(event);
   return updateDoc(doc(db, 'events', id), {
     ...event,
+    metroArea: classifyMetroArea(event.address),
     updatedAt: serverTimestamp()
   });
 }
@@ -49,16 +69,27 @@ export async function getActiveEvents(isGuest = false) {
     return result.data?.events || [];
   }
 
-  const snap = await getDocs(
-    query(
+  const yesterday = localDateStr(-1);
+  const [upcomingSnap, liveSnap] = await Promise.all([
+    getDocs(query(
       collection(db, 'events'),
       where('status', '==', 'active'),
-      orderBy('eventDate', 'asc')
-    )
-  );
-  return snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(e => !e.hidden);
+      where('eventDate', '>=', yesterday),
+      orderBy('eventDate', 'asc'),
+      limit(150)
+    )),
+    getDocs(query(collection(db, 'events'), where('isLive', '==', true))),
+  ]);
+
+  const byId = new Map();
+  [...upcomingSnap.docs, ...liveSnap.docs].forEach(item => {
+    const event = { id: item.id, ...item.data() };
+    if (event.status === 'active' && !event.hidden) byId.set(item.id, event);
+  });
+
+  return [...byId.values()]
+    .filter(e => !e.hidden)
+    .sort((a, b) => (a.eventDate || '').localeCompare(b.eventDate || ''));
 }
 
 // My Events — all events by this user including hidden ones
@@ -89,6 +120,7 @@ export async function endLive(id) {
     isLive:       false,
     liveUrl:      null,
     liveWatchUrl: null,
+    liveSource:   null,
     liveEndedAt:  new Date().toISOString(),
     updatedAt:    serverTimestamp(),
   });

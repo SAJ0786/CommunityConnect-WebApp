@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import EventCard from '../components/EventCard';
+import EventFilters from '../components/EventFilters';
 import { saveHijriSettings, getHijriSettings, saveMonthOverride } from '../services/settingsService';
-import { listUsers, updateUserRole } from '../services/userService';
+import { listUsers, updateUserContactProfile, updateUserRole } from '../services/userService';
 import { canManageUsers, isAdminRole } from '../utils/permissions';
 import { ROLES } from '../utils/constants';
 import { getHijriDisplay, getHijriParts, hijriToGregorian, HIJRI_MONTHS } from '../services/hijriService';
@@ -10,12 +11,36 @@ import { getApp } from 'firebase/app';
 import * as XLSX from 'xlsx';
 import { getOrganisations, addOrganisation, deleteOrganisation, updateOrganisation, fileToBase64, seedBuiltInOrgs } from '../services/organisationsService';
 import { invalidateOrgsCache } from '../services/imageService';
-import NativeStreamTester from '../components/NativeStreamTester';
 
 const ROLE_LABELS = {
   [ROLES.USER]:        { label: 'User',        color: '#6b7280', bg: '#f3f4f6' },
   [ROLES.ADMIN]:       { label: 'Admin',       color: '#c0392b', bg: '#fdf2f1' },
   [ROLES.SUPER_ADMIN]: { label: 'Super Admin', color: '#7c3aed', bg: '#ede9fe' },
+};
+
+const normalisePhone = value => {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.startsWith('0061')) digits = digits.slice(2);
+  if (digits.startsWith('61') && digits.length >= 10) digits = `0${digits.slice(2)}`;
+  return digits;
+};
+
+const userMatchesSearch = (userRecord, query) => {
+  const textQuery = String(query || '').trim().toLowerCase();
+  if (!textQuery) return true;
+
+  const textFields = [
+    userRecord.fullName,
+    userRecord.displayName,
+    userRecord.name,
+    userRecord.email,
+  ];
+  if (textFields.some(value => String(value || '').toLowerCase().includes(textQuery))) return true;
+
+  const queryDigits = normalisePhone(textQuery);
+  if (!queryDigits) return false;
+  return [userRecord.phone, userRecord.phoneNumber, userRecord.mobile, userRecord.mobileNumber]
+    .some(value => normalisePhone(value).includes(queryDigits));
 };
 
 // ── YouTube OAuth Connect Card ────────────────────────────────────────────────
@@ -64,8 +89,8 @@ function YouTubeConnectCard() {
       {status === 'checking' && <p className="small">Checking connection…</p>}
       {status === 'connected' && (
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ color:'#27ae60', fontWeight:700, fontSize:14 }}>✅ Connected to YouTube</span>
-          <button className="btn-light" style={{ fontSize:12 }} onClick={handleConnect}>
+          <span style={{ color:'#27ae60', fontWeight:700, fontSize:'0.875rem' }}>✅ Connected to YouTube</span>
+          <button className="btn-light" style={{ fontSize:'0.75rem' }} onClick={handleConnect}>
             Reconnect
           </button>
         </div>
@@ -73,7 +98,7 @@ function YouTubeConnectCard() {
       {status === 'disconnected' && (
         <button onClick={handleConnect} disabled={loading}
           style={{ background:'#FF0000', color:'white', border:'none',
-            borderRadius:10, padding:'10px 20px', fontSize:14,
+            borderRadius:10, padding:'10px 20px', fontSize:'0.875rem',
             fontWeight:900, cursor:'pointer', display:'flex',
             alignItems:'center', gap:8 }}>
           {loading ? 'Opening…' : '🔗 Connect YouTube Channel'}
@@ -87,7 +112,7 @@ function YouTubeConnectCard() {
           </p>
           <button onClick={checkConnection}
             style={{ background:'#27ae60', color:'white', border:'none',
-              borderRadius:10, padding:'10px 20px', fontSize:14,
+              borderRadius:10, padding:'10px 20px', fontSize:'0.875rem',
               fontWeight:900, cursor:'pointer' }}>
             Check Connection Status
           </button>
@@ -101,11 +126,17 @@ function YouTubeConnectCard() {
 function RoleBadge({ role }) {
   const r = ROLE_LABELS[role] || ROLE_LABELS[ROLES.USER];
   return (
-    <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 9px',
+    <span style={{ fontSize: '0.6875rem', fontWeight: 800, padding: '3px 9px',
       borderRadius: 99, background: r.bg, color: r.color }}>
       {r.label}
     </span>
   );
+}
+
+function legacySeriesKey(event) {
+  return [
+    event.createdByUserId || '', event.seriesStartDate || '', event.seriesEndDate || ''
+  ].join('|');
 }
 
 export default function AdminDashboard({ events, user, profile, setPage, setEditingEvent, handleDelete, handleCopy }) {
@@ -116,10 +147,15 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   const [anchorYear,     setAnchorYear]     = useState('');
   const [users,          setUsers]          = useState([]);
   const [calCount,       setCalCount]       = useState(null);
+  const [inactiveCount,  setInactiveCount]  = useState(null);
   const [calSyncUids,    setCalSyncUids]     = useState(new Set());
   const [msg,            setMsg]            = useState({ text: '', type: '' });
   const [search,         setSearch]         = useState('');
   const [saving,         setSaving]         = useState(false);
+  const [editingUser,    setEditingUser]    = useState(null);
+  const [editUserName,   setEditUserName]   = useState('');
+  const [editUserEmail,  setEditUserEmail]  = useState('');
+  const [savingUserEdit, setSavingUserEdit] = useState(false);
   const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   const [recalculating,  setRecalculating]  = useState(false);
@@ -152,9 +188,13 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   const [communityMsg,   setCommunityMsg]   = useState('');
   const [deleteTarget,   setDeleteTarget]   = useState(null);
   // Transfer ownership state
-  const [transferEventId,  setTransferEventId]  = useState(null);
+  const [selectedEventIds, setSelectedEventIds] = useState(new Set());
+  const [filteredAdminEvents, setFilteredAdminEvents] = useState(null);
+  const [showTransferPanel, setShowTransferPanel] = useState(false);
   const [transferToUid,    setTransferToUid]    = useState('');
   const [transferring,     setTransferring]     = useState(false);
+  const [transferError,    setTransferError]    = useState('');
+  const [backfillingSeries,setBackfillingSeries]= useState(false);
   // ── Repair tool state ────────────────────────────────────────────────────
   const [repairEvents,   setRepairEvents]   = useState(null);   // null=not loaded
   const [repairLoading,  setRepairLoading]  = useState(false);
@@ -169,6 +209,16 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
   const isSuperAdmin = profile?.role === ROLES.SUPER_ADMIN;
   const fns = getFunctions(getApp(), 'australia-southeast1');
+  const displayedAdminEvents = filteredAdminEvents ?? adminEvents ?? [];
+  const seriesCounts = useMemo(() => {
+    const counts = new Map();
+    for (const event of adminEvents || []) {
+      if (!event.isSeries) continue;
+      const key = event.seriesId || legacySeriesKey(event);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }, [adminEvents]);
 
   useEffect(() => {
     if (!isAdminRole(profile?.role)) return;
@@ -182,6 +232,11 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     httpsCallable(fns, 'getCalendarStats')()
       .then(r => { setCalCount(r.data.count); setCalSyncUids(new Set(r.data.uids || [])); })
       .catch(() => {});
+    import('firebase/firestore').then(async ({ collection, getCountFromServer }) => {
+      const { db } = await import('../firebase/firebase');
+      const snapshot = await getCountFromServer(collection(db, 'archivedEvents'));
+      setInactiveCount(snapshot.data().count);
+    }).catch(() => setInactiveCount(null));
   }, [profile]);
 
   // Auto-load admin events when events tab opens
@@ -253,6 +308,9 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         orderBy('eventDate', 'asc')
       ));
       setAdminEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setFilteredAdminEvents(null);
+      setSelectedEventIds(new Set());
+      setShowTransferPanel(false);
     } catch (e) { showMsg('Error loading events: ' + e.message, 'error'); }
   };
 
@@ -380,30 +438,100 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     setRepairLoading(false);
   };
 
-    // ── Transfer single event ownership ──────────────────────────────────
-    const doTransferEvent = async (eventId, toUid) => {
-      const toUser = users.find(u => u.id === toUid);
-      if (!toUser) { showMsg('User not found', 'error'); return; }
+    // ── Transfer selected event ownership ────────────────────────────────
+    const toggleEventSelection = (eventId) => {
+      setSelectedEventIds(prev => {
+        const next = new Set(prev);
+        if (next.has(eventId)) next.delete(eventId);
+        else next.add(eventId);
+        return next;
+      });
+    };
+
+    const doTransferEvents = async () => {
+      const toUser = users.find(u => u.id === transferToUid);
+      if (!toUser) { setTransferError('Please select a valid user.'); return; }
+      const ids = [...selectedEventIds];
+      if (ids.length === 0) { setTransferError('Select at least one event.'); return; }
       setTransferring(true);
+      setTransferError('');
       try {
-        const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
+        const { doc, writeBatch, serverTimestamp } = await import('firebase/firestore');
         const { db } = await import('../firebase/firebase');
-        await updateDoc(doc(db, 'events', eventId), {
-          createdByUserId: toUid,
-          createdByName:   toUser.fullName || toUser.email || '',
-          updatedAt:       serverTimestamp(),
-        });
-        showMsg(`✅ Event transferred to ${toUser.fullName || toUser.email}`);
-        // Update local state so card reflects new owner immediately
+        for (let offset = 0; offset < ids.length; offset += 450) {
+          const batch = writeBatch(db);
+          ids.slice(offset, offset + 450).forEach(eventId => {
+            batch.update(doc(db, 'events', eventId), {
+              createdByUserId: transferToUid,
+              createdByName: toUser.fullName || toUser.email || '',
+              createdByUserEmail: toUser.email || '',
+              updatedAt: serverTimestamp(),
+            });
+          });
+          await batch.commit();
+        }
+        showMsg(`${ids.length} event${ids.length === 1 ? '' : 's'} transferred to ${toUser.fullName || toUser.email}.`);
         setAdminEvents(prev => prev ? prev.map(e =>
-          e.id === eventId
-            ? { ...e, createdByUserId: toUid, createdByName: toUser.fullName || toUser.email || '' }
+          selectedEventIds.has(e.id)
+            ? { ...e, createdByUserId: transferToUid, createdByName: toUser.fullName || toUser.email || '', createdByUserEmail: toUser.email || '' }
             : e
         ) : prev);
-        setTransferEventId(null);
+        setFilteredAdminEvents(prev => prev ? prev.map(e =>
+          selectedEventIds.has(e.id)
+            ? { ...e, createdByUserId: transferToUid, createdByName: toUser.fullName || toUser.email || '', createdByUserEmail: toUser.email || '' }
+            : e
+        ) : prev);
+        setSelectedEventIds(new Set());
+        setShowTransferPanel(false);
         setTransferToUid('');
-      } catch(e) { showMsg('Transfer failed: ' + e.message, 'error'); }
+      } catch(e) {
+        setTransferError(e.message || 'The transfer could not be completed.');
+        showMsg('Transfer failed: ' + e.message, 'error');
+      }
       setTransferring(false);
+    };
+
+    const backfillLegacySeriesIds = async () => {
+      const legacy = (adminEvents || []).filter(e => e.isSeries && !e.seriesId);
+      if (legacy.length === 0) { showMsg('All series already have a permanent series ID.'); return; }
+      setBackfillingSeries(true);
+      try {
+        const groups = new Map();
+        legacy.forEach(event => {
+          const key = legacySeriesKey(event);
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(event);
+        });
+        const { doc, writeBatch, serverTimestamp } = await import('firebase/firestore');
+        const { db } = await import('../firebase/firebase');
+        let updated = 0;
+        let skipped = 0;
+        for (const group of groups.values()) {
+          const dates = group.map(event => event.eventDate).filter(Boolean);
+          const hasIdentity = group.every(event =>
+            event.createdByUserId && event.seriesStartDate && event.seriesEndDate
+          );
+          if (!hasIdentity || dates.length !== group.length || new Set(dates).size !== dates.length) {
+            skipped += group.length;
+            continue;
+          }
+          const seriesId = typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `series_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+          for (let offset = 0; offset < group.length; offset += 450) {
+            const batch = writeBatch(db);
+            group.slice(offset, offset + 450).forEach(event => {
+              batch.update(doc(db, 'events', event.id), { seriesId, updatedAt: serverTimestamp() });
+            });
+            await batch.commit();
+          }
+          updated += group.length;
+        }
+        showMsg(`Assigned permanent series IDs to ${updated} legacy events.${skipped ? ` Skipped ${skipped} ambiguous events for manual review.` : ''}`,
+          skipped ? 'error' : 'success');
+        await loadAdminEvents();
+      } catch (e) { showMsg('Series ID backfill failed: ' + e.message, 'error'); }
+      setBackfillingSeries(false);
     };
 
     // ── Organisations CRUD ──────────────────────────────────────────────────
@@ -543,6 +671,24 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   };
 
   // ── Role change ─────────────────────────────────────────────────────────────
+  const sendStoreAnnouncement = async () => {
+    if (!confirm('Send the App Store and Microsoft Store announcement to all users who have email reminders enabled?')) return;
+    setSendingReminder(true); setReminderResult(null);
+    try {
+      const fn = httpsCallable(fns, 'sendRemindersNow');
+      const result = await fn({
+        mode: 'date',
+        date: new Date().toISOString().slice(0, 10),
+        customMode: true,
+        customTemplate: 'storeAnnouncement',
+      });
+      setReminderResult({ message: result.data.message || 'Store announcement sent.', error: false });
+    } catch (e) {
+      setReminderResult({ message: e.message || 'Failed to send store announcement.', error: true });
+    }
+    setSendingReminder(false);
+  };
+
   const changeRole = async (u, role) => {
     if (u.id === user.uid && role !== ROLES.SUPER_ADMIN) {
       const sas = users.filter(x => x.role === ROLES.SUPER_ADMIN);
@@ -612,11 +758,37 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
   const [calFilter, setCalFilter] = useState(false); // when true, show only calendar-synced users
 
-  const filteredUsers = users.filter(u =>
-    (!search || u.email?.toLowerCase().includes(search.toLowerCase()) ||
-      u.fullName?.toLowerCase().includes(search.toLowerCase()))
-    && (!calFilter || calSyncUids.has(u.id))
-  );
+  const filteredUsers = useMemo(() => users.filter(u =>
+    userMatchesSearch(u, search) && (!calFilter || calSyncUids.has(u.id))
+  ), [users, search, calFilter, calSyncUids]);
+
+  const openUserEditor = (target) => {
+    setEditingUser(target);
+    setEditUserName(target.fullName || '');
+    setEditUserEmail(target.email || '');
+  };
+
+  const saveUserEditor = async () => {
+    if (!editingUser) return;
+    const fullName = editUserName.trim().replace(/\s+/g, ' ');
+    const email = editUserEmail.trim().toLowerCase();
+    if (fullName.length < 2) return showMsg('Enter a valid full name.', 'error');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showMsg('Enter a valid email address.', 'error');
+
+    setSavingUserEdit(true);
+    try {
+      const updated = await updateUserContactProfile(editingUser.id, fullName, email);
+      setUsers(current => current.map(item => item.id === editingUser.id ? { ...item, ...updated } : item));
+      setEditingUser(null);
+      showMsg('User name and email updated.', 'success');
+    } catch (error) {
+      showMsg(error.code === 'functions/already-exists'
+        ? (error.message || 'This phone number or email is already used by another account.')
+        : `Update failed: ${error.message}`, 'error');
+    } finally {
+      setSavingUserEdit(false);
+    }
+  };
 
   const stats = [
     { label: 'Total Users',    value: users.length },
@@ -624,6 +796,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     { label: 'Admins',         value: users.filter(u => u.role === ROLES.ADMIN).length },
     { label: 'Calendar Syncs', value: calCount ?? '…' },
     { label: 'Active Events',  value: events.length },
+    { label: 'Inactive Events', value: inactiveCount ?? '...' },
   ];
 
   const TABS = [
@@ -632,7 +805,6 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     { key: 'events',   label: 'Events'        },
     { key: 'repair',   label: '🛠 Repair'     },
     { key: 'orgs',     label: '🏛 Orgs'       },
-    { key: 'nstream',  label: '🎥 Native Stream' },
     { key: 'settings', label: 'Settings'      },
   ];
 
@@ -644,7 +816,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         color: 'white', border: 'none', marginBottom: 0, borderRadius: '20px 20px 0 0'
       }}>
         <h2 style={{ color: 'white', margin: '0 0 4px' }}>Admin Dashboard</h2>
-        <p style={{ color: 'rgba(255,255,255,.85)', margin: 0, fontSize: 13 }}>
+        <p style={{ color: 'rgba(255,255,255,.85)', margin: 0, fontSize: '0.8125rem' }}>
           {profile?.fullName || user?.email} · <RoleBadge role={profile?.role} />
         </p>
       </div>
@@ -654,8 +826,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         gap: 1, background: 'var(--border)', border: '1px solid var(--border)', borderTop: 'none' }}>
         {stats.map(s => (
           <div key={s.label} style={{ background: 'white', padding: '14px 12px', textAlign: 'center' }}>
-            <div style={{ fontSize: 22, fontWeight: 900, color: '#c0392b' }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{s.label}</div>
+            <div style={{ fontSize: '1.375rem', fontWeight: 900, color: '#c0392b' }}>{s.value}</div>
+            <div style={{ fontSize: '0.6875rem', color: 'var(--muted)', marginTop: 2 }}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -666,7 +838,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             flex: 1, padding: '12px 0', fontWeight: tab === t.key ? 900 : 600,
-            fontSize: 13, border: 'none',
+            fontSize: '0.8125rem', border: 'none',
             borderBottom: tab === t.key ? '3px solid #c0392b' : '3px solid transparent',
             background: 'white', color: tab === t.key ? '#c0392b' : 'var(--muted)',
             cursor: 'pointer', boxShadow: 'none',
@@ -689,21 +861,47 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             <h3 style={{ margin:0 }}>User Management</h3>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
               <button onClick={() => setCalFilter(f => !f)}
-                style={{ fontSize:12, padding:'8px 12px', borderRadius:10,
+                style={{ fontSize:'0.75rem', padding:'8px 12px', borderRadius:10,
                   border: calFilter ? '1px solid #0f766e' : '1px solid var(--border)',
                   background: calFilter ? '#e6f4f1' : 'white',
                   color: calFilter ? '#0f766e' : 'var(--text)',
                   fontWeight:800, cursor:'pointer', whiteSpace:'nowrap' }}>
                 📅 {calFilter ? 'Showing Synced Only' : `Calendar Synced (${calSyncUids.size})`}
               </button>
-              <input placeholder="Search name or email…" value={search}
+              <input placeholder="Search name, email or phone…" aria-label="Search users by name, email or phone" value={search}
                 onChange={e => setSearch(e.target.value)}
-                style={{ width:220, padding:'8px 12px', fontSize:13,
+                style={{ width:220, padding:'8px 12px', fontSize:'0.8125rem',
                   borderRadius:10, border:'1px solid var(--border)', marginBottom:0 }} />
             </div>
           </div>
           {!isSuperAdmin && (
-            <div className="notice" style={{ marginBottom:12 }}>Role changes and user actions require Super Admin access.</div>
+            <div className="notice" style={{ marginBottom:12 }}>You can correct user names and emails. Role changes and account deletion require Super Admin access.</div>
+          )}
+          {editingUser && (
+            <div style={{ marginBottom:14, padding:14, border:'1px solid #acd9d5', borderRadius:8, background:'#f3fbfa' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, marginBottom:12 }}>
+                <h4 style={{ margin:0 }}>Edit User Details</h4>
+                <span className="small">{editingUser.phone || 'No phone recorded'}</span>
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:10 }}>
+                <div>
+                  <label htmlFor="admin-user-name">Full name</label>
+                  <input id="admin-user-name" value={editUserName} maxLength={100}
+                    onChange={event => setEditUserName(event.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="admin-user-email">Email</label>
+                  <input id="admin-user-email" type="email" value={editUserEmail} maxLength={254}
+                    onChange={event => setEditUserEmail(event.target.value)} />
+                </div>
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={saveUserEditor} disabled={savingUserEdit}>
+                  {savingUserEdit ? 'Saving...' : 'Save User'}
+                </button>
+                <button className="btn-muted" disabled={savingUserEdit} onClick={() => setEditingUser(null)}>Cancel</button>
+              </div>
+            </div>
           )}
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {/* Sort by join date (createdAt asc) */}
@@ -718,21 +916,21 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                 background: u.id === user?.uid ? '#fdf2f1' : 'white',
                 flexWrap:'wrap', gap:8 }}>
                 <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontWeight:800, fontSize:14 }}>
+                  <div style={{ fontWeight:800, fontSize:'0.875rem' }}>
                     {u.fullName || '—'}
-                    {u.id === user?.uid && <span style={{ fontSize:11, color:'#c0392b', marginLeft:6 }}>(you)</span>}
+                    {u.id === user?.uid && <span style={{ fontSize:'0.6875rem', color:'#c0392b', marginLeft:6 }}>(you)</span>}
                   </div>
-                  <div style={{ fontSize:12, color:'var(--muted)' }}>{u.email}</div>
-                  {u.phone && <div style={{ fontSize:12, color:'var(--muted)' }}>{u.phone}</div>}
+                  <div style={{ fontSize:'0.75rem', color:'var(--muted)' }}>{u.email}</div>
+                  {u.phone && <div style={{ fontSize:'0.75rem', color:'var(--muted)' }}>{u.phone}</div>}
                   {u.createdAt?.seconds && (
-                    <div style={{ fontSize:11, color:'var(--muted)' }}>
+                    <div style={{ fontSize:'0.6875rem', color:'var(--muted)' }}>
                       Joined {new Date(u.createdAt.seconds*1000).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'})}
                     </div>
                   )}
                   <div style={{ marginTop:4, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
                     <RoleBadge role={u.role} />
                     {calSyncUids.has(u.id) && (
-                      <span style={{ fontSize:11, fontWeight:800, color:'#0f766e',
+                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#0f766e',
                         background:'#e6f4f1', border:'1px solid #b8e0db',
                         borderRadius:20, padding:'2px 9px', display:'inline-flex',
                         alignItems:'center', gap:4 }}>
@@ -741,12 +939,16 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                     )}
                   </div>
                 </div>
+                <button className="btn-light" onClick={() => openUserEditor(u)}
+                  style={{ fontSize:'0.75rem', padding:'6px 11px', flexShrink:0 }}>
+                  Edit
+                </button>
                 {isSuperAdmin && u.id !== user?.uid && (
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     {/* Role changes */}
                     {Object.values(ROLES).filter(r => r !== u.role).map(r => (
                       <button key={r} onClick={() => changeRole(u, r)}
-                        className="btn-light" style={{ fontSize:12, padding:'5px 10px' }}>
+                        className="btn-light" style={{ fontSize:'0.75rem', padding:'5px 10px' }}>
                         Make {ROLE_LABELS[r]?.label}
                       </button>
                     ))}
@@ -758,7 +960,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                       httpsCallable(fns, 'adminDeleteUser')({ targetUid: u.id, ban: doBan })
                         .then(() => { showMsg(`User deleted${doBan ? ' and banned' : ''}.`); setUsers(prev => prev.filter(x => x.id !== u.id)); })
                         .catch(e => showMsg('Delete failed: ' + e.message, 'error'));
-                    }} style={{ fontSize:12, padding:'5px 10px', borderRadius:8,
+                    }} style={{ fontSize:'0.75rem', padding:'5px 10px', borderRadius:8,
                       background:'#fdf2f1', color:'#c0392b', border:'1px solid #fadbd8',
                       fontWeight:700, cursor:'pointer' }}>
                       🗑 Delete{isSuperAdmin ? '/Ban' : ''}
@@ -793,7 +995,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             <div key={step.n} style={{ display:'flex', gap:12, alignItems:'flex-start', marginBottom:16 }}>
               <div style={{ width:28, height:28, borderRadius:'50%', background:'#c0392b',
                 color:'white', display:'flex', alignItems:'center', justifyContent:'center',
-                fontWeight:900, fontSize:13, flexShrink:0 }}>{step.n}</div>
+                fontWeight:900, fontSize:'0.8125rem', flexShrink:0 }}>{step.n}</div>
               <div style={{flex:1}}>
                 <div style={{ fontWeight:800, marginBottom:6 }}>{step.title}</div>
                 {step.body}
@@ -830,24 +1032,98 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                 <h3 style={{ margin:0 }}>
                   {adminEvents.length} Event(s)
                   {adminEvents.filter(e => e.isLive).length > 0 && (
-                    <span style={{ fontSize:12, color:'#c0392b', marginLeft:8 }}>
+                    <span style={{ fontSize:'0.75rem', color:'#c0392b', marginLeft:8 }}>
                       · {adminEvents.filter(e => e.isLive).length} 🔴 LIVE
                     </span>
                   )}
                 </h3>
-                <button className="btn-light" onClick={loadAdminEvents}
-                  style={{ fontSize:12, margin:0 }}>🔄 Refresh</button>
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  <button disabled={selectedEventIds.size === 0}
+                    onClick={() => { setTransferError(''); setShowTransferPanel(true); }}
+                    style={{ fontSize:'0.75rem', margin:0, opacity:selectedEventIds.size ? 1 : 0.45,
+                      cursor:selectedEventIds.size ? 'pointer' : 'not-allowed' }}>
+                    <i className="ti ti-user-share" /> Transfer Ownership ({selectedEventIds.size})
+                  </button>
+                  <button className="btn-light" onClick={backfillLegacySeriesIds}
+                    disabled={backfillingSeries}
+                    style={{ fontSize:'0.75rem', margin:0 }}>
+                    <i className="ti ti-link" /> {backfillingSeries ? 'Identifying Series…' : 'Identify Older Series'}
+                  </button>
+                  <button className="btn-light" onClick={loadAdminEvents}
+                    style={{ fontSize:'0.75rem', margin:0 }}><i className="ti ti-refresh" /> Refresh</button>
+                </div>
               </div>
+              <EventFilters events={adminEvents} onChange={setFilteredAdminEvents} />
+              {showTransferPanel && (
+                <div className="card" style={{ border:'1px solid #b2d8d0' }}>
+                  <h3 style={{ margin:'0 0 6px' }}>
+                    Transfer {selectedEventIds.size} selected event{selectedEventIds.size === 1 ? '' : 's'}
+                  </h3>
+                  <p className="small" style={{ margin:'0 0 10px', color:'var(--muted)' }}>
+                    Choose the user who will become the owner of every selected event.
+                  </p>
+                  <select value={transferToUid} onChange={e => { setTransferToUid(e.target.value); setTransferError(''); }}
+                    style={{ width:'100%', marginBottom:10 }}>
+                    <option value="">Select a user</option>
+                    {users.slice().sort((a,b) => (a.fullName || a.email || '').localeCompare(b.fullName || b.email || '')).map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.fullName || u.email}{u.fullName && u.email ? ` (${u.email})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {transferError && (
+                    <div className="error" style={{ marginBottom:10 }}>{transferError}</div>
+                  )}
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button disabled={!transferToUid || transferring} onClick={doTransferEvents}
+                      style={{ opacity:transferToUid && !transferring ? 1 : 0.45 }}>
+                      {transferring ? 'Transferring…' : 'Confirm Transfer'}
+                    </button>
+                    <button className="btn-light" onClick={() => { setShowTransferPanel(false); setTransferToUid(''); setTransferError(''); }}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
               {adminEvents.length === 0 && <div className="card">No active events.</div>}
-              {adminEvents.map(e => (
+              {displayedAdminEvents.length === 0 && adminEvents.length > 0 && (
+                <div className="card">No events match the selected filters.</div>
+              )}
+              {displayedAdminEvents.map(e => {
+                const seriesKey = e.seriesId || legacySeriesKey(e);
+                const seriesCount = seriesCounts.get(seriesKey) || 0;
+                return (
                 <div key={e.id}>
+                  <div style={{ margin:'8px 16px 4px', display:'flex', alignItems:'center',
+                    justifyContent:'space-between', gap:8, flexWrap:'wrap' }}>
+                    <label className="checkbox" style={{ margin:0, fontWeight:800, fontSize:'0.8125rem' }}>
+                      <input type="checkbox" checked={selectedEventIds.has(e.id)}
+                        onChange={() => toggleEventSelection(e.id)} />
+                      <span>Select event</span>
+                    </label>
+                    {e.isSeries && (
+                      <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                        <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#7c3aed',
+                          background:'#ede9fe', padding:'4px 8px', borderRadius:6 }}>
+                          <i className="ti ti-calendar-repeat" /> Series · {seriesCount} events
+                        </span>
+                        <button className="btn-light" disabled={!e.seriesId} onClick={() => {
+                          setEditingEvent({ ...e, __editSeries:true });
+                          setPage('edit');
+                        }} title={!e.seriesId ? 'Use Identify Older Series first' : 'Edit every event in this series'}
+                          style={{ fontSize:'0.6875rem', padding:'5px 9px', margin:0, opacity:e.seriesId ? 1 : 0.5 }}>
+                          <i className="ti ti-edit" /> {e.seriesId ? 'Edit entire series' : 'Identify series first'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   {e.isLive && (
                     <div style={{ padding:'4px 20px 2px', display:'flex',
                       alignItems:'center', gap:8 }}>
-                      <span style={{ fontSize:11, fontWeight:900, color:'#c0392b',
+                      <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'#c0392b',
                         animation:'liveBlink 1s infinite' }}>🔴 LIVE</span>
                       <button onClick={() => clearLiveStatus(e.id)}
-                        style={{ fontSize:11, padding:'3px 12px', borderRadius:6,
+                        style={{ fontSize:'0.6875rem', padding:'3px 12px', borderRadius:6,
                           border:'none', cursor:'pointer', fontWeight:800,
                           background:'#fef9e7', color:'#b7950b' }}>
                         Clear Live Status
@@ -860,62 +1136,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                     isExpanded={adminExpandedId === e.id}
                     onExpand={id => setAdminExpandedId(prev => prev === id ? null : id)}
                   />
-                  {/* Transfer ownership button (admins only) */}
-                  {(isAdminRole(profile?.role)) && (
-                    <div style={{ margin:'-4px 12px 8px', padding:'0 4px' }}>
-                      {transferEventId === e.id ? (
-                        <div style={{ background:'#f0faf8', border:'1px solid #b2d8d0',
-                          borderRadius:12, padding:'12px 14px', marginTop:4 }}>
-                          <p style={{ fontSize:12, fontWeight:800, color:'var(--teal)',
-                            margin:'0 0 8px' }}>🔄 Transfer ownership to:</p>
-                          <select
-                            value={transferToUid}
-                            onChange={e2 => setTransferToUid(e2.target.value)}
-                            style={{ width:'100%', padding:'9px 12px', fontSize:13,
-                              borderRadius:10, border:'1px solid var(--border)',
-                              background:'white', marginBottom:10 }}>
-                            <option value="">— Select a user —</option>
-                            {users
-                              .filter(u => u.id !== e.createdByUserId)
-                              .sort((a,b) => (a.fullName||'').localeCompare(b.fullName||''))
-                              .map(u => (
-                                <option key={u.id} value={u.id}>
-                                  {u.fullName || u.email}{u.fullName && u.email ? ` (${u.email})` : ''}
-                                </option>
-                              ))
-                            }
-                          </select>
-                          <div style={{ display:'flex', gap:8 }}>
-                            <button
-                              disabled={!transferToUid || transferring}
-                              onClick={() => doTransferEvent(e.id, transferToUid)}
-                              style={{ flex:1, padding:'9px', borderRadius:10, border:'none',
-                                background:'var(--teal)', color:'white', fontWeight:800,
-                                fontSize:13, cursor: transferToUid ? 'pointer' : 'not-allowed',
-                                opacity: transferToUid ? 1 : 0.5 }}>
-                              {transferring ? 'Transferring…' : '✅ Confirm Transfer'}
-                            </button>
-                            <button
-                              onClick={() => { setTransferEventId(null); setTransferToUid(''); }}
-                              style={{ padding:'9px 16px', borderRadius:10, border:'1px solid var(--border)',
-                                background:'white', fontWeight:700, fontSize:13, cursor:'pointer' }}>
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => { setTransferEventId(e.id); setTransferToUid(''); }}
-                          style={{ fontSize:12, padding:'5px 14px', borderRadius:8,
-                            background:'#e6f4f1', color:'var(--teal)',
-                            border:'1px solid #b2d8d0', fontWeight:700, cursor:'pointer' }}>
-                          🔄 Transfer Ownership
-                        </button>
-                      )}
-                    </div>
-                  )}
                 </div>
-              ))}
+              )})}
             </>
           )}
           <style>{`@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
@@ -937,7 +1159,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               {repairLoading ? '⏳ Loading…' : repairEvents === null ? '🔍 Load Hijri Events' : '🔄 Refresh'}
             </button>
             {repairMsg && (
-              <p style={{ fontSize: 13, color: repairMsg.startsWith('❌') ? 'var(--danger,#dc2626)' : 'var(--teal)',
+              <p style={{ fontSize: '0.8125rem', color: repairMsg.startsWith('❌') ? 'var(--danger,#dc2626)' : 'var(--teal)',
                 fontWeight: 600, margin: '8px 0 0' }}>{repairMsg}</p>
             )}
           </div>
@@ -970,27 +1192,27 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                     {/* Event header */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: 14,
+                        <p style={{ margin: '0 0 2px', fontWeight: 700, fontSize: '0.875rem',
                           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {ev.title || ev.eventType || 'Untitled'}
-                          {ev.isSeries && <span style={{ fontSize: 11, color: 'var(--teal)',
+                          {ev.isSeries && <span style={{ fontSize: '0.6875rem', color: 'var(--teal)',
                             marginLeft: 6, fontWeight: 600 }}>SERIES</span>}
                         </p>
-                        <p style={{ margin: '0 0 4px', fontSize: 12, color: 'var(--muted)' }}>
+                        <p style={{ margin: '0 0 4px', fontSize: '0.75rem', color: 'var(--muted)' }}>
                           📅 Gregorian: <strong>{ev.eventDate}</strong>
                         </p>
-                        <p style={{ margin: '0 0 2px', fontSize: 12,
+                        <p style={{ margin: '0 0 2px', fontSize: '0.75rem',
                           color: mismatch ? '#c0392b' : 'var(--muted)' }}>
                           🌙 Stored components: <strong>{storedHijriStr}</strong>
                           {mismatch && <span style={{ marginLeft: 6 }}>⚠️ mismatch</span>}
                         </p>
-                        <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>
+                        <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--muted)' }}>
                           🏷 Display tag: <strong>{displayStr}</strong>
                         </p>
                       </div>
                       {!isFixing && (
                         <button onClick={() => startFix(ev)}
-                          style={{ fontSize: 12, padding: '6px 14px', whiteSpace: 'nowrap',
+                          style={{ fontSize: '0.75rem', padding: '6px 14px', whiteSpace: 'nowrap',
                             background: mismatch ? '#c0392b' : 'var(--teal)',
                             color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer',
                             fontWeight: 700, flexShrink: 0 }}>
@@ -1003,16 +1225,16 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                     {isFixing && (
                       <div style={{ marginTop: 12, background: '#f8f9fa',
                         borderRadius: 10, padding: 12 }}>
-                        <p style={{ margin: '0 0 8px', fontSize: 13, fontWeight: 700 }}>
+                        <p style={{ margin: '0 0 8px', fontSize: '0.8125rem', fontWeight: 700 }}>
                           Enter correct Hijri date:
                         </p>
                         <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr 90px', gap: 8, marginBottom: 10 }}>
                           <input type="number" min="1" max="30" placeholder="Day"
                             value={fixDay} onChange={e => setFixDay(e.target.value)}
-                            style={{ padding: '8px', fontSize: 14,
+                            style={{ padding: '8px', fontSize: '0.875rem',
                               border: '1px solid var(--border)', borderRadius: 8 }} />
                           <select value={fixMonth} onChange={e => setFixMonth(e.target.value)}
-                            style={{ padding: '8px', fontSize: 13,
+                            style={{ padding: '8px', fontSize: '0.8125rem',
                               border: '1px solid var(--border)', borderRadius: 8 }}>
                             <option value="">Month</option>
                             {HIJRI_MONTHS.map(m => (
@@ -1021,7 +1243,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           </select>
                           <input type="number" min="1400" max="1500" placeholder="Year"
                             value={fixYear} onChange={e => setFixYear(e.target.value)}
-                            style={{ padding: '8px', fontSize: 14,
+                            style={{ padding: '8px', fontSize: '0.875rem',
                               border: '1px solid var(--border)', borderRadius: 8 }} />
                         </div>
 
@@ -1030,7 +1252,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           const prev = hijriToGregorian(parseInt(fixDay), parseInt(fixMonth),
                             parseInt(fixYear), repairOverrides);
                           return prev ? (
-                            <p style={{ fontSize: 12, color: 'var(--teal)', margin: '0 0 10px', fontWeight: 600 }}>
+                            <p style={{ fontSize: '0.75rem', color: 'var(--teal)', margin: '0 0 10px', fontWeight: 600 }}>
                               = Gregorian: {prev}
                             </p>
                           ) : null;
@@ -1039,7 +1261,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                         {/* Series option */}
                         {ev.isSeries && (
                           <label style={{ display: 'flex', alignItems: 'center', gap: 8,
-                            fontSize: 13, marginBottom: 10, cursor: 'pointer' }}>
+                            fontSize: '0.8125rem', marginBottom: 10, cursor: 'pointer' }}>
                             <input type="checkbox" checked={fixSeries}
                               onChange={e => setFixSeries(e.target.checked)} />
                             Fix entire series (all events from {ev.seriesStartDate} to {ev.seriesEndDate})
@@ -1050,11 +1272,11 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           <button onClick={() => applyFix(ev)} disabled={repairLoading}
                             style={{ flex: 1, background: 'var(--teal)', color: 'white',
                               border: 'none', borderRadius: 8, padding: '9px',
-                              fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>
+                              fontWeight: 700, cursor: 'pointer', fontSize: '0.8125rem' }}>
                             {repairLoading ? '⏳ Fixing…' : '✅ Apply Fix'}
                           </button>
                           <button onClick={() => setFixingId(null)}
-                            style={{ padding: '9px 18px', borderRadius: 8, fontSize: 13,
+                            style={{ padding: '9px 18px', borderRadius: 8, fontSize: '0.8125rem',
                               border: '1px solid var(--border)', background: 'white',
                               cursor: 'pointer', fontWeight: 600 }}>
                             Cancel
@@ -1079,7 +1301,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               Add organisations here. Their logo appears on event cards when no poster is uploaded.
             </p>
 
-            <label style={{ fontWeight:700, fontSize:13, display:'block', marginBottom:6 }}>
+            <label style={{ fontWeight:700, fontSize:'0.8125rem', display:'block', marginBottom:6 }}>
               Organisation Logo
             </label>
             {newOrgLogo ? (
@@ -1087,9 +1309,9 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                 <img src={newOrgLogo} alt="preview" style={{ width:72, height:72, objectFit:'contain',
                   borderRadius:12, border:'1px solid var(--border)', background:'#f4f9f8', padding:6 }} />
                 <div>
-                  <div style={{ fontSize:12, color:'var(--teal)', fontWeight:700, marginBottom:4 }}>Logo ready</div>
+                  <div style={{ fontSize:'0.75rem', color:'var(--teal)', fontWeight:700, marginBottom:4 }}>Logo ready</div>
                   <button type="button" onClick={() => { setNewOrgLogo(''); setNewOrgLogoFile(null); }}
-                    style={{ fontSize:12, padding:'4px 12px', borderRadius:8, background:'#fee2e2',
+                    style={{ fontSize:'0.75rem', padding:'4px 12px', borderRadius:8, background:'#fee2e2',
                       color:'#dc2626', border:'1px solid #fecaca', cursor:'pointer' }}>
                     Remove
                   </button>
@@ -1099,14 +1321,14 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               <label style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6,
                 background:'var(--bg)', border:'2px dashed #b9ccc8', borderRadius:14,
                 padding:18, cursor:'pointer', color:'var(--teal)', marginBottom:14 }}>
-                <span style={{ fontSize:28 }}>Logo</span>
-                <span style={{ fontSize:13, fontWeight:800 }}>Upload logo</span>
-                <span style={{ fontSize:11, color:'var(--muted)' }}>PNG with transparent background preferred</span>
+                <span style={{ fontSize:'1.75rem' }}>Logo</span>
+                <span style={{ fontSize:'0.8125rem', fontWeight:800 }}>Upload logo</span>
+                <span style={{ fontSize:'0.6875rem', color:'var(--muted)' }}>PNG with transparent background preferred</span>
                 <input type="file" accept="image/*" onChange={handleOrgLogoChange} style={{ display:'none' }} />
               </label>
             )}
 
-            <label style={{ fontWeight:700, fontSize:13, display:'block', marginBottom:6 }}>
+            <label style={{ fontWeight:700, fontSize:'0.8125rem', display:'block', marginBottom:6 }}>
               Organisation Name *
             </label>
             <input value={newOrgName}
@@ -1117,9 +1339,9 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               placeholder="e.g. Alamdar Granville"
               style={{ marginBottom:12 }} />
 
-            <label style={{ fontWeight:700, fontSize:13, display:'block', marginBottom:6 }}>
+            <label style={{ fontWeight:700, fontSize:'0.8125rem', display:'block', marginBottom:6 }}>
               Slug (unique identifier)
-              <span style={{ fontSize:11, fontWeight:400, color:'var(--muted)', marginLeft:6 }}>
+              <span style={{ fontSize:'0.6875rem', fontWeight:400, color:'var(--muted)', marginLeft:6 }}>
                 Auto-generated
               </span>
             </label>
@@ -1128,7 +1350,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               placeholder="e.g. alamdargranville"
               style={{ marginBottom:12, fontFamily:'monospace' }} />
 
-            <label style={{ fontWeight:700, fontSize:13, display:'block', marginBottom:6 }}>
+            <label style={{ fontWeight:700, fontSize:'0.8125rem', display:'block', marginBottom:6 }}>
               Location in Australia
             </label>
             <input value={newOrgLocation}
@@ -1140,7 +1362,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               style={{
                 background: (orgsLoading || !newOrgName.trim()) ? '#94a3b8' : 'var(--teal,#0f766e)',
                 color:'white', border:'none', borderRadius:11,
-                padding:'12px 24px', fontWeight:800, fontSize:14,
+                padding:'12px 24px', fontWeight:800, fontSize:'0.875rem',
                 cursor: (orgsLoading || !newOrgName.trim()) ? 'not-allowed' : 'pointer',
                 width:'100%', transition:'background 0.2s',
               }}>
@@ -1148,7 +1370,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             </button>
 
             {orgMsg && (
-              <p style={{ fontSize:13, color: orgMsg.startsWith('Error') ? '#dc2626' : 'var(--teal)',
+              <p style={{ fontSize:'0.8125rem', color: orgMsg.startsWith('Error') ? '#dc2626' : 'var(--teal)',
                 fontWeight:700, margin:'10px 0 0' }}>{orgMsg}</p>
             )}
           </div>
@@ -1157,23 +1379,23 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:14 }}>
               <h3 style={{ margin:0 }}>Existing Organisations</h3>
               <button onClick={loadOrgs} disabled={orgsLoading}
-                style={{ fontSize:12, padding:'7px 16px', borderRadius:8,
+                style={{ fontSize:'0.75rem', padding:'7px 16px', borderRadius:8,
                   background:'white', border:'1.5px solid var(--teal,#0f766e)',
                   color:'var(--teal,#0f766e)', cursor:'pointer', fontWeight:800 }}>
                 {orgsLoading ? 'Loading...' : 'Refresh'}
               </button>
             </div>
 
-            <p style={{ fontSize:12, color:'var(--muted)', margin:'0 0 10px', lineHeight:1.5 }}>
+            <p style={{ fontSize:'0.75rem', color:'var(--muted)', margin:'0 0 10px', lineHeight:1.5 }}>
               All organisations are listed below. Built-in ones (Community Events, Muhammadi, Imam Hasan, Alamdar) are seeded automatically — you can edit their logo, name, or location here.
             </p>
 
             {orgs === null || orgsLoading ? (
-              <div style={{ textAlign:'center', padding:20, color:'var(--muted)', fontSize:13 }}>
+              <div style={{ textAlign:'center', padding:20, color:'var(--muted)', fontSize:'0.8125rem' }}>
                 {orgsLoading ? 'Loading...' : 'No data yet'}
               </div>
             ) : orgs.length === 0 ? (
-              <p style={{ color:'var(--muted)', fontSize:13, textAlign:'center', padding:16 }}>
+              <p style={{ color:'var(--muted)', fontSize:'0.8125rem', textAlign:'center', padding:16 }}>
                 No custom organisations added yet.
               </p>
             ) : (
@@ -1189,34 +1411,34 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                         {org.logoBase64
                           ? <img src={org.logoBase64} alt={org.name}
                               style={{ width:'100%', height:'100%', objectFit:'contain', padding:4 }} />
-                          : <span style={{ fontSize:22 }}>?</span>
+                          : <span style={{ fontSize:'1.375rem' }}>?</span>
                         }
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontWeight:800, fontSize:14, marginBottom:2, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
+                        <div style={{ fontWeight:800, fontSize:'0.875rem', marginBottom:2, display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
                           {org.name}
                           {org.builtIn && (
-                            <span style={{ fontSize:10, fontWeight:700, padding:'2px 7px', borderRadius:20,
+                            <span style={{ fontSize:'0.625rem', fontWeight:700, padding:'2px 7px', borderRadius:20,
                               background:'#e6f4f1', color:'var(--teal,#0f766e)', border:'1px solid #b2d8d0' }}>
                               built-in
                             </span>
                           )}
                         </div>
-                        <div style={{ fontSize:11, color:'var(--muted)', display:'flex', gap:10, flexWrap:'wrap' }}>
+                        <div style={{ fontSize:'0.6875rem', color:'var(--muted)', display:'flex', gap:10, flexWrap:'wrap' }}>
                           <span>ID: {org.slug}</span>
                           {org.location ? <span>{org.location}</span> : null}
                         </div>
                       </div>
                       <div style={{ display:'flex', gap:6, flexShrink:0 }}>
                         <button onClick={() => editingOrgId === org.id ? setEditingOrgId(null) : startEditOrg(org)}
-                          style={{ fontSize:12, padding:'6px 12px', borderRadius:8,
+                          style={{ fontSize:'0.75rem', padding:'6px 12px', borderRadius:8,
                             background: editingOrgId === org.id ? 'var(--teal)' : '#e6f4f1',
                             color: editingOrgId === org.id ? 'white' : 'var(--teal)',
                             border:'1px solid #b2d8d0', fontWeight:700, cursor:'pointer' }}>
                           {editingOrgId === org.id ? 'Cancel' : 'Edit'}
                         </button>
                         <button onClick={() => handleDeleteOrg(org)}
-                          style={{ fontSize:12, padding:'6px 12px', borderRadius:8, background:'#fdf2f1',
+                          style={{ fontSize:'0.75rem', padding:'6px 12px', borderRadius:8, background:'#fdf2f1',
                             color:'#c0392b', border:'1px solid #fadbd8', fontWeight:700, cursor:'pointer' }}>
                           Delete
                         </button>
@@ -1226,18 +1448,18 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                     {editingOrgId === org.id && (
                       <div style={{ background:'#f4f9f8', border:'1px solid #b2d8d0',
                         borderRadius:12, padding:14, marginTop:-4 }}>
-                        <p style={{ fontWeight:800, fontSize:13, color:'var(--teal)', margin:'0 0 10px' }}>
+                        <p style={{ fontWeight:800, fontSize:'0.8125rem', color:'var(--teal)', margin:'0 0 10px' }}>
                           Edit Organisation
                         </p>
 
-                        <label style={{ fontWeight:700, fontSize:12, display:'block', marginBottom:4 }}>Logo</label>
+                        <label style={{ fontWeight:700, fontSize:'0.75rem', display:'block', marginBottom:4 }}>Logo</label>
                         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
                           {editOrgLogo ? (
                             <img src={editOrgLogo} alt="logo"
                               style={{ width:50, height:50, objectFit:'contain', borderRadius:8,
                                 border:'1px solid var(--border)', background:'#f4f9f8', padding:4 }} />
                           ) : null}
-                          <label style={{ fontSize:12, padding:'6px 14px', borderRadius:8,
+                          <label style={{ fontSize:'0.75rem', padding:'6px 14px', borderRadius:8,
                             background:'var(--bg)', border:'1px solid var(--border)',
                             cursor:'pointer', fontWeight:700, color:'var(--teal)' }}>
                             {editOrgLogo ? 'Change Logo' : 'Upload Logo'}
@@ -1246,22 +1468,22 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           </label>
                           {editOrgLogo ? (
                             <button type="button" onClick={() => setEditOrgLogo('')}
-                              style={{ fontSize:11, padding:'4px 10px', borderRadius:7,
+                              style={{ fontSize:'0.6875rem', padding:'4px 10px', borderRadius:7,
                                 background:'#fee2e2', color:'#dc2626', border:'none', cursor:'pointer' }}>
                               Remove
                             </button>
                           ) : null}
                         </div>
 
-                        <label style={{ fontWeight:700, fontSize:12, display:'block', marginBottom:4 }}>Name *</label>
+                        <label style={{ fontWeight:700, fontSize:'0.75rem', display:'block', marginBottom:4 }}>Name *</label>
                         <input value={editOrgName} onChange={e => setEditOrgName(e.target.value)}
                           style={{ marginBottom:8 }} />
 
-                        <label style={{ fontWeight:700, fontSize:12, display:'block', marginBottom:4 }}>Slug</label>
+                        <label style={{ fontWeight:700, fontSize:'0.75rem', display:'block', marginBottom:4 }}>Slug</label>
                         <input value={editOrgSlug} onChange={e => setEditOrgSlug(slugify(e.target.value))}
                           style={{ marginBottom:8, fontFamily:'monospace' }} />
 
-                        <label style={{ fontWeight:700, fontSize:12, display:'block', marginBottom:4 }}>Location</label>
+                        <label style={{ fontWeight:700, fontSize:'0.75rem', display:'block', marginBottom:4 }}>Location</label>
                         <input value={editOrgLocation} onChange={e => setEditOrgLocation(e.target.value)}
                           style={{ marginBottom:12 }} />
 
@@ -1269,13 +1491,13 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           <button onClick={saveEditOrg} disabled={editOrgSaving || !editOrgName.trim()}
                             style={{ flex:1, padding:'10px', borderRadius:10, border:'none',
                               background:'var(--teal)', color:'white', fontWeight:800,
-                              fontSize:13, cursor:'pointer', opacity: !editOrgName.trim() ? 0.5 : 1 }}>
+                              fontSize:'0.8125rem', cursor:'pointer', opacity: !editOrgName.trim() ? 0.5 : 1 }}>
                             {editOrgSaving ? 'Saving...' : 'Save Changes'}
                           </button>
                           <button onClick={() => setEditingOrgId(null)}
                             style={{ padding:'10px 16px', borderRadius:10,
                               border:'1px solid var(--border)', background:'white',
-                              fontWeight:700, fontSize:13, cursor:'pointer' }}>
+                              fontWeight:700, fontSize:'0.8125rem', cursor:'pointer' }}>
                             Cancel
                           </button>
                         </div>
@@ -1289,13 +1511,6 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         </>
       )}
 
-
-            {/* ── NATIVE STREAM TAB ── */}
-      {tab === 'nstream' && (
-        <div className="card" style={{ background:'#0a0f0e', minHeight:600 }}>
-          <NativeStreamTester />
-        </div>
-      )}
 
                   {/* ── SETTINGS TAB ── */}
       {tab === 'settings' && (
@@ -1311,7 +1526,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               <strong>Current Hijri month:</strong>{' '}
               {getHijriDisplay(new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' }), hijriSettings.overrides || [])}
               {hijriSettings.anchorDate && (
-                <span style={{ marginLeft:8, color:'var(--muted)', fontSize:12 }}>
+                <span style={{ marginLeft:8, color:'var(--muted)', fontSize:'0.75rem' }}>
                   (anchor: {hijriSettings.anchorDate})
                 </span>
               )}
@@ -1436,6 +1651,15 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             />
             <button onClick={sendCommunityMsg} disabled={sendingReminder || !communityMsg.trim()}>
               {sendingReminder ? 'Sending…' : '📣 Send to All Users'}
+            </button>
+            <div style={{ margin:'18px 0', borderTop:'1px solid var(--border)' }} />
+            <h3 style={{ margin:'0 0 6px' }}>Store Availability Announcement</h3>
+            <p className="small" style={{ margin:'0 0 12px' }}>
+              Send the formatted Google Play, Apple App Store and Microsoft Store announcement.
+            </p>
+            <button onClick={sendStoreAnnouncement} disabled={sendingReminder}
+              style={{ background:'#0f766e', color:'white' }}>
+              {sendingReminder ? 'Sending…' : 'Send Store Announcement'}
             </button>
           </div>
         </>

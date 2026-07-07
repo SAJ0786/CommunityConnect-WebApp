@@ -340,20 +340,34 @@ exports.dailyEmailReminders = onSchedule(
   }
 );
 
-// ─── DAILY CLEANUP — 2 AM Sydney ──────────────────────────────────────────────
+// ─── DAILY ARCHIVE — 2 AM Sydney ──────────────────────────────────────────────
 exports.dailyEventCleanup = onSchedule(
   { schedule: "0 2 * * *", timeZone: "Australia/Sydney", region: REGION },
   async () => {
     const cutoff = todaySydney(-7);
     const snap = await db.collection("events").where("eventDate", "<", cutoff).get();
     if (snap.empty) return null;
-    let batch = db.batch(); let count = 0;
-    for (const doc of snap.docs) {
-      batch.delete(doc.ref); count++;
-      if (count % 450 === 0) { await batch.commit(); batch = db.batch(); }
+
+    const eligible = snap.docs.filter(doc => doc.data().isLive !== true);
+    const archivedAt = admin.firestore.Timestamp.now();
+    let archived = 0;
+    for (let offset = 0; offset < eligible.length; offset += 240) {
+      const batch = db.batch();
+      const chunk = eligible.slice(offset, offset + 240);
+      for (const eventDoc of chunk) {
+        batch.set(db.collection("archivedEvents").doc(eventDoc.id), {
+          ...eventDoc.data(),
+          status: "inactive",
+          archivedAt,
+          archivedFromEventId: eventDoc.id,
+          archiveReason: "event_date_expired",
+        }, { merge: true });
+        batch.delete(eventDoc.ref);
+      }
+      await batch.commit();
+      archived += chunk.length;
     }
-    await batch.commit();
-    console.log(`Deleted ${count} old events`);
+    console.log(`Archived ${archived} old events; skipped ${snap.size - eligible.length} live events`);
     return null;
   }
 );

@@ -42,30 +42,30 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
           background:'white', border:'1px solid var(--border,#e8edec)',
           borderRadius:14, height:46, padding:'0 8px 0 14px',
           boxShadow:'0 2px 8px rgba(0,0,0,0.03)' }}>
-          <span style={{ color:'var(--teal,#0f766e)', fontSize:16 }}>🔍</span>
+          <span style={{ color:'var(--teal,#0f766e)', fontSize:'1rem' }}>🔍</span>
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search events…"
-            style={{ flex:1, border:'none', outline:'none', fontSize:14,
+            style={{ flex:1, border:'none', outline:'none', fontSize:'0.875rem',
               background:'transparent', color:'var(--text)' }} />
           {/* Mic */}
           <button aria-label="Voice search" onClick={() => setPage('search')} style={{
             background:'none', border:'none', cursor:'pointer', boxShadow:'none',
-            fontSize:17, color:'var(--muted)', padding:'4px' }}>🎤</button>
+            fontSize:'1.0625rem', color:'var(--muted)', padding:'4px' }}>🎤</button>
           {/* Clear / Send */}
           {query.trim() ? (
             <button aria-label="Clear search" onClick={() => setQuery('')}
               style={{ width:32, height:32, borderRadius:'50%', border:'none',
                 cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center',
                 justifyContent:'center', padding:0, background:'#d6dedc',
-                color:'white', fontSize:16 }}>×</button>
+                color:'white', fontSize:'1rem' }}>×</button>
           ) : (
             <button aria-label="AI search" onClick={() => setPage('search')}
               style={{ width:32, height:32, borderRadius:'50%', border:'none',
                 cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center',
                 justifyContent:'center', padding:0, background:'var(--teal,#0f766e)',
-                color:'white', fontSize:16 }}>↑</button>
+                color:'white', fontSize:'1rem' }}>↑</button>
           )}
         </div>
         {/* Filter icon (right of search bar) */}
@@ -74,7 +74,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
           background: showFilters ? 'var(--teal,#0f766e)' : 'white',
           color: showFilters ? 'white' : 'var(--teal,#0f766e)',
           border:'1px solid var(--border,#e8edec)', cursor:'pointer',
-          fontSize:18, display:'flex', alignItems:'center', justifyContent:'center',
+          fontSize:'1.125rem', display:'flex', alignItems:'center', justifyContent:'center',
           boxShadow:'0 2px 8px rgba(0,0,0,0.03)' }}>⚙️</button>
       </div>
 
@@ -83,12 +83,12 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
         background:'var(--bg,#f4f7f6)', paddingTop:4 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
           padding:'6px 18px 8px' }}>
-          <h2 style={{ margin:0, fontSize:18, fontWeight:800, color:'var(--text)' }}>
+          <h2 style={{ margin:0, fontSize:'1.125rem', fontWeight:800, color:'var(--text)' }}>
             Upcoming Events
           </h2>
           <button onClick={handleRefresh} disabled={refreshing}
             style={{ background:'none', border:'none', cursor:'pointer', boxShadow:'none',
-              color:'var(--teal,#0f766e)', fontSize:12, fontWeight:800, padding:'0 4px' }}>
+              color:'var(--teal,#0f766e)', fontSize:'0.75rem', fontWeight:800, padding:'0 4px' }}>
             {refreshing ? '⏳' : '🔄'} Refresh
           </button>
         </div>
@@ -100,10 +100,10 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
           padding:'14px 16px', display:'flex', alignItems:'center',
           justifyContent:'space-between', color:'white',
           boxShadow:'0 4px 14px rgba(15,118,110,0.3)' }}>
-          <span style={{ display:'flex', alignItems:'center', gap:10, fontWeight:800, fontSize:14 }}>
+          <span style={{ display:'flex', alignItems:'center', gap:10, fontWeight:800, fontSize:'0.875rem' }}>
             📅 View Calendar
           </span>
-          <span style={{ fontSize:18 }}>›</span>
+          <span style={{ fontSize:'1.125rem' }}>›</span>
         </div>
       </div>
 
@@ -111,7 +111,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
       {showFilters && <EventFilters events={upcoming} onChange={setFiltered} />}
 
       {/* ── Notices ── */}
-      <div style={{ padding:'0 16px 10px', fontSize:11, color:'var(--muted)', fontWeight:600, lineHeight:1.6 }}>
+      <div style={{ padding:'0 16px 10px', fontSize:'0.6875rem', color:'var(--muted)', fontWeight:600, lineHeight:1.6 }}>
         🌙 <em>Hijri dates subject to moon sighting.</em>
         &nbsp;·&nbsp;
         ℹ️ <em>Events are user-submitted — verify with hosts directly.</em>

@@ -7,17 +7,17 @@ const PRECACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
 ];
 
-// ── Install: cache but DON'T skip waiting automatically ─────────────────────
-// Wait for user to confirm update via the banner, then skipWaiting is called
+// ── Install: cache the complete shell before automatic activation ────────────
+// The client activates this worker silently once no stream or form is active.
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then(cache => cache.addAll(PRECACHE).catch(() => {}))
   );
-  // Do NOT call self.skipWaiting() here — let the app control when to update
+  // The client sends SKIP_WAITING when it is safe to reload.
 });
 
 // ── Activate: delete old caches ──────────────────────────────────────────────
@@ -39,17 +39,26 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   if (url.origin !== self.location.origin) return;
 
-  // Always network-first for HTML — ensures fresh app shell
+  // Always prefer fresh HTML so it references assets from the current release.
+  // The cached shell remains available as an offline fallback.
   if (event.request.headers.get('accept')?.includes('text/html') ||
       url.pathname === '/' || url.pathname === '/index.html') {
     event.respondWith(
-      fetch(event.request)
-        .then(response => {
-          const clone = response.clone();
-          caches.open(STATIC_CACHE).then(cache => cache.put(event.request, clone));
+      (async () => {
+        try {
+          const response = await fetch(event.request, { cache: 'no-store' });
+          if (response.ok) {
+            const cache = await caches.open(STATIC_CACHE);
+            await cache.put(event.request, response.clone());
+            await cache.put('/index.html', response.clone());
+          }
           return response;
-        })
-        .catch(() => caches.match(event.request))
+        } catch {
+          return await caches.match(event.request)
+            || await caches.match('/index.html')
+            || Response.error();
+        }
+      })()
     );
     return;
   }
@@ -69,7 +78,7 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// ── Message: user tapped "Update" in the banner ───────────────────────────────
+// ── Message: client determined that automatic activation is safe ─────────────
 self.addEventListener('message', event => {
   if (event.data?.type === 'SKIP_WAITING') {
     self.skipWaiting();

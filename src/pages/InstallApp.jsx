@@ -10,14 +10,14 @@ export default function InstallApp() {
         background: 'var(--card,white)', borderRadius: 22, padding: 24,
         boxShadow: '0 8px 30px rgba(0,0,0,0.08)', border: '1px solid var(--border)',
       }}>
-        <h2 style={{ margin: '0 0 16px', fontSize: 18, fontFamily: 'var(--font)', fontWeight: 900 }}>
+        <h2 style={{ margin: '0 0 16px', fontSize: '1.125rem', fontFamily: 'var(--font)', fontWeight: 900 }}>
           📲 Install App
         </h2>
 
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
           {[['iphone', '🍎 iPhone'], ['android', '🤖 Android']].map(([key, label]) => (
             <button key={key} onClick={() => setInstallPlatform(key)} style={{
-              flex: 1, padding: '10px 8px', borderRadius: 12, fontWeight: 800, fontSize: 13, cursor: 'pointer',
+              flex: 1, padding: '10px 8px', borderRadius: 12, fontWeight: 800, fontSize: '0.8125rem', cursor: 'pointer',
               background: installPlatform === key ? 'var(--teal,#0f766e)' : 'var(--bg,#f8f9fa)',
               color: installPlatform === key ? 'white' : 'var(--text)',
               border: `1.5px solid ${installPlatform === key ? 'var(--teal,#0f766e)' : 'var(--border)'}`,
@@ -27,14 +27,14 @@ export default function InstallApp() {
         </div>
 
         {installPlatform === 'iphone' ? (
-          <ol style={{ margin: 0, paddingLeft: 22, color: 'var(--text)', fontSize: 14, lineHeight: 2, fontFamily: 'var(--font)', fontWeight: 600 }}>
+          <ol style={{ margin: 0, paddingLeft: 22, color: 'var(--text)', fontSize: '0.875rem', lineHeight: 2, fontFamily: 'var(--font)', fontWeight: 600 }}>
             <li>Open in <strong>Safari</strong> (not Chrome)</li>
             <li>Tap <strong>Share ⬆️</strong> at the bottom</li>
             <li>Tap <strong>"Add to Home Screen"</strong></li>
             <li>Tap <strong>Add</strong> ✅</li>
           </ol>
         ) : (
-          <ol style={{ margin: 0, paddingLeft: 22, color: 'var(--text)', fontSize: 14, lineHeight: 2, fontFamily: 'var(--font)', fontWeight: 600 }}>
+          <ol style={{ margin: 0, paddingLeft: 22, color: 'var(--text)', fontSize: '0.875rem', lineHeight: 2, fontFamily: 'var(--font)', fontWeight: 600 }}>
             <li>Open in <strong>Chrome</strong></li>
             <li>Tap <strong>⋮ menu</strong> top right</li>
             <li>Tap <strong>"Add to Home Screen"</strong></li>
@@ -43,7 +43,7 @@ export default function InstallApp() {
         )}
 
         <div style={{ marginTop: 14, padding: '10px 14px', background: 'var(--teal-l,#e6f4f1)',
-          borderRadius: 10, fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, fontWeight: 600 }}>
+          borderRadius: 10, fontSize: '0.75rem', color: 'var(--muted)', lineHeight: 1.5, fontWeight: 600 }}>
           💡 Loads instantly, works offline, feels like a native app.
         </div>
       </div>

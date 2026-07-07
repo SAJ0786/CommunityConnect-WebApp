@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const APP_URL = 'https://communityevents.siza.info';
@@ -21,7 +22,8 @@ function buildShareMessage(event, isGuest, user, profile) {
   if (showFull && event.hostPhone) lines.push(`📞 ${event.hostPhone}`);
   if (!showFull) lines.push('ℹ️ Full address available in the app (login required)');
   if (isReligious && event.speakerName) lines.push(`🎤 Speaker: ${event.speakerName}`);
-  if (isReligious) { const r=(event.reciters||[]).filter(x=>x.name); if(r.length) lines.push(`📿 ${r.map(x=>x.type+': '+x.name).join(' · ')}`); }
+  if (isReligious) { const r=(event.reciters||[]).filter(x=>x.name); if(r.length) lines.push(`📿 ${r.map(x=>(x.customType||x.type||'Reciter')+': '+x.name).join(' · ')}`); }
+  if (event.notes?.trim()) lines.push(`📝 Notes: ${event.notes.trim()}`);
   lines.push('','🔗 View all community events:',APP_URL,'','_Shared via Community Events app_');
   return lines.join('\n');
 }
@@ -39,10 +41,13 @@ function shareEvent(event, isGuest, user, profile) {
 function openDirections(address, lat, lng) {
   const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
   const dest  = (lat&&lng) ? `${lat},${lng}` : encodeURIComponent(address);
-  if (isIOS) window.open(`maps://maps.apple.com/?daddr=${dest}`,'_blank');
-  else       window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}`,'_blank');
+  const url = isIOS
+    ? `https://maps.apple.com/?daddr=${dest}&dirflg=d`
+    : `https://www.google.com/maps/dir/?api=1&destination=${dest}`;
+  window.location.assign(url);
 }
 import { getApp } from 'firebase/app';
+import { db } from '../firebase/firebase';
 import { RELIGIOUS_EVENT_TYPES } from '../utils/constants';
 import { canDeleteEvent, canEditEvent } from '../utils/permissions';
 
@@ -53,6 +58,10 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
   const [input, setInput] = useState('');
   const [busy, setBusy]       = useState(false);
   const [listening, setListening] = useState(false);
+  const [reportTarget, setReportTarget] = useState(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportComments, setReportComments] = useState('');
+  const [reportSaving, setReportSaving] = useState(false);
   const [voiceSupported]          = useState(() => 'SpeechRecognition' in window || 'webkitSpeechRecognition' in window);
   const recognitionRef            = useRef(null);
   const bottomRef                 = useRef(null);
@@ -126,7 +135,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
     setMessages(prev => [
       ...prev,
       { role: 'user', text: q },
-      { role: 'agent', text: '__typing__' }
+      { role: 'agent', text: '__typing__', prompt: q }
     ]);
 
     try {
@@ -161,6 +170,44 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
     setBusy(false);
   };
 
+  const openReport = (message, index) => {
+    setReportTarget({ ...message, index });
+    setReportReason('');
+    setReportComments('');
+  };
+
+  const submitReport = async () => {
+    if (!reportTarget || reportSaving) return;
+    if (!reportReason) {
+      window.showToast?.('Please select a report reason.', 'warning');
+      return;
+    }
+    setReportSaving(true);
+    try {
+      await addDoc(collection(db, 'ai_reports'), {
+        userId: user?.uid || 'guest',
+        userEmail: profile?.email || user?.email || '',
+        userRole: profile?.role || (isGuest ? 'guest' : ''),
+        prompt: reportTarget.prompt || '',
+        aiResponse: reportTarget.text || '',
+        reason: reportReason,
+        comments: reportComments.trim(),
+        page: 'ai-search',
+        appVersion: typeof __APP_BUILD_TIME__ !== 'undefined' ? String(__APP_BUILD_TIME__) : '',
+        userAgent: navigator.userAgent || '',
+        createdAt: serverTimestamp(),
+      });
+      setReportTarget(null);
+      setReportReason('');
+      setReportComments('');
+      window.showToast?.('Thank you. Your report has been submitted and will be reviewed.', 'success');
+    } catch (e) {
+      console.error('AI report failed:', e);
+      window.showToast?.('Could not submit report. Please try again.', 'error');
+    }
+    setReportSaving(false);
+  };
+
   const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', {
     weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'
   });
@@ -180,7 +227,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
 
 
   return (
-    <div style={{ margin: '0 16px 16px' }}>
+    <div className="ai-search-page" style={{ margin: '0 16px 16px' }}>
       <div style={{
         background: 'var(--card,white)', border: '1px solid var(--border)',
         borderRadius: 20, overflow: 'hidden',
@@ -196,16 +243,16 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
             width: 40, height: 40, borderRadius: '50%',
             background: 'rgba(255,255,255,.18)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 20, color: 'white', flexShrink: 0
+            fontSize: '1.25rem', color: 'white', flexShrink: 0
           }}>✦</div>
           <div>
-            <div style={{ color: 'white', fontWeight: 800, fontSize: 15 }}>Event AI Agent</div>
-            <div style={{ color: 'rgba(255,255,255,.8)', fontSize: 12 }}>Ask me anything about community events</div>
+            <div style={{ color: 'white', fontWeight: 800, fontSize: '0.9375rem' }}>Event AI Agent</div>
+            <div style={{ color: 'rgba(255,255,255,.8)', fontSize: '0.75rem' }}>Ask me anything about community events</div>
           </div>
         </div>
 
         {/* Messages */}
-        <div style={{ padding: 16, minHeight: 240, maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="ai-search-messages" style={{ padding: 16, minHeight: 240, maxHeight: 420, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
           {messages.map((m, i) => (
             <div key={i} style={{
               display: 'flex',
@@ -216,7 +263,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                 background: m.role === 'agent' ? 'var(--teal)' : 'var(--border,#e5e7eb)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, color: m.role === 'agent' ? 'white' : 'var(--text,#374151)', fontWeight: 700
+                fontSize: '0.75rem', color: m.role === 'agent' ? 'white' : 'var(--text,#374151)', fontWeight: 700
               }}>{m.role === 'agent' ? '✦' : 'U'}</div>
 
               <div style={{
@@ -224,7 +271,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
                 background: m.role === 'user' ? 'var(--teal-l,#e6f4f1)' : 'var(--bg,#f9fafb)',
                 color: m.role === 'user' ? 'var(--teal-dark)' : 'var(--text)',
                 borderRadius: m.role === 'agent' ? '4px 16px 16px 16px' : '16px 4px 16px 16px',
-                padding: '10px 14px', fontSize: 14, lineHeight: 1.6
+                padding: '10px 14px', fontSize: '0.875rem', lineHeight: 1.6
               }}>
                 {/* Typing dots */}
                 {m.text === '__typing__' && (
@@ -240,6 +287,16 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
                   <p style={{ margin: 0, whiteSpace: 'pre-wrap' }}>{m.text}</p>
                 )}
 
+                {m.role === 'agent' && m.text && m.text !== '__typing__' && i > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', justifyContent: 'flex-end' }}>
+                    <button className="btn-light"
+                      style={{ fontSize: '0.6875rem', padding: '4px 8px', borderRadius: 8 }}
+                      onClick={() => openReport(m, i)}>
+                      Report AI Response
+                    </button>
+                  </div>
+                )}
+
                 {/* Moon sighting notice on results */}
                 {m.matched && m.matched.length > 0 && (
                   <div style={{
@@ -248,8 +305,8 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
                     display: 'flex', gap: 8, alignItems: 'flex-start',
                     marginTop: 8
                   }}>
-                    <span style={{ fontSize: 14, flexShrink: 0 }}>🌙</span>
-                    <p style={{ margin: 0, fontSize: 11, color: 'var(--text)', lineHeight: 1.5 }}>
+                    <span style={{ fontSize: '0.875rem', flexShrink: 0 }}>🌙</span>
+                    <p style={{ margin: 0, fontSize: '0.6875rem', color: 'var(--text)', lineHeight: 1.5 }}>
                       <strong>Moon sighting notice:</strong> Dates in the next Hijri month
                       may change subject to moon sighting confirmation.
                     </p>
@@ -266,41 +323,41 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
                       return (
                         <div key={e.id} style={{ background: 'var(--card,white)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px' }}>
                           <div style={{ marginBottom: 6 }}>
-                            <span style={{ background: typeColor(e.eventType) + '20', color: typeColor(e.eventType), fontSize: 11, fontWeight: 800, padding: '3px 8px', borderRadius: 99 }}>{e.eventType}</span>
-                            {e.audienceType && <span style={{ background: 'var(--teal-l,#f3f4f6)', color: 'var(--muted)', fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 99, marginLeft: 5 }}>{e.audienceType}</span>}
+                            <span style={{ background: typeColor(e.eventType) + '20', color: typeColor(e.eventType), fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: 99 }}>{e.eventType}</span>
+                            {e.audienceType && <span style={{ background: 'var(--teal-l,#f3f4f6)', color: 'var(--muted)', fontSize: '0.6875rem', fontWeight: 700, padding: '3px 8px', borderRadius: 99, marginLeft: 5 }}>{e.audienceType}</span>}
                           </div>
-                          <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 3 }}>{e.hostName}</div>
-                          <div style={{ color: 'var(--muted)', fontSize: 13 }}>{fmtDate(e.eventDate)} · {e.startTime}</div>
-                          <div style={{ color: 'var(--muted)', fontSize: 13 }}>
+                          <div style={{ fontWeight: 800, fontSize: '0.875rem', marginBottom: 3 }}>{e.hostName}</div>
+                          <div style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>{fmtDate(e.eventDate)} · {e.startTime}</div>
+                          <div style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>
                             {isGuest
                               ? (e.address?.suburb ? `${e.address.suburb}${e.address.state ? ', ' + e.address.state : ''}` : '')
                               : addr}
                           </div>
                           {!isGuest && e.hostPhone && (
-                            <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 2 }}>📞 {e.hostPhone}</div>
+                            <div style={{ color: 'var(--muted)', fontSize: '0.75rem', marginTop: 2 }}>📞 {e.hostPhone}</div>
                           )}
-                          {showReligious && e.speakerName && <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>Speaker: {e.speakerName}</div>}
-                          {showReligious && reciters && <div style={{ color: 'var(--muted)', fontSize: 12 }}>{reciters}</div>}
+                          {showReligious && e.speakerName && <div style={{ color: 'var(--muted)', fontSize: '0.75rem', marginTop: 4 }}>Speaker: {e.speakerName}</div>}
+                          {showReligious && reciters && <div style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{reciters}</div>}
                           {/* Guest masked fields */}
                           {isGuest && e.address?.suburb && (
-                            <div style={{ fontSize: 12, color: 'var(--teal)', background: 'var(--teal-l,#fffbeb)', padding: '5px 8px', borderRadius: 8, marginTop: 4 }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--teal)', background: 'var(--teal-l,#fffbeb)', padding: '5px 8px', borderRadius: 8, marginTop: 4 }}>
                               🔒 Login to see full address & phone
                             </div>
                           )}
                           <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                             {/* Edit / Delete — logged in users only */}
                             {!isGuest && canEditEvent(profile, e, user?.uid) && (
-                              <button className="btn-light" style={{ fontSize: 12, padding: '5px 10px' }}
+                              <button className="btn-light" style={{ fontSize: '0.75rem', padding: '5px 10px' }}
                                 onClick={() => { setEditingEvent(e); setPage('edit'); }}>Edit</button>
                             )}
                             {!isGuest && canDeleteEvent(profile, e, user?.uid) && (
-                              <button className="btn-danger" style={{ fontSize: 12, padding: '5px 10px' }}
+                              <button className="btn-danger" style={{ fontSize: '0.75rem', padding: '5px 10px' }}
                                 onClick={() => handleDelete(e.id)}>Delete</button>
                             )}
 
                             {/* Share — logged-in: all events | guest: centre events only */}
                             {(!isGuest || e.organiserType === 'centre') && (
-                              <button className="btn-light" style={{ fontSize: 12, padding: '5px 10px' }}
+                              <button className="btn-light" style={{ fontSize: '0.75rem', padding: '5px 10px' }}
                                 onClick={() => shareEvent(e, isGuest, user, profile)}>
                                 📤 Share
                               </button>
@@ -308,7 +365,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
 
                             {/* Directions — logged-in: all events | guest: centre events only */}
                             {(!isGuest || e.organiserType === 'centre') && addr && (
-                              <button className="btn-light" style={{ fontSize: 12, padding: '5px 10px' }}
+                              <button className="btn-light" style={{ fontSize: '0.75rem', padding: '5px 10px' }}
                                 onClick={() => openDirections(addr, e.address?.latitude, e.address?.longitude)}>
                                 🗺 Directions
                               </button>
@@ -329,7 +386,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
         <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--bg,#f9fafb)', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {suggestions.map(s => (
             <button key={s}
-              style={{ fontSize: 12, padding: '5px 10px', border: '1px solid var(--border)', borderRadius: 99, background: 'var(--card,white)', color: 'var(--text)', cursor: 'pointer' }}
+              style={{ fontSize: '0.75rem', padding: '5px 10px', border: '1px solid var(--border)', borderRadius: 99, background: 'var(--card,white)', color: 'var(--text)', cursor: 'pointer' }}
               onClick={() => setInput(s)}>{s}</button>
           ))}
         </div>
@@ -338,7 +395,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
         <div style={{ display: 'flex', gap: 8, padding: '12px 14px', borderTop: '1px solid var(--border)' }}>
           <input
             style={{
-              flex: 1, padding: '10px 14px', fontSize: 14,
+              flex: 1, padding: '10px 14px', fontSize: '0.875rem',
               border: listening ? '1.5px solid #dc2626' : '1px solid var(--border)',
               borderRadius: 12, background: 'var(--card,white)',
               color: 'var(--text)'
@@ -353,7 +410,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
             onClick={startVoice}
             title={listening ? 'Stop listening' : 'Voice search'}
             style={{
-              padding: '10px 12px', fontSize: 20,
+              padding: '10px 12px', fontSize: '1.25rem',
               borderRadius: 12, border: '1px solid var(--border,#e5e7eb)',
               background: listening ? '#fee2e2' : '#fff0ee',
               color: listening ? '#dc2626' : '#c0392b',
@@ -373,11 +430,66 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
           </button>
 
           <button onClick={send} disabled={busy || !input.trim()}
-            style={{ padding: '10px 18px', fontWeight: 800, fontSize: 13, borderRadius: 12, border: 'none', background: busy || !input.trim() ? 'var(--border,#e5e7eb)' : 'var(--teal)', color: busy || !input.trim() ? 'var(--muted)' : 'white', cursor: busy || !input.trim() ? 'not-allowed' : 'pointer' }}>
+            style={{ padding: '10px 18px', fontWeight: 800, fontSize: '0.8125rem', borderRadius: 12, border: 'none', background: busy || !input.trim() ? 'var(--border,#e5e7eb)' : 'var(--teal)', color: busy || !input.trim() ? 'var(--muted)' : 'white', cursor: busy || !input.trim() ? 'not-allowed' : 'pointer' }}>
             {busy ? '...' : 'Ask ↗'}
           </button>
         </div>
       </div>
+      {reportTarget && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        }}>
+          <div style={{
+            background: 'var(--card,white)', borderRadius: 18, border: '1px solid var(--border)',
+            width: '100%', maxWidth: 420, padding: 20, boxShadow: '0 20px 60px rgba(0,0,0,.3)',
+          }}>
+            <h3 style={{ margin: '0 0 6px', color: 'var(--text)' }}>Report AI Response</h3>
+            <p style={{ margin: '0 0 14px', color: 'var(--muted)', fontSize: '0.8125rem', lineHeight: 1.5 }}>
+              Tell us what was wrong with this AI-generated response.
+            </p>
+
+            {[
+              'Offensive or inappropriate',
+              'Incorrect information',
+              'Unsafe advice',
+              'Spam or misleading',
+              'Other',
+            ].map(reason => (
+              <label key={reason} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, fontSize: '0.875rem' }}>
+                <input type="radio" name="ai-report-reason" value={reason}
+                  checked={reportReason === reason}
+                  onChange={e => setReportReason(e.target.value)}
+                  style={{ width: 'auto' }} />
+                {reason}
+              </label>
+            ))}
+
+            <label style={{ display: 'block', marginTop: 12, marginBottom: 6, fontWeight: 700, fontSize: '0.8125rem' }}>
+              Additional comments
+            </label>
+            <textarea value={reportComments}
+              onChange={e => setReportComments(e.target.value)}
+              placeholder="Optional details"
+              rows={4}
+              style={{
+                width: '100%', resize: 'vertical', border: '1px solid var(--border)',
+                borderRadius: 10, padding: 10, fontFamily: 'inherit', fontSize: '0.8125rem',
+              }} />
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button className="btn-light" disabled={reportSaving}
+                onClick={() => setReportTarget(null)}>
+                Cancel
+              </button>
+              <button disabled={reportSaving || !reportReason}
+                onClick={submitReport}>
+                {reportSaving ? 'Submitting...' : 'Submit Report'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <style>{`
         @keyframes dot { 0%,80%,100%{opacity:.3} 40%{opacity:1} }
         @keyframes pulse-mic { 0%,100%{transform:scale(1)} 50%{transform:scale(1.15)} }

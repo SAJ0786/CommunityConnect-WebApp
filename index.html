@@ -3,18 +3,80 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Community Events</title>
-  <meta name="description" content="Create – Share – Connect" />
-  <meta name="theme-color" content="#c0392b" />
-  <link rel="manifest" href="/manifest.json" />
+  <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin />
+  <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin />
+  <link rel="dns-prefetch" href="https://australia-southeast1-community-event-8b639.cloudfunctions.net" />
+  <title>Shia Majlis &amp; Muharram Programs Australia | Community Events</title>
+  <meta name="description" content="Find Shia Majlis, Majalis, Muharram programs and Ashura events in Sydney and across Australia, including Melbourne, Brisbane, Adelaide and Perth." />
+  <link rel="canonical" href="https://communityevents.siza.info/" />
+  <meta name="robots" content="index, follow" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Community Events Australia" />
+  <meta property="og:title" content="Shia Majlis &amp; Muharram Programs Australia | Community Events" />
+  <meta property="og:description" content="Find Shia Majlis, Majalis, Muharram programs and Ashura events in Sydney and across Australia." />
+  <meta property="og:url" content="https://communityevents.siza.info/" />
+  <meta property="og:image" content="https://communityevents.siza.info/community-events-app-poster.jpg" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Community Events Australia",
+      "url": "https://communityevents.siza.info/",
+      "description": "Find and share Shia Majlis, Majalis, Muharram programs, Ashura processions and community events in Sydney and across Australia.",
+      "applicationCategory": "LifestyleApplication",
+      "operatingSystem": "Any",
+      "audience": {
+        "@type": "Audience",
+        "audienceType": "Shia Muslim community in Australia"
+      },
+      "areaServed": [
+        "Australia",
+        "Sydney",
+        "Melbourne",
+        "Brisbane",
+        "Adelaide",
+        "Perth"
+      ],
+      "image": "https://communityevents.siza.info/community-events-app-poster.jpg",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "AUD"
+      }
+    }
+  </script>
+  <meta name="theme-color" content="#0f766e" />
+  <link rel="manifest" href="/manifest.json?v=20260625" />
   <link rel="icon" href="/favicon.png" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
+      });
+    }
+  </script>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root">
+    <main style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;background:#f8faf9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#1a1a2e;text-align:center">
+      <img src="/icons/icon-1024.png" width="148" height="148" alt="" style="display:block;object-fit:contain" />
+      <h1 style="max-width:340px;margin:0;font-size:24px;line-height:1.2">Community Events Australia</h1>
+      <div aria-label="Loading" style="width:112px;height:4px;margin-top:8px;overflow:hidden;border-radius:4px;background:#dce7e5">
+        <span style="display:block;width:45%;height:100%;border-radius:4px;background:#0f766e"></span>
+      </div>
+    </main>
+  </div>
+  <noscript>
+    <nav aria-label="Community Events Australia information">
+      <a href="/shia-events-australia.html">Browse Shia Majlis and Muharram programs in Australia</a>
+      <a href="/install.html">Install Community Events Australia</a>
+      <a href="/docs/user-guide.html">Community Events app user guide</a>
+      <a href="/support.html">Community Events support</a>
+      <a href="/privacy.html">Community Events privacy policy</a>
+    </nav>
+  </noscript>
   <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

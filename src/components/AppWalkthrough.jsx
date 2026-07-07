@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react';
 
-// Bump this version string whenever you want all existing users to see the tour again
-const WALKTHROUGH_VERSION = 'v3_2026';
-
 const STEPS = [
   {
     target: null, // full screen intro
@@ -67,29 +64,25 @@ const STEPS = [
   },
 ];
 
-export default function AppWalkthrough({ isGuest, userId }) {
+export default function AppWalkthrough({ isGuest, userId, completed, onComplete }) {
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (isGuest) {
-      // Always show for guests — they have no persistent identity
       setVisible(true);
       return;
     }
-    if (!userId) return; // not resolved yet, wait
-    // For logged-in users: show once per version, keyed to their uid
-    const key = `cea_walkthrough_${WALKTHROUGH_VERSION}_${userId}`;
-    if (!localStorage.getItem(key)) setVisible(true);
-  }, [isGuest, userId]);
+    if (!userId) {
+      setVisible(false);
+      return;
+    }
+    setVisible(completed === false);
+  }, [isGuest, userId, completed]);
 
   const dismiss = () => {
-    if (!isGuest && userId) {
-      // Persist dismissal for logged-in users only
-      localStorage.setItem(`cea_walkthrough_${WALKTHROUGH_VERSION}_${userId}`, '1');
-    }
-    // Guests: don't persist — next visit shows it again
     setVisible(false);
+    if (!isGuest && userId) onComplete?.();
   };
 
   const next = () => {
@@ -131,28 +124,28 @@ export default function AppWalkthrough({ isGuest, userId }) {
             margin: '0 24px', textAlign: 'center',
             boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
           }}>
-          <div style={{ fontSize: 52, marginBottom: 12 }}>{s.icon}</div>
-          <h2 style={{ fontSize: 18, fontWeight: 900, margin: '0 0 10px', lineHeight: 1.2 }}>{s.title}</h2>
-          <p style={{ fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.6, margin: '0 0 20px' }}>{s.body}</p>
+          <div style={{ fontSize: '3.25rem', marginBottom: 12 }}>{s.icon}</div>
+          <h2 style={{ fontSize: '1.125rem', fontWeight: 900, margin: '0 0 10px', lineHeight: 1.2 }}>{s.title}</h2>
+          <p style={{ fontSize: '0.84375rem', color: 'var(--muted)', lineHeight: 1.6, margin: '0 0 20px' }}>{s.body}</p>
           <div style={{ display: 'flex', gap: 10 }}>
             {!isFirst && (
               <button onClick={e => { e.stopPropagation(); setStep(s => s - 1); }}
                 style={{ flex: 1, padding: '12px', borderRadius: 12, border: '1px solid var(--border)',
-                  fontWeight: 800, fontSize: 14, background: 'white', cursor: 'pointer' }}>
+                  fontWeight: 800, fontSize: '0.875rem', background: 'white', cursor: 'pointer' }}>
                 ← Back
               </button>
             )}
             <button onClick={e => { e.stopPropagation(); next(); }}
               style={{ flex: 2, padding: '12px', borderRadius: 12, border: 'none',
                 background: 'linear-gradient(135deg,#16a34a,#0f766e)', color: 'white',
-                fontWeight: 800, fontSize: 14, cursor: 'pointer' }}>
+                fontWeight: 800, fontSize: '0.875rem', cursor: 'pointer' }}>
               {isLast ? 'Get Started 🚀' : 'Next →'}
             </button>
           </div>
           {!isLast && (
             <button onClick={e => { e.stopPropagation(); dismiss(); }}
               style={{ marginTop: 10, background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--muted)', fontSize: 12, fontWeight: 600 }}>
+                color: 'var(--muted)', fontSize: '0.75rem', fontWeight: 600 }}>
               Skip tour
             </button>
           )}
@@ -177,16 +170,16 @@ export default function AppWalkthrough({ isGuest, userId }) {
             zIndex: 50001,
           }}>
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 10 }}>
-            <span style={{ fontSize: 24, flexShrink: 0 }}>{s.icon}</span>
+            <span style={{ fontSize: '1.5rem', flexShrink: 0 }}>{s.icon}</span>
             <div>
-              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4 }}>{s.title}</div>
-              <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>{s.body}</div>
+              <div style={{ fontWeight: 800, fontSize: '0.875rem', marginBottom: 4 }}>{s.title}</div>
+              <div style={{ fontSize: '0.78125rem', color: 'var(--muted)', lineHeight: 1.5 }}>{s.body}</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
             <button onClick={e => { e.stopPropagation(); setStep(s => s - 1); }}
               style={{ background: 'none', border: 'none', cursor: 'pointer',
-                color: 'var(--muted)', fontSize: 12, fontWeight: 600 }}>← Back</button>
+                color: 'var(--muted)', fontSize: '0.75rem', fontWeight: 600 }}>← Back</button>
             <div style={{ display: 'flex', gap: 4 }}>
               {STEPS.map((_, i) => (
                 <div key={i} style={{ width: i === step ? 14 : 6, height: 6, borderRadius: 3,
@@ -196,14 +189,14 @@ export default function AppWalkthrough({ isGuest, userId }) {
             </div>
             <button onClick={e => { e.stopPropagation(); next(); }}
               style={{ background: 'var(--teal,#0f766e)', border: 'none', cursor: 'pointer',
-                color: 'white', fontSize: 12, fontWeight: 800, padding: '7px 14px',
+                color: 'white', fontSize: '0.75rem', fontWeight: 800, padding: '7px 14px',
                 borderRadius: 9 }}>
               {isLast ? 'Done ✓' : 'Next →'}
             </button>
           </div>
           <button onClick={e => { e.stopPropagation(); dismiss(); }}
             style={{ display: 'block', margin: '8px auto 0', background: 'none',
-              border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11 }}>
+              border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: '0.6875rem' }}>
             Skip tour
           </button>
         </div>

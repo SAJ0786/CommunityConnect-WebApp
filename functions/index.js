@@ -1,6 +1,7 @@
 const admin      = require("firebase-admin");
 const nodemailer = require("nodemailer");
-const { onRequest, onCall } = require("firebase-functions/v2/https");
+const crypto     = require("crypto");
+const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { onSchedule }        = require("firebase-functions/v2/scheduler");
 const { defineSecret }      = require("firebase-functions/params");
@@ -28,6 +29,134 @@ exports.helloWorld = onRequest(
 );
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+// Temporary app store reviewer login. Remove after Google/Apple review is complete.
+exports.temporaryStoreTesterLogin = onCall({ region: REGION }, async (request) => {
+  const email = String(request.data?.email || "").trim().toLowerCase();
+  const password = String(request.data?.password || "");
+  const testerEmail = "communityeventstester@outlook.com";
+  const testerPassword = "Sydney#201977";
+
+  if (email !== testerEmail || password !== testerPassword) {
+    throw new HttpsError("permission-denied", "Invalid tester credentials.");
+  }
+
+  let userRecord;
+  try {
+    userRecord = await admin.auth().getUserByEmail(testerEmail);
+  } catch (e) {
+    if (e.code !== "auth/user-not-found") throw e;
+    userRecord = await admin.auth().createUser({
+      email: testerEmail,
+      emailVerified: true,
+      displayName: "Community Events Tester",
+    });
+  }
+
+  await db.collection("users").doc(userRecord.uid).set({
+    fullName: "Community Events Tester",
+    email: testerEmail,
+    emailLower: testerEmail,
+    role: "superAdmin",
+    isActive: true,
+    reminderEmailEnabled: true,
+    walkthroughCompleted: true,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const token = await admin.auth().createCustomToken(userRecord.uid, {
+    storeTester: true,
+  });
+  return { token };
+});
+
+// Update the editable identity fields on a user profile. Users may update
+// themselves; admins may correct any active user's profile. Role and account
+// permissions are deliberately outside this endpoint.
+exports.updateUserContactProfile = onCall({ region: REGION }, async (request) => {
+  if (!request.auth?.uid || request.auth.token.firebase?.sign_in_provider === 'anonymous') {
+    throw new HttpsError('unauthenticated', 'Please sign in first.');
+  }
+
+  const requesterUid = request.auth.uid;
+  const targetUid = String(request.data?.targetUid || requesterUid).trim();
+  const fullName = String(request.data?.fullName || '').trim().replace(/\s+/g, ' ');
+  const email = String(request.data?.email || '').trim().toLowerCase();
+
+  if (fullName.length < 2 || fullName.length > 100) {
+    throw new HttpsError('invalid-argument', 'Enter a valid full name.');
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+    throw new HttpsError('invalid-argument', 'Enter a valid email address.');
+  }
+
+  if (targetUid !== requesterUid) {
+    const requester = await db.collection('users').doc(requesterUid).get();
+    if (!requester.exists || !['admin', 'superAdmin'].includes(requester.data()?.role)) {
+      throw new HttpsError('permission-denied', 'Admin access required.');
+    }
+  }
+
+  const targetRef = db.collection('users').doc(targetUid);
+  const target = await targetRef.get();
+  if (!target.exists || target.data()?.isActive === false || target.data()?.migratedToUid) {
+    throw new HttpsError('not-found', 'User profile not found.');
+  }
+
+  const [lowerMatches, legacyMatches] = await Promise.all([
+    db.collection('users').where('emailLower', '==', email).limit(5).get(),
+    db.collection('users').where('email', '==', email).limit(5).get(),
+  ]);
+  const possibleDuplicates = new Map(
+    [...lowerMatches.docs, ...legacyMatches.docs].map(doc => [doc.id, doc])
+  );
+  const duplicate = [...possibleDuplicates.values()].find(doc =>
+    doc.id !== targetUid && doc.data()?.isActive !== false && !doc.data()?.migratedToUid
+  );
+  if (duplicate) {
+    throw new HttpsError('already-exists', 'This email is already used by another account.');
+  }
+
+  const authUser = await admin.auth().getUser(targetUid).catch(() => null);
+  const rawPhone = String(authUser?.phoneNumber || target.data()?.phone || '').trim();
+  const phoneDigits = rawPhone.replace(/\D/g, '');
+  const canonicalPhone = rawPhone.startsWith('+')
+    ? rawPhone
+    : phoneDigits.startsWith('04')
+      ? `+61${phoneDigits.slice(1)}`
+      : phoneDigits.startsWith('614')
+        ? `+${phoneDigits}`
+        : rawPhone;
+
+  if (canonicalPhone) {
+    const localPhone = canonicalPhone.startsWith('+614') ? `0${canonicalPhone.slice(3)}` : canonicalPhone;
+    const phoneCandidates = [...new Set([canonicalPhone, localPhone, phoneDigits].filter(Boolean))];
+    const phoneQueries = await Promise.all(phoneCandidates.map(phone =>
+      db.collection('users').where('phone', '==', phone).limit(5).get()
+    ));
+    const phoneMatches = new Map(phoneQueries.flatMap(result => result.docs).map(doc => [doc.id, doc]));
+    const phoneDuplicate = [...phoneMatches.values()].find(doc =>
+      doc.id !== targetUid && doc.data()?.isActive !== false && !doc.data()?.migratedToUid
+    );
+    if (phoneDuplicate) {
+      throw new HttpsError('already-exists', 'This phone number is already attached to another email account.');
+    }
+  }
+
+  await targetRef.update({
+    fullName,
+    email,
+    emailLower: email,
+    ...(canonicalPhone ? { phone: canonicalPhone, phoneNormalized: canonicalPhone } : {}),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    profileUpdatedByUid: requesterUid,
+  });
+  await admin.auth().updateUser(targetUid, { displayName: fullName }).catch(error => {
+    console.warn('Could not update Firebase display name:', targetUid, error.message);
+  });
+
+  return { profile: { id: targetUid, fullName, email, emailLower: email } };
+});
+
 function todaySydney(offsetDays = 0) {
   const now = new Date();
   now.setDate(now.getDate() + offsetDays);
@@ -43,6 +172,15 @@ function buildTransporter(secrets) {
   return nodemailer.createTransport({
     host, port, secure: port === 465, auth: { user, pass }
   });
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 function toICSDate(dateStr, timeStr = "00:00") {
@@ -246,15 +384,29 @@ exports.getPublicEvents = onCall(
   async (request) => {
     if (!request.auth) throw new Error("Unauthenticated");
 
-    const snap = await db.collection("events")
-      .where("status", "==", "active")
-      .orderBy("eventDate", "asc")
-      .get();
+    if (publicEventsCache.expiresAt > Date.now() && publicEventsCache.events.length) {
+      return { events: publicEventsCache.events, cached: true };
+    }
 
-    const events = snap.docs
+    const yesterday = todaySydney(-1);
+    const [upcomingSnap, liveSnap] = await Promise.all([
+      db.collection("events")
+        .where("status", "==", "active")
+        .where("eventDate", ">=", yesterday)
+        .orderBy("eventDate", "asc")
+        .limit(150)
+        .get(),
+      db.collection("events").where("isLive", "==", true).get(),
+    ]);
+
+    const docsById = new Map();
+    [...upcomingSnap.docs, ...liveSnap.docs].forEach(doc => docsById.set(doc.id, doc));
+
+    const events = [...docsById.values()]
+      .sort((a, b) => (a.data().eventDate || "").localeCompare(b.data().eventDate || ""))
       .map(doc => {
         const e = doc.data();
-        if (e.hidden) return null;
+        if (e.hidden || e.status !== "active") return null;
 
         const isPrivate = (e.organiserType || "private") === "private";
         const safeAddress = {
@@ -287,8 +439,10 @@ exports.getPublicEvents = onCall(
           customEventType: e.customEventType || "",
           eventTypeDisplay: e.eventTypeDisplay || e.eventType || "",
           eventSubject: e.eventSubject || "",
+          notes: typeof e.notes === "string" ? e.notes.slice(0, 500) : "",
           audienceType: e.audienceType || "",
           organiserType: e.organiserType || "private",
+          metroArea: e.metroArea || "",
           isOnBehalfOf: !!e.isOnBehalfOf,
           address: safeAddress,
           speakerName: e.speakerName || "",
@@ -299,7 +453,8 @@ exports.getPublicEvents = onCall(
       })
       .filter(Boolean);
 
-    return { events };
+    publicEventsCache = { expiresAt: Date.now() + 20 * 1000, events };
+    return { events, cached: false };
   }
 );
 
@@ -335,6 +490,7 @@ exports.aiEventSearch = onCall(
         eventType:    e.eventType,
         eventTypeDisplay: e.eventTypeDisplay || e.eventType,
         eventSubject: e.eventSubject || "",
+        notes: typeof e.notes === "string" ? e.notes.slice(0, 500) : "",
         hostName:     e.hostName,
         eventDate:    e.eventDate,
         startTime:    e.startTime,
@@ -535,20 +691,39 @@ exports.dailyEmailReminders = onSchedule(
   }
 );
 
-// ─── DAILY CLEANUP — 2 AM Sydney ──────────────────────────────────────────────
+// ─── DAILY ARCHIVE — 2 AM Sydney ──────────────────────────────────────────────
 exports.dailyEventCleanup = onSchedule(
   { schedule: "0 2 * * *", timeZone: "Australia/Sydney", region: REGION },
   async () => {
     const cutoff = todaySydney(-7);
     const snap = await db.collection("events").where("eventDate", "<", cutoff).get();
     if (snap.empty) return null;
-    let batch = db.batch(); let count = 0;
-    for (const doc of snap.docs) {
-      batch.delete(doc.ref); count++;
-      if (count % 450 === 0) { await batch.commit(); batch = db.batch(); }
+
+    const eligible = snap.docs.filter(doc => doc.data().isLive !== true);
+    const archivedAt = admin.firestore.Timestamp.now();
+    let archived = 0;
+
+    // Each event uses two writes (archive + source removal), so stay below the
+    // Firestore 500-operation batch limit.
+    for (let offset = 0; offset < eligible.length; offset += 240) {
+      const batch = db.batch();
+      const chunk = eligible.slice(offset, offset + 240);
+      for (const eventDoc of chunk) {
+        const archiveRef = db.collection("archivedEvents").doc(eventDoc.id);
+        batch.set(archiveRef, {
+          ...eventDoc.data(),
+          status: "inactive",
+          archivedAt,
+          archivedFromEventId: eventDoc.id,
+          archiveReason: "event_date_expired",
+        }, { merge: true });
+        batch.delete(eventDoc.ref);
+      }
+      await batch.commit();
+      archived += chunk.length;
     }
-    await batch.commit();
-    console.log(`Deleted ${count} old events`);
+
+    console.log(`Archived ${archived} old events; skipped ${snap.size - eligible.length} live events`);
     return null;
   }
 );
@@ -592,7 +767,7 @@ exports.monthlyHijriReminder = onSchedule(
 exports.deleteUserData = onCall({ region: REGION }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new Error("Unauthenticated");
-  const keepEvents = request.data?.keepEvents === true;
+  const archiveEventsNow = request.data?.archiveEventsNow === true;
   const userDoc = await db.collection("users").doc(uid).get();
   if (userDoc.exists && userDoc.data().role === "superAdmin") {
     const saSnap = await db.collection("users")
@@ -601,29 +776,54 @@ exports.deleteUserData = onCall({ region: REGION }, async (request) => {
       "You are the only Super Admin. Assign another before deleting your account."
     );
   }
+  const eventsSnap = await db.collection("events")
+    .where("createdByUserId", "==", uid).get();
+  if (eventsSnap.docs.some(eventDoc => eventDoc.data().isLive === true)) {
+    throw new HttpsError("failed-precondition", "End your active live stream before deleting your account.");
+  }
+
+  const accountDeletedAt = admin.firestore.Timestamp.now();
   let count = 0;
-  let batch = db.batch();
-  if (!keepEvents) {
-    // Delete the user's events
-    const eventsSnap = await db.collection("events")
-      .where("createdByUserId", "==", uid).get();
-    for (const doc of eventsSnap.docs) {
-      batch.delete(doc.ref); count++;
-      if (count % 450 === 0) { await batch.commit(); batch = db.batch(); }
+  if (archiveEventsNow) {
+    // Preserve the complete event, host and on-behalf-of submission details.
+    // Only its lifecycle changes from active to inactive.
+    for (let offset = 0; offset < eventsSnap.docs.length; offset += 240) {
+      const batch = db.batch();
+      const chunk = eventsSnap.docs.slice(offset, offset + 240);
+      for (const eventDoc of chunk) {
+        batch.set(db.collection("archivedEvents").doc(eventDoc.id), {
+          ...eventDoc.data(),
+          status: "inactive",
+          creatorDeleted: true,
+          accountDeletedAt,
+          archivedAt: accountDeletedAt,
+          archivedFromEventId: eventDoc.id,
+          archiveReason: "creator_account_deleted",
+        }, { merge: true });
+        batch.delete(eventDoc.ref);
+      }
+      await batch.commit();
+      count += chunk.length;
     }
   } else {
-    // Keep events, but mark them as orphaned (creator deleted)
-    const eventsSnap = await db.collection("events")
-      .where("createdByUserId", "==", uid).get();
-    for (const doc of eventsSnap.docs) {
-      batch.update(doc.ref, { creatorDeleted: true }); count++;
-      if (count % 450 === 0) { await batch.commit(); batch = db.batch(); }
+    // Keep events visible until the scheduled expiry process archives them.
+    for (let offset = 0; offset < eventsSnap.docs.length; offset += 450) {
+      const batch = db.batch();
+      const chunk = eventsSnap.docs.slice(offset, offset + 450);
+      chunk.forEach(eventDoc => batch.update(eventDoc.ref, {
+        creatorDeleted: true,
+        accountDeletedAt,
+      }));
+      await batch.commit();
+      count += chunk.length;
     }
   }
+
+  const batch = db.batch();
   batch.delete(db.collection("users").doc(uid));
   batch.delete(db.collection("calendarSubscriptions").doc(uid));
   await batch.commit();
-  return { deleted: keepEvents ? 0 : count, kept: keepEvents ? count : 0 };
+  return { archivedNow: archiveEventsNow ? count : 0, keptUntilExpiry: archiveEventsNow ? 0 : count };
 });
 
 // Phone-only login migration support.
@@ -904,7 +1104,7 @@ exports.sendRemindersNow = onCall(
       throw new Error("Email is not configured. Please set SMTP_HOST, SMTP_USER and SMTP_PASS secrets.");
     }
 
-    const { mode, date, from, to, month, customMode = false, customMessage = '' } = request.data || {};
+    const { mode, date, from, to, month, customMode = false, customMessage = '', customTemplate = '' } = request.data || {};
     const todaySyd = new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" });
 
     // Build Firestore query based on mode
@@ -928,7 +1128,11 @@ exports.sendRemindersNow = onCall(
       label = targetDate;
     }
 
-    const eventsSnap = await eventsQuery.get();
+    // Community updates and fixed announcement templates contain no event
+    // table, so they must not depend on event query indexes.
+    const eventsSnap = customMode
+      ? { empty: true, docs: [], size: 0 }
+      : await eventsQuery.get();
 
     // For custom messages, we don't need events — send to all users regardless
     if (eventsSnap.empty && !customMode) {
@@ -990,14 +1194,20 @@ exports.sendRemindersNow = onCall(
         await transporter.sendMail({
           from: EMAIL_FROM.value() || SMTP_USER.value(),
           to: u.email,
-          subject: customMode ? 'Important Update from Community Events' : `Community Events – Events for ${label}`,
-          html: customMode
+          subject: customMode
+            ? (customTemplate === 'storeAnnouncement'
+                ? 'Community Events Australia is now on Google Play, the App Store and Microsoft Store'
+                : 'Important Update from Community Events')
+            : `Community Events – Events for ${label}`,
+          html: customMode && customTemplate === 'storeAnnouncement'
+            ? buildStoreAnnouncementEmail() + unsubscribeFooter(doc.id)
+            : customMode
             ? `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
                 <div style="background:#0f766e;padding:20px;border-radius:8px 8px 0 0">
                   <h2 style="color:white;margin:0">Community Update</h2>
                 </div>
                 <div style="padding:20px;background:#f9fafb;border-radius:0 0 8px 8px">
-                  <p style="white-space:pre-wrap;font-size:15px;line-height:1.6;color:#1f2937">${customMessage}</p>
+                  <p style="white-space:pre-wrap;font-size:15px;line-height:1.6;color:#1f2937">${escapeHtml(customMessage)}</p>
                 </div>
                 ${unsubscribeFooter(doc.id)}
               </div>`
@@ -1005,6 +1215,7 @@ exports.sendRemindersNow = onCall(
         });
         sent++;
       } catch (e) {
+        console.error('[Manual Email] SMTP send failed:', e.message);
         errors.push(u.email);
       }
     }
@@ -1012,9 +1223,10 @@ exports.sendRemindersNow = onCall(
     return {
       sent,
       failed: errors.length,
-      message: `Sent to ${sent} user(s) · ${eventsSnap.size} event(s) included${errors.length ? ` · ${errors.length} failed` : ''}.`,
       events: eventsSnap.size,
-      message: `Sent to ${sent} user(s) · ${eventsSnap.size} event(s) included${errors.length > 0 ? ` · ${errors.length} failed` : ''}.`
+      message: customMode
+        ? `Sent to ${sent} user(s)${errors.length ? ` · ${errors.length} failed` : ''}.`
+        : `Sent to ${sent} user(s) · ${eventsSnap.size} event(s) included${errors.length ? ` · ${errors.length} failed` : ''}.`
     };
   }
 );
@@ -1272,6 +1484,107 @@ exports.adminUnbanUser = onCall(
 // ─── EMAIL HELPERS ────────────────────────────────────────────────────────────
 const APP_URL = 'https://communityevents.siza.info';
 
+// Email the support inbox whenever a user reports an AI-generated response.
+exports.onAiReportCreated = onDocumentCreated(
+  { document: 'ai_reports/{reportId}', region: REGION,
+    secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM] },
+  async (event) => {
+    const report = event.data?.data();
+    const reportId = event.params.reportId;
+    if (!report) return;
+
+    // Eventarc delivery is at-least-once. Skip a retry after successful mail.
+    if (report.emailNotificationSentAt) return;
+
+    const transporter = buildTransporter({ SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS });
+    if (!transporter) {
+      console.error(`[AI Report] SMTP is not configured for report ${reportId}`);
+      return;
+    }
+
+    const createdAt = report.createdAt?.toDate?.() || new Date();
+    const createdLabel = createdAt.toLocaleString('en-AU', {
+      timeZone: 'Australia/Sydney',
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    });
+    const consoleUrl = `https://console.firebase.google.com/project/community-event-8b639/firestore/databases/-default-/data/~2Fai_reports~2F${encodeURIComponent(reportId)}`;
+
+    await transporter.sendMail({
+      from: EMAIL_FROM.value() || SMTP_USER.value(),
+      to: 'communityeventssydney@gmail.com',
+      subject: `[AI Response Report] ${String(report.reason || 'Review required').slice(0, 120)}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:680px;margin:0 auto;color:#1f2937">
+          <div style="background:#b91c1c;padding:18px 20px;border-radius:8px 8px 0 0">
+            <h2 style="color:white;margin:0;font-size:20px">AI Response Report</h2>
+          </div>
+          <div style="padding:20px;background:#f9fafb;border:1px solid #e5e7eb;border-top:0">
+            <p><strong>Reason:</strong> ${escapeHtml(report.reason || 'Not provided')}</p>
+            <p><strong>Comments:</strong></p>
+            <div style="white-space:pre-wrap;background:white;border:1px solid #e5e7eb;border-radius:6px;padding:12px">${escapeHtml(report.comments || 'No additional comments')}</div>
+            <p><strong>User:</strong> ${escapeHtml(report.userEmail || report.userId || 'Guest')}</p>
+            <p><strong>Role:</strong> ${escapeHtml(report.userRole || 'Unknown')}</p>
+            <p><strong>Reported:</strong> ${escapeHtml(createdLabel)}</p>
+            <p><strong>App version:</strong> ${escapeHtml(report.appVersion || 'Unknown')}</p>
+            <p><strong>User prompt:</strong></p>
+            <div style="white-space:pre-wrap;background:white;border:1px solid #e5e7eb;border-radius:6px;padding:12px">${escapeHtml(report.prompt || 'Not recorded')}</div>
+            <p><strong>AI response:</strong></p>
+            <div style="white-space:pre-wrap;background:white;border:1px solid #e5e7eb;border-radius:6px;padding:12px">${escapeHtml(report.aiResponse || 'Not recorded')}</div>
+            <p style="margin-top:20px"><a href="${consoleUrl}" style="color:#b91c1c;font-weight:bold">Open report in Firebase Console</a></p>
+          </div>
+        </div>`,
+    });
+
+    await event.data.ref.update({
+      emailNotificationSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      emailNotificationRecipient: 'communityeventssydney@gmail.com',
+    });
+    console.log(`[AI Report] Notification sent for ${reportId}`);
+  }
+);
+
+function buildStoreAnnouncementEmail() {
+  const microsoftUrl = 'https://apps.microsoft.com/detail/9NDGJZHL86KJ';
+  const appleUrl = 'https://apps.apple.com/au/app/community-events-australia/id6782770347';
+  const googlePlayUrl = 'https://play.google.com/store/apps/details?id=info.siza.communityevents.app';
+  return `
+    <div style="margin:0 auto;max-width:620px;background:#ffffff;border:1px solid #dce7e5;border-radius:8px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#17202a">
+      <div style="padding:32px 24px 20px;text-align:center">
+        <img src="https://communityevents.siza.info/icons/icon-192.png" width="112" height="112" alt="Community Events Australia" style="display:block;width:112px;height:112px;margin:0 auto;border:0;object-fit:contain">
+        <h1 style="margin:16px 0 8px;font-size:28px;line-height:1.2;color:#1a1a2e">Community Events Australia</h1>
+        <p style="margin:0;color:#c9362a;font-size:19px;font-weight:bold">Now available on Google Play, the App Store and Microsoft Store</p>
+      </div>
+      <div style="padding:0 28px 22px;text-align:center;color:#46545d;font-size:15px;line-height:1.6">
+        Download for Android through Google Play, for iPhone and iPad through the Apple App Store, or for Windows PC through the Microsoft Store.
+      </div>
+      <div style="padding:0 24px 28px;text-align:center">
+        <a href="${appleUrl}" style="display:block;max-width:390px;margin:8px auto;text-decoration:none;border:2px solid #16a34a;border-radius:9px;background:#fff;padding:11px 14px;color:#111827;text-align:left">
+          <img src="https://cdn.simpleicons.org/apple/000000" width="38" height="38" alt="" style="display:inline-block;vertical-align:middle;margin-right:14px;border:0">
+          <span style="display:inline-block;vertical-align:middle"><strong style="display:block;font-size:20px;line-height:1.15">App Store</strong><small style="display:block;margin-top:3px;font-size:12px;color:#374151">Download for iPhone &amp; iPad</small></span>
+          <span style="float:right;margin-top:8px;background:#16a34a;color:#fff;border-radius:50%;width:28px;height:28px;line-height:28px;text-align:center;font-size:18px;font-weight:bold">&#10003;</span>
+        </a>
+        <a href="${googlePlayUrl}" style="display:block;max-width:390px;margin:8px auto;text-decoration:none;border:2px solid #16a34a;border-radius:9px;background:#fff;padding:11px 14px;color:#111827;text-align:left">
+          <img src="https://www.gstatic.com/android/market_images/web/play_prism_hlock_2x.png" width="48" height="38" alt="" style="display:inline-block;vertical-align:middle;margin-right:8px;border:0;object-fit:contain">
+          <span style="display:inline-block;vertical-align:middle"><strong style="display:block;font-size:20px;line-height:1.15">Google Play</strong><small style="display:block;margin-top:3px;font-size:12px;color:#374151">Download for Android</small></span>
+          <span style="float:right;margin-top:8px;background:#16a34a;color:#fff;border-radius:50%;width:28px;height:28px;line-height:28px;text-align:center;font-size:18px;font-weight:bold">&#10003;</span>
+        </a>
+        <a href="${microsoftUrl}" style="display:block;max-width:390px;margin:8px auto;text-decoration:none;border:2px solid #16a34a;border-radius:9px;background:#fff;padding:11px 14px;color:#111827;text-align:left">
+          <span style="display:inline-block;vertical-align:middle;width:42px;margin-right:10px;font-size:0;line-height:0"><i style="display:inline-block;width:18px;height:18px;background:#f25022;margin:1px"></i><i style="display:inline-block;width:18px;height:18px;background:#7fba00;margin:1px"></i><i style="display:inline-block;width:18px;height:18px;background:#00a4ef;margin:1px"></i><i style="display:inline-block;width:18px;height:18px;background:#ffb900;margin:1px"></i></span>
+          <span style="display:inline-block;vertical-align:middle"><strong style="display:block;font-size:20px;line-height:1.15">Microsoft Store</strong><small style="display:block;margin-top:3px;font-size:12px;color:#374151">Download for Windows PC</small></span>
+          <span style="float:right;margin-top:8px;background:#16a34a;color:#fff;border-radius:50%;width:28px;height:28px;line-height:28px;text-align:center;font-size:18px;font-weight:bold">&#10003;</span>
+        </a>
+      </div>
+      <div style="padding:4px 24px 28px;text-align:center;color:#46545d;font-size:14px">
+        You can also use the web app on any device:<br>
+        <a href="https://communityevents.siza.info" style="color:#087f72;font-size:16px;font-weight:bold">communityevents.siza.info</a>
+      </div>
+      <div style="background:#064e46;padding:18px 24px;text-align:center;color:#ffffff;font-size:14px;font-weight:bold">
+        Discover, share and manage community events across Australia
+      </div>
+    </div>`;
+}
+
 // Unsubscribe footer added to every user-facing email
 function unsubscribeFooter(uid = '') {
   const fnUrl = 'https://australia-southeast1-community-event-8b639.cloudfunctions.net/unsubscribeEmail';
@@ -1292,22 +1605,28 @@ function unsubscribeFooter(uid = '') {
 }
 
 // ─── SUPER ADMIN NOTIFICATIONS ───────────────────────────────────────────────
-const SUPER_ADMIN_EMAIL = 'sajjadzaheer@gmail.com';
-
 async function notifySuperAdmin(subject, bodyHtml, secrets) {
   try {
     // Fetch ALL superAdmin AND admin emails dynamically
     const superAdminsSnap = await db.collection('users')
       .where('role', 'in', ['superAdmin', 'admin']).get();
 
-    const emails = [...new Set(
-      superAdminsSnap.docs
-        .map(d => d.data()?.email)
-        .filter(e => e && e.includes('@'))
-    )];
+    const adminProfiles = superAdminsSnap.docs
+      .map(docSnap => docSnap.data() || {})
+      .filter(profile => profile.isActive !== false && !profile.migratedToUid);
 
-    // Always include the hardcoded super admin as fallback
-    if (!emails.includes(SUPER_ADMIN_EMAIL)) emails.push(SUPER_ADMIN_EMAIL);
+    // Aggregate by email so an explicit unsubscribe wins even if historical
+    // duplicate profiles still exist for the same administrator address.
+    const preferenceByEmail = new Map();
+    for (const profile of adminProfiles) {
+      const email = String(profile.email || '').trim().toLowerCase();
+      if (!email.includes('@')) continue;
+      const enabled = profile.adminAlertEmailEnabled !== false;
+      preferenceByEmail.set(email, (preferenceByEmail.get(email) ?? true) && enabled);
+    }
+    const emails = [...preferenceByEmail.entries()]
+      .filter(([, enabled]) => enabled)
+      .map(([email]) => email);
 
     if (emails.length === 0) return;
 
@@ -1318,7 +1637,7 @@ async function notifySuperAdmin(subject, bodyHtml, secrets) {
       subject,
       html: bodyHtml,
     });
-    console.log(`Notification sent to ${emails.length} super admins:`, emails);
+    console.log(`Admin notification sent to ${emails.length} opted-in administrators:`, emails);
   } catch (e) {
     console.warn('notifySuperAdmin failed:', e.message);
   }
@@ -1361,6 +1680,11 @@ exports.onEventDeleted = onDocumentDeleted(
   async (event) => {
     const data    = event.data?.data();
     if (!data) return;
+
+    // Scheduled expiry moves the document atomically to archivedEvents. That
+    // is not a user deletion and must not generate a deletion alert.
+    const archived = await db.collection('archivedEvents').doc(event.params.eventId).get();
+    if (archived.exists && archived.data()?.archiveReason === 'event_date_expired') return;
 
     await notifySuperAdmin(
       `🗑 Event deleted: ${data.eventType} — ${data.hostName}`,
@@ -1910,7 +2234,7 @@ async function getYouTubeAccessToken() {
 }
 
 // Step 3 — Create a new YouTube broadcast and return stream URL
-async function createYouTubeBroadcast(accessToken, title) {
+async function createYouTubeBroadcast(accessToken, title, privacyStatus = 'public') {
   const now       = new Date();
   const startTime = new Date(now.getTime() + 30000).toISOString(); // 30 seconds from now
 
@@ -1930,12 +2254,14 @@ async function createYouTubeBroadcast(accessToken, title) {
           description:      "Live streamed via Community Events Australia app",
         },
         status: {
-          privacyStatus:          "public",
+          privacyStatus,
           selfDeclaredMadeForKids: false,
         },
         contentDetails: {
           enableAutoStart: true,
-          enableAutoStop:  true,
+          // Keep the broadcast alive through temporary mobile/network loss.
+          // Explicit End Stream still transitions it to complete immediately.
+          enableAutoStop:  false,
           enableDvr:       true,
           recordFromStart: true,
           latencyPreference: "ultraLow",
@@ -2032,6 +2358,163 @@ exports.youtubeConnectionStatus = onCall(
 );
 
 // --- SHARED: Stale live event cleanup logic ──────────────────────────────────
+async function completeYouTubeBroadcastIfLive(broadcastId) {
+  if (!broadcastId) return;
+  try {
+    const accessToken = await getYouTubeAccessToken();
+    const statusRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/liveBroadcasts?part=status&id=${broadcastId}`,
+      { headers:{ 'Authorization':`Bearer ${accessToken}` } }
+    );
+    const statusData = await statusRes.json();
+    const lifeCycle = statusData.items?.[0]?.status?.lifeCycleStatus;
+    if (lifeCycle === 'live' || lifeCycle === 'liveStarting' || lifeCycle === 'testing') {
+      await fetch(
+        `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=complete&id=${broadcastId}&part=status`,
+        { method:'POST', headers:{ 'Authorization':`Bearer ${accessToken}`, 'Content-Length':'0' } }
+      );
+    }
+  } catch (error) {
+    console.error(`[NativeStream] Could not complete stale broadcast ${broadcastId}:`, error.message);
+  }
+}
+
+async function markStreamVideoCompleted(videoRecordId) {
+  if (!videoRecordId) return;
+  await db.collection('streamVideos').doc(videoRecordId).set({
+    status: 'completed',
+    endedAt: new Date().toISOString(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true }).catch(error => {
+    console.warn(`[StreamVideos] Could not complete ${videoRecordId}:`, error.message);
+  });
+}
+
+async function syncStreamVideoAvailability() {
+  const healthRef = db.collection('system').doc('stream_video_catalog_health');
+  const healthSnap = await healthRef.get();
+  const lastCheckedAt = new Date(healthSnap.data()?.checkedAt || 0).getTime();
+  if (Date.now() - lastCheckedAt < 60 * 60 * 1000) return;
+
+  const catalogSnap = await db.collection('streamVideos').orderBy('startedAt', 'desc').limit(100).get();
+  const checkable = catalogSnap.docs.filter(docSnap => {
+    const data = docSnap.data();
+    return !!data.videoId && data.status !== 'live' && data.status !== 'active';
+  });
+  if (!checkable.length) {
+    await healthRef.set({ checkedAt: new Date().toISOString() }, { merge: true });
+    return;
+  }
+
+  const accessToken = await getYouTubeAccessToken();
+  const availableIds = new Set();
+  for (let offset = 0; offset < checkable.length; offset += 50) {
+    const ids = checkable.slice(offset, offset + 50).map(docSnap => docSnap.data().videoId);
+    const response = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=id&id=${encodeURIComponent(ids.join(','))}`,
+      { headers: { 'Authorization': `Bearer ${accessToken}` } }
+    );
+    const payload = await response.json();
+    if (!response.ok || payload.error) {
+      throw new Error(payload.error?.message || `YouTube availability check failed (${response.status})`);
+    }
+    (payload.items || []).forEach(item => availableIds.add(item.id));
+  }
+
+  const checkedAt = new Date().toISOString();
+  const batch = db.batch();
+  checkable.forEach(docSnap => {
+    batch.set(docSnap.ref, {
+      youtubeAvailable: availableIds.has(docSnap.data().videoId),
+      youtubeCheckedAt: checkedAt,
+    }, { merge: true });
+  });
+  batch.set(healthRef, { checkedAt }, { merge: true });
+  await batch.commit();
+}
+
+// Returns stream metadata to everyone, but only registered users receive the
+// YouTube URL. This is enforced server-side so guests cannot recover unlisted
+// links by inspecting Firestore or the network response.
+exports.listStreamVideos = onCall(
+  { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
+  async (request) => {
+  const isRegistered = !!request.auth?.uid
+    && request.auth.token.firebase?.sign_in_provider !== 'anonymous';
+
+  // Lazily catalogue older native streams created before streamVideos existed.
+  const legacySnap = await db.collection('nativeStreamSessions').orderBy('createdAt', 'desc').limit(100).get();
+  const eligibleLegacy = legacySnap.docs.filter(docSnap => !!docSnap.data()?.broadcastId);
+  if (eligibleLegacy.length) {
+    const existing = await Promise.all(eligibleLegacy.map(docSnap =>
+      db.collection('streamVideos').doc(docSnap.data().broadcastId).get()
+    ));
+    const missing = eligibleLegacy.filter((docSnap, index) => !existing[index]?.exists);
+    if (missing.length) {
+      const eventDocs = await Promise.all(missing.map(docSnap => {
+        const eventId = docSnap.data()?.eventId;
+        return eventId ? db.collection('events').doc(eventId).get() : Promise.resolve(null);
+      }));
+      const batch = db.batch();
+      missing.forEach((docSnap, index) => {
+        const session = docSnap.data();
+        const eventData = eventDocs[index]?.exists ? eventDocs[index].data() : {};
+        batch.set(db.collection('streamVideos').doc(session.broadcastId), {
+          videoId: session.broadcastId,
+          watchUrl: session.watchUrl || `https://www.youtube.com/watch?v=${session.broadcastId}`,
+          eventId: session.eventId || null,
+          eventTitle: eventData.eventSubject || eventData.eventTypeDisplay || eventData.eventType || 'Community Event Stream',
+          eventDate: eventData.eventDate || '',
+          hostName: eventData.hostName || '',
+          organiserType: eventData.organiserType || '',
+          ownerUid: eventData.createdByUserId || session.uid || '',
+          startedByUid: session.uid || '',
+          source: 'native',
+          privacyStatus: 'public',
+          status: ['stopped', 'ended'].includes(session.status) ? 'completed' : (session.status || 'completed'),
+          startedAt: session.createdAt || '',
+          endedAt: session.stoppedAt || session.endedAt || null,
+          legacy: true,
+        }, { merge: true });
+      });
+      await batch.commit();
+    }
+  }
+
+  await syncStreamVideoAvailability().catch(error => {
+    // A temporary YouTube/API error must not make the archive disappear.
+    console.warn('[StreamVideos] Availability sync skipped:', error.message);
+  });
+
+  const snap = await db.collection('streamVideos').orderBy('startedAt', 'desc').limit(100).get();
+  const videos = snap.docs.filter(docSnap => docSnap.data().youtubeAvailable !== false).map(docSnap => {
+    const data = docSnap.data();
+    const item = {
+      id: docSnap.id,
+      eventId: data.eventId || null,
+      eventTitle: data.eventTitle || 'Community Event Stream',
+      eventDate: data.eventDate || '',
+      hostName: data.hostName || '',
+      organiserType: data.organiserType || '',
+      source: data.source || 'native',
+      privacyStatus: data.privacyStatus === 'unlisted' ? 'unlisted' : 'public',
+      status: data.status || 'completed',
+      startedAt: data.startedAt || '',
+      endedAt: data.endedAt || null,
+    };
+    if (isRegistered) {
+      item.videoId = data.videoId || '';
+      item.watchUrl = data.watchUrl || null;
+    }
+    return item;
+  });
+
+  return { videos, canWatch: isRegistered };
+  }
+);
+
+let publicEventsCache = { expiresAt: 0, events: [] };
+
 async function runStaleLiveCleanup() {
   const snap = await db.collection('events').where('isLive', '==', true).get();
   if (snap.empty) return 0;
@@ -2044,18 +2527,28 @@ async function runStaleLiveCleanup() {
 
     // Safety net — force end if live for more than 3 hours, or no session at all
     if (!sessionId || hoursLive > 3) {
+      await markStreamVideoCompleted(data.liveVideoRecordId);
       await docSnap.ref.update({ isLive: false, liveUrl: null, liveWatchUrl: null,
-        liveEndedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+        liveVideoRecordId: null, liveEndedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
       ended++; continue;
     }
 
     try {
       const sessDoc = await db.collection('nativeStreamSessions').doc(sessionId).get();
-      const status  = sessDoc.exists ? sessDoc.data().status : 'ended';
-      // 'pending' or 'connected' or 'streaming' = still active; 'ended'/'stopped'/missing = stale
-      if (status === 'ended' || status === 'stopped') {
+      const sessionData = sessDoc.exists ? sessDoc.data() : null;
+      const status = sessionData?.status || 'ended';
+      const resumeExpired = status === 'interrupted'
+        && new Date(sessionData?.resumeUntil || 0).getTime() < Date.now();
+      // Interrupted sessions remain visible during the recovery window so the
+      // host can resume the same YouTube URL.
+      if (status === 'ended' || status === 'stopped' || resumeExpired) {
+        if (resumeExpired && sessionData?.broadcastId) {
+          await completeYouTubeBroadcastIfLive(sessionData.broadcastId);
+          await sessDoc.ref.update({ status:'stopped', stoppedAt:new Date().toISOString() }).catch(() => {});
+        }
+        await markStreamVideoCompleted(sessionData?.broadcastId);
         await docSnap.ref.update({ isLive: false, liveUrl: null, liveWatchUrl: null,
-          liveEndedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+          liveVideoRecordId: null, liveEndedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
         ended++;
       }
     } catch (e) { console.error(`[Cleanup] Error checking session ${sessionId}:`, e.message); }
@@ -2067,7 +2560,7 @@ async function runStaleLiveCleanup() {
 // ─── CALLABLE: Immediate cleanup (called from client on stream end) ───────────
 // Named differently from the scheduled version to avoid Firebase trigger-type conflict
 exports.cleanupStaleLiveEventsNow = onCall(
-  { region: REGION },
+  { region: REGION, secrets:[YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
   async () => {
     const ended = await runStaleLiveCleanup();
     return { ended };
@@ -2076,7 +2569,7 @@ exports.cleanupStaleLiveEventsNow = onCall(
 
 // ─── SCHEDULED: Clean up stale live events every 10 minutes ──────────────────
 exports.cleanupStaleLiveEvents = onSchedule(
-  { schedule: 'every 2 minutes', region: REGION },
+  { schedule: 'every 2 minutes', region: REGION, secrets:[YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
   async () => { await runStaleLiveCleanup(); }
 );
 
@@ -2096,7 +2589,26 @@ exports.nativeStreamStart = onCall(
   { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
-    const { useOAuth, manualRtmpKey, eventTitle } = request.data || {};
+    const { useOAuth, manualRtmpKey, eventTitle, eventId, qualityProfile, audioMode, testMode, protocolVersion } = request.data || {};
+    const privacyStatus = request.data?.privacyStatus === 'unlisted' ? 'unlisted' : 'public';
+    let eventData = null;
+    if (eventId) {
+      const eventSnap = await db.collection('events').doc(eventId).get();
+      if (!eventSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+      eventData = eventSnap.data();
+    }
+    const requiresAdminCheck = eventData
+      ? eventData.createdByUserId !== request.auth.uid
+      : protocolVersion === 2;
+    if (requiresAdminCheck) {
+      const userSnap = await db.collection('users').doc(request.auth.uid).get();
+      if (!['admin', 'superAdmin'].includes(userSnap.data()?.role)) {
+        throw new HttpsError('permission-denied', 'Not authorised to stream this event.');
+      }
+    }
+    if (eventData?.isLive && eventData.liveUrl) {
+      throw new HttpsError('failed-precondition', 'This event already has an active or resumable stream.');
+    }
 
     let rtmpUrl   = null;
     let watchUrl  = null;
@@ -2106,7 +2618,7 @@ exports.nativeStreamStart = onCall(
     if (useOAuth) {
       try {
         const accessToken = await getYouTubeAccessToken();
-        const broadcast   = await createYouTubeBroadcast(accessToken, eventTitle || 'Community Events Live Stream');
+        const broadcast   = await createYouTubeBroadcast(accessToken, eventTitle || 'Community Events Live Stream', privacyStatus);
         // Use RTMPS (port 443) — Cloud Run blocks outbound port 1935 (plain RTMP)
         const ingestBase = broadcast.rtmpsUrl || broadcast.rtmpUrl;
         rtmpUrl     = `${ingestBase}/${broadcast.streamKey}`;
@@ -2132,17 +2644,63 @@ exports.nativeStreamStart = onCall(
       || 'wss://native-stream-relay-209723097611.australia-southeast1.run.app';
 
     const sessionId = `ns_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const streamToken = crypto.randomBytes(32).toString('base64url');
+    const tokenHash = crypto.createHash('sha256').update(streamToken).digest('hex');
 
     // Store session in Firestore so relay can validate it
     try {
       await db.collection('nativeStreamSessions').doc(sessionId).set({
         uid:        request.auth.uid,
+        eventId: eventId || null,
         rtmpUrl,
         broadcastId: broadcastId || null,
         watchUrl:    watchUrl || null,
         createdAt:   new Date().toISOString(),
         status:      'pending',
+        tokenHash,
+        protocolVersion: protocolVersion === 2 ? 2 : 1,
+        qualityProfile: ['1080p','720p','480p'].includes(qualityProfile) ? qualityProfile : '720p',
+        audioMode: audioMode === 'speech' ? 'speech' : 'natural',
+        privacyStatus,
+        resumeUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       });
+
+      // Publish the resumable session before returning to the phone. If
+      // Android reloads the page or the network drops after this point, the
+      // next attempt resumes this session instead of creating another
+      // YouTube broadcast.
+      if (eventId) {
+        await db.collection('events').doc(eventId).update({
+          isLive: true,
+          liveUrl: sessionId,
+          liveRoomCode: sessionId,
+          liveWatchUrl: watchUrl || null,
+          liveSource: 'native',
+          liveVideoRecordId: broadcastId || null,
+          liveStartedAt: new Date().toISOString(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+
+      if (broadcastId) {
+        await db.collection('streamVideos').doc(broadcastId).set({
+          videoId: broadcastId,
+          watchUrl,
+          eventId: eventId || null,
+          eventTitle: eventTitle || eventData?.eventSubject || eventData?.eventTypeDisplay || eventData?.eventType || 'Community Event Stream',
+          eventDate: eventData?.eventDate || '',
+          hostName: eventData?.hostName || '',
+          organiserType: eventData?.organiserType || '',
+          ownerUid: eventData?.createdByUserId || request.auth.uid,
+          startedByUid: request.auth.uid,
+          source: 'native',
+          privacyStatus,
+          status: 'live',
+          startedAt: new Date().toISOString(),
+          endedAt: null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
     } catch (e) {
       console.error('[NativeStream] Firestore session write failed:', e.message, e.code);
       throw new HttpsError('internal', 'Failed to create session in Firestore: ' + e.message);
@@ -2150,13 +2708,72 @@ exports.nativeStreamStart = onCall(
 
     const wsUrl = `${RELAY_URL}/stream?session=${sessionId}`;
     console.log(`[NativeStream] Session ${sessionId} created for uid ${request.auth.uid}`);
-    return { wsUrl, watchUrl, sessionId, rtmpTarget: rtmpUrl.replace(/\/[^/]+$/, '/REDACTED') };
+    return { wsUrl, watchUrl, sessionId, streamToken, rtmpTarget: rtmpUrl.replace(/\/[^/]+$/, '/REDACTED') };
+  }
+);
+
+// ─── NATIVE STREAM: Resume the same YouTube broadcast ────────────────────────
+exports.nativeStreamResume = onCall(
+  { region: REGION },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+    const { eventId, sessionId } = request.data || {};
+    if (!eventId || !sessionId) throw new HttpsError('invalid-argument', 'eventId and sessionId required.');
+
+    const [eventSnap, sessionSnap] = await Promise.all([
+      db.collection('events').doc(eventId).get(),
+      db.collection('nativeStreamSessions').doc(sessionId).get(),
+    ]);
+    if (!eventSnap.exists || !sessionSnap.exists) throw new HttpsError('not-found', 'Stream session not found.');
+    const eventData = eventSnap.data();
+    const session = sessionSnap.data();
+    if (session.eventId !== eventId || eventData.liveUrl !== sessionId) {
+      throw new HttpsError('failed-precondition', 'This session does not belong to the selected event.');
+    }
+    if (eventData.createdByUserId !== request.auth.uid) {
+      const userSnap = await db.collection('users').doc(request.auth.uid).get();
+      if (!['admin', 'superAdmin'].includes(userSnap.data()?.role)) {
+        throw new HttpsError('permission-denied', 'Not authorised to resume this event.');
+      }
+    }
+    if (session.status === 'stopped') throw new HttpsError('failed-precondition', 'This stream was ended explicitly.');
+    const leaseExpiry = new Date(session.leaseExpiresAt || 0).getTime();
+    if (session.activeConnectionId && leaseExpiry > Date.now()) {
+      throw new HttpsError('failed-precondition', 'This stream is still active on another device.');
+    }
+    const resumeUntil = new Date(session.resumeUntil || 0).getTime();
+    if (session.status === 'interrupted' && resumeUntil && resumeUntil < Date.now()) {
+      throw new HttpsError('deadline-exceeded', 'The resume window has expired.');
+    }
+
+    const streamToken = crypto.randomBytes(32).toString('base64url');
+    const tokenHash = crypto.createHash('sha256').update(streamToken).digest('hex');
+    await sessionSnap.ref.update({
+      tokenHash,
+      status: 'pending',
+      resumedBy: request.auth.uid,
+      resumedAt: new Date().toISOString(),
+      resumeUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      activeConnectionId: null,
+      leaseExpiresAt: null,
+    });
+
+    const relayUrl = process.env.NATIVE_STREAM_RELAY_URL
+      || 'wss://native-stream-relay-209723097611.australia-southeast1.run.app';
+    return {
+      wsUrl: `${relayUrl}/stream?session=${sessionId}`,
+      watchUrl: session.watchUrl,
+      sessionId,
+      streamToken,
+      qualityProfile: session.qualityProfile || '720p',
+      audioMode: session.audioMode || 'natural',
+    };
   }
 );
 
 // ─── NATIVE STREAM: Stop session ─────────────────────────────────────────────
 exports.nativeStreamStop = onCall(
-  { region: REGION },
+  { region: REGION, secrets:[YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
     const { sessionId } = request.data || {};
@@ -2168,10 +2785,126 @@ exports.nativeStreamStop = onCall(
     if (sess.data().uid !== request.auth.uid) throw new HttpsError('permission-denied', 'Not your session.');
 
     await sessRef.update({ status: 'stopped', stoppedAt: new Date().toISOString() });
+    await completeYouTubeBroadcastIfLive(sess.data().broadcastId);
+    await markStreamVideoCompleted(sess.data().broadcastId);
     console.log(`[NativeStream] Session ${sessionId} stopped`);
     return { ok: true };
   }
 );
+
+// Connect a YouTube Live broadcast created on another device to an event.
+exports.startExternalYouTubeStream = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+  const eventId = String(request.data?.eventId || '').trim();
+  const rawUrl = String(request.data?.youtubeUrl || '').trim();
+  const privacyStatus = request.data?.privacyStatus === 'unlisted' ? 'unlisted' : 'public';
+  if (!eventId || !rawUrl) throw new HttpsError('invalid-argument', 'Event and YouTube URL are required.');
+
+  const eventRef = db.collection('events').doc(eventId);
+  const eventSnap = await eventRef.get();
+  if (!eventSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+  const eventData = eventSnap.data();
+  const isOwner = eventData.createdByUserId === request.auth.uid;
+  if (!isOwner) {
+    const userSnap = await db.collection('users').doc(request.auth.uid).get();
+    if (!['admin', 'superAdmin'].includes(userSnap.data()?.role)) {
+      throw new HttpsError('permission-denied', 'Not authorised to stream this event.');
+    }
+  }
+  if (eventData.isLive) throw new HttpsError('failed-precondition', 'This event is already live.');
+
+  let parsed;
+  try { parsed = new URL(rawUrl); } catch { throw new HttpsError('invalid-argument', 'Enter a valid YouTube video URL.'); }
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, '').replace(/^m\./, '');
+  let videoId = '';
+  if (host === 'youtu.be') videoId = parsed.pathname.split('/').filter(Boolean)[0] || '';
+  if (host === 'youtube.com') {
+    if (parsed.pathname === '/watch') videoId = parsed.searchParams.get('v') || '';
+    else if (/^\/(live|embed|shorts)\//.test(parsed.pathname)) videoId = parsed.pathname.split('/')[2] || '';
+  }
+  if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+    throw new HttpsError('invalid-argument', 'Use a YouTube video link such as youtube.com/watch?v=... or youtu.be/...');
+  }
+  const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+
+  try {
+    const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) throw new Error(`YouTube returned ${response.status}`);
+    await response.json();
+  } catch (error) {
+    console.warn(`[ExternalStream] URL verification failed for ${videoId}: ${error.message}`);
+    throw new HttpsError('invalid-argument', 'YouTube could not verify this video. Make sure it is available, then try again.');
+  }
+
+  const now = new Date().toISOString();
+  const videoRecordId = `external_${videoId}_${eventId}`;
+  await eventRef.update({
+    isLive:true,
+    liveUrl:null,
+    liveWatchUrl:watchUrl,
+    liveSource:'external-youtube',
+    liveStartedAt:now,
+    liveStartedBy:request.auth.uid,
+    liveVideoRecordId:videoRecordId,
+    updatedAt:now,
+  });
+  await db.collection('streamVideos').doc(videoRecordId).set({
+    videoId,
+    watchUrl,
+    eventId,
+    eventTitle:eventData.eventSubject || eventData.eventTypeDisplay || eventData.eventType || 'Community Event Stream',
+    eventDate:eventData.eventDate || '',
+    hostName:eventData.hostName || '',
+    organiserType:eventData.organiserType || '',
+    ownerUid:eventData.createdByUserId || request.auth.uid,
+    startedByUid:request.auth.uid,
+    source:'external-youtube',
+    privacyStatus,
+    status:'live',
+    startedAt:now,
+    endedAt:null,
+    createdAt:admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge:true });
+  console.log(`[ExternalStream] Event ${eventId} linked to YouTube video ${videoId} by ${request.auth.uid}`);
+  return { ok:true, watchUrl, videoId };
+});
+
+exports.endExternalYouTubeStream = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+  const eventId = String(request.data?.eventId || '').trim();
+  if (!eventId) throw new HttpsError('invalid-argument', 'eventId required.');
+
+  const eventRef = db.collection('events').doc(eventId);
+  const eventSnap = await eventRef.get();
+  if (!eventSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+  const eventData = eventSnap.data();
+  const isOwner = eventData.createdByUserId === request.auth.uid;
+  if (!isOwner) {
+    const userSnap = await db.collection('users').doc(request.auth.uid).get();
+    if (!['admin', 'superAdmin'].includes(userSnap.data()?.role)) {
+      throw new HttpsError('permission-denied', 'Not authorised to end this live event.');
+    }
+  }
+  if (eventData.liveSource !== 'external-youtube') {
+    throw new HttpsError('failed-precondition', 'This event is not using an external YouTube stream.');
+  }
+
+  const now = new Date().toISOString();
+  await markStreamVideoCompleted(eventData.liveVideoRecordId);
+  await eventRef.update({
+    isLive:false,
+    liveUrl:null,
+    liveWatchUrl:null,
+    liveSource:null,
+    liveVideoRecordId:null,
+    liveEndedAt:now,
+    updatedAt:now,
+  });
+  console.log(`[ExternalStream] Event ${eventId} ended in app by ${request.auth.uid}`);
+  return { ok:true };
+});
 
 // ─── NATIVE STREAM: Check YouTube stream health (diagnostic) ────────────────
 // Returns the streamStatus of the bound liveStream — tells us if YouTube
@@ -2337,6 +3070,7 @@ exports.nativeStreamEndEvent = onCall(
         // the Firestore update below is the critical piece for the app UI
         console.error('[NativeStream] YouTube transition error (non-fatal):', e.message);
       }
+      await markStreamVideoCompleted(broadcastId);
     }
 
     // 3. Force-clear isLive on the event — source of truth for the app UI
@@ -2344,6 +3078,8 @@ exports.nativeStreamEndEvent = onCall(
       isLive:       false,
       liveUrl:      null,
       liveWatchUrl: null,
+      liveSource:   null,
+      liveVideoRecordId: null,
       liveEndedAt:  new Date().toISOString(),
       updatedAt:    new Date().toISOString(),
     });

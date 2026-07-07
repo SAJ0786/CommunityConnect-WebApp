@@ -7,6 +7,7 @@
 'use strict';
 
 const http    = require('http');
+const crypto  = require('crypto');
 const { WebSocketServer } = require('ws');
 const { spawn }           = require('child_process');
 
@@ -23,6 +24,11 @@ try {
 }
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
+const QUALITY_PROFILES = {
+  '1080p': { width:1920, height:1080, videoBitrate:'5500k', maxrate:'6500k', bufsize:'9000k' },
+  '720p':  { width:1280, height:720,  videoBitrate:'5000k', maxrate:'6000k', bufsize:'10000k' },
+  '480p':  { width:854,  height:480,  videoBitrate:'2500k', maxrate:'3200k', bufsize:'5000k' },
+};
 
 // ── Uncaught error handlers — prevent silent crash ───────────────────────────
 process.on('uncaughtException',  e => console.error('[Relay] uncaughtException:', e.message, e.stack));
@@ -30,6 +36,22 @@ process.on('unhandledRejection', e => console.error('[Relay] unhandledRejection:
 
 // ── HTTP Server ───────────────────────────────────────────────────────────────
 const server = http.createServer((req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+  if (req.url === '/speed-test' && req.method === 'POST') {
+    let bytes = 0;
+    req.on('data', chunk => {
+      bytes += chunk.length;
+      if (bytes > 2 * 1024 * 1024) req.destroy();
+    });
+    req.on('end', () => {
+      res.writeHead(200, { 'Content-Type':'application/json', 'Cache-Control':'no-store' });
+      res.end(JSON.stringify({ ok:true, bytes }));
+    });
+    return;
+  }
   if (req.url === '/health' || req.url === '/') {
     res.writeHead(200, { 'Content-Type': 'text/plain' });
     res.end('Native Stream Relay — Community Events Australia — OK');
@@ -44,6 +66,7 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', (ws, req) => {
   const urlObj    = new URL(req.url, `http://localhost`);
   const sessionId = urlObj.searchParams.get('session');
+  const connectionId = crypto.randomUUID();
 
   console.log(`[Relay] New connection — session: ${sessionId || 'NONE'} — ip: ${req.socket.remoteAddress}`);
 
@@ -55,10 +78,24 @@ wss.on('connection', (ws, req) => {
   let bytesRecv  = 0;
   let chunkCount = 0;
   let lastFfmpegLine = '';
+  let qualityProfile = '720p';
+  let explicitStop = false;
+  let heartbeatTimer = null;
+  let relayReadySent = false;
 
   // ── Send JSON to client ───────────────────────────────────────────────────
   const send = (obj) => {
     try { if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj)); } catch {}
+  };
+
+  const updateSessionIfOwned = async (fields) => {
+    if (!db) return;
+    const ref = db.collection('nativeStreamSessions').doc(sessionId);
+    await db.runTransaction(async transaction => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists || snap.data().activeConnectionId !== connectionId) return;
+      transaction.update(ref, fields);
+    }).catch(error => console.warn('[Relay] Session ownership update failed:', error.message));
   };
 
   // ── Register message handler IMMEDIATELY (before async session validation) ──
@@ -68,9 +105,26 @@ wss.on('connection', (ws, req) => {
   // was listening yet — FFmpeg never started.
   let sessionReady = false;
   const earlyQueue = [];
+  let authResolver;
+  const authPromise = new Promise(resolve => {
+    authResolver = resolve;
+  });
+  const waitForAuthToken = () => Promise.race([
+    authPromise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Authentication timeout')), 10000)),
+  ]);
 
   ws.on('message', (data, isBinary) => {
     if (!sessionReady) {
+      if (!isBinary) {
+        try {
+          const msg = JSON.parse(data.toString());
+          if (msg.type === 'authenticate' && msg.token) {
+            authResolver(msg.token);
+            return;
+          }
+        } catch {}
+      }
       earlyQueue.push({ data, isBinary });
       return;
     }
@@ -79,12 +133,12 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', (code, reason) => {
     console.log(`[Relay] Client disconnected: ${code} ${reason}`);
-    stopAll('client disconnected');
+    stopAll('client disconnected', false);
   });
 
   ws.on('error', (e) => {
     console.error('[Relay] WebSocket error:', e.message);
-    stopAll('ws error');
+    stopAll('ws error', false);
   });
 
   function handleMessage(data, isBinary) {
@@ -94,15 +148,20 @@ wss.on('connection', (ws, req) => {
         if (msg.type === 'start') {
           // Client can override rtmpUrl for manual stream key mode
           if (msg.rtmpUrl && msg.rtmpUrl !== 'OAUTH') rtmpUrl = msg.rtmpUrl;
+          qualityProfile = QUALITY_PROFILES[msg.qualityProfile] ? msg.qualityProfile : qualityProfile;
           if (!active) startFFmpeg(msg.mimeType || 'video/webm');
         } else if (msg.type === 'stop') {
-          stopAll('client requested stop');
+          stopAll('client requested stop', true);
         } else if (msg.type === 'switch-camera') {
           // Camera switch produces a new WebM header mid-stream which breaks
           // the current FFmpeg process. Restart FFmpeg on the SAME RTMPS
           // connection target — YouTube tolerates a brief (1-3s) reconnect
           // without ending the broadcast.
           console.log('[Relay] Camera switch — restarting FFmpeg');
+          restartFFmpeg(msg.mimeType || 'video/webm');
+        } else if (msg.type === 'quality-change') {
+          qualityProfile = QUALITY_PROFILES[msg.qualityProfile] ? msg.qualityProfile : qualityProfile;
+          console.log(`[Relay] Adaptive quality change -> ${qualityProfile}`);
           restartFFmpeg(msg.mimeType || 'video/webm');
         }
       } catch (e) { console.warn('[Relay] Bad JSON:', e.message); }
@@ -148,30 +207,61 @@ wss.on('connection', (ws, req) => {
   }
 
   // ── Validate session ──────────────────────────────────────────────────────
-  const validateSession = async () => {
+  const validateSession = async (token, requiresToken) => {
     if (!db) {
       console.warn('[Relay] No Firestore — skipping session validation');
       return { rtmpUrl: process.env.TEST_RTMP_URL || null, status: 'pending' };
     }
-    const snap = await db.collection('nativeStreamSessions').doc(sessionId).get();
-    if (!snap.exists) throw new Error('Session not found: ' + sessionId);
-    return snap.data();
+    const ref = db.collection('nativeStreamSessions').doc(sessionId);
+    return db.runTransaction(async transaction => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists) throw new Error('Session not found: ' + sessionId);
+      const session = snap.data();
+      if (requiresToken) {
+        const suppliedHash = crypto.createHash('sha256').update(String(token)).digest();
+        const storedHash = Buffer.from(session.tokenHash || '', 'hex');
+        if (storedHash.length !== suppliedHash.length || !crypto.timingSafeEqual(storedHash, suppliedHash)) {
+          throw new Error('Invalid stream token');
+        }
+      }
+      if (session.status === 'stopped') throw new Error('Session was explicitly ended');
+      const leaseExpiry = new Date(session.leaseExpiresAt || 0).getTime();
+      if (session.activeConnectionId && session.activeConnectionId !== connectionId && leaseExpiry > Date.now()) {
+        throw new Error('This stream is already connected on another device');
+      }
+      if (session.status === 'interrupted' && new Date(session.resumeUntil || 0).getTime() < Date.now()) {
+        throw new Error('Resume window expired');
+      }
+      transaction.update(ref, {
+        status:'connected', activeConnectionId:connectionId,
+        connectedAt:new Date().toISOString(),
+        leaseExpiresAt:new Date(Date.now() + 30000).toISOString(),
+      });
+      return session;
+    });
   };
 
-  validateSession().then(async (session) => {
-    if (session.status !== 'pending') {
-      send({ type: 'error', message: 'Session already used or expired' });
-      ws.close(4003); return;
-    }
+  const loadAndValidateSession = async () => {
+    if (!db) return validateSession(null, false);
+    const initial = await db.collection('nativeStreamSessions').doc(sessionId).get();
+    if (!initial.exists) throw new Error('Session not found: ' + sessionId);
+    const requiresToken = Number(initial.data().protocolVersion || 1) >= 2;
+    const token = requiresToken ? await waitForAuthToken() : null;
+    return validateSession(token, requiresToken);
+  };
 
+  loadAndValidateSession().then(async (session) => {
     rtmpUrl = session.rtmpUrl;
+    qualityProfile = QUALITY_PROFILES[session.qualityProfile] ? session.qualityProfile : '720p';
+    heartbeatTimer = setInterval(() => {
+      if (!db || ws.readyState !== ws.OPEN) return;
+      updateSessionIfOwned({
+        leaseExpiresAt:new Date(Date.now() + 30000).toISOString(),
+        lastHeartbeatAt:new Date().toISOString(),
+      });
+    }, 10000);
 
-    if (db) {
-      await db.collection('nativeStreamSessions').doc(sessionId)
-        .update({ status: 'connected', connectedAt: new Date().toISOString() })
-        .catch(e => console.warn('[Relay] Firestore update failed:', e.message));
-    }
-
+    send({ type:'authenticated', sessionId, qualityProfile });
     send({ type: 'session', sessionId });
     console.log(`[Relay] Session validated — RTMP: ${rtmpUrl ? rtmpUrl.replace(/\/[^/]+$/, '/REDACTED') : 'NONE'}`);
 
@@ -194,7 +284,9 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
-    console.log('[Relay] Starting FFmpeg normalized 16:9 transcode -> ' + rtmpUrl.replace(/\/[^/]+$/, '/REDACTED'));
+    const quality = QUALITY_PROFILES[qualityProfile] || QUALITY_PROFILES['720p'];
+    relayReadySent = false;
+    console.log(`[Relay] Starting FFmpeg ${qualityProfile} normalized transcode -> ` + rtmpUrl.replace(/\/[^/]+$/, '/REDACTED'));
 
     const args = [
       '-loglevel',  'info',
@@ -206,13 +298,15 @@ wss.on('connection', (ws, req) => {
     // Always normalize the browser feed into a YouTube-friendly 16:9 frame.
     // Portrait is centered with black side bars; landscape fills the frame.
     args.push(
-      '-vf',        'scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,setsar=1',
+      '-map',        '0:v:0',
+      '-map',        '0:a:0?',
+      '-vf',        `scale=${quality.width}:${quality.height}:force_original_aspect_ratio=decrease,pad=${quality.width}:${quality.height}:(ow-iw)/2:(oh-ih)/2,setsar=1`,
       '-c:v',       'libx264',
       '-preset',    'veryfast',
       '-tune',      'zerolatency',
-      '-b:v',       '3500k',
-      '-maxrate',   '4500k',
-      '-bufsize',   '6000k',
+      '-b:v',       quality.videoBitrate,
+      '-maxrate',   quality.maxrate,
+      '-bufsize',   quality.bufsize,
       '-g',         '60',
       '-keyint_min','30',
       '-sc_threshold', '0',
@@ -225,7 +319,7 @@ wss.on('connection', (ws, req) => {
     // afftdn nf=-20 (not -25): lighter touch preserves voice clarity
     // highpass=f=80: removes low-end rumble and handling noise only
     args.push(
-      '-af',        'highpass=f=60,aresample=async=1:first_pts=0',
+      '-af',        'highpass=f=60,alimiter=limit=0.95:attack=5:release=50,aresample=async=1:first_pts=0',
       '-c:a',       'aac',
       '-b:a',       '192k',
       '-ar',        '48000',
@@ -251,12 +345,14 @@ wss.on('connection', (ws, req) => {
       if (line.length < 3) return;
       lastFfmpegLine = line.slice(0, 300);
       console.log('[FFmpeg]', line.slice(0, 150));
-      if (line.includes('Output #0') || line.includes('frame=')) {
+      if (!relayReadySent && (line.includes('Output #0') || line.includes('frame='))) {
+        relayReadySent = true;
         send({ type: 'ready' });
         if (db) {
-          db.collection('nativeStreamSessions').doc(sessionId)
-            .update({ status: 'streaming', streamingAt: new Date().toISOString() })
-            .catch(() => {});
+          updateSessionIfOwned({
+              status: 'streaming', streamingAt: new Date().toISOString(),
+              qualityProfile, resumeUntil:new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+            });
         }
       }
       if (line.toLowerCase().includes('error') || line.toLowerCase().includes('invalid')) {
@@ -270,11 +366,13 @@ wss.on('connection', (ws, req) => {
       if (code !== 0 && lastFfmpegLine) {
         send({ type: 'error', message: `FFmpeg exited (${code || signal}): ${lastFfmpegLine}` });
       }
-      send({ type: 'ended', code });
-      if (db) {
-        db.collection('nativeStreamSessions').doc(sessionId)
-          .update({ status: 'ended', endedAt: new Date().toISOString(), chunkCount, bytesRecv })
-          .catch(() => {});
+      if (!restarting && !explicitStop) send({ type: 'ended', code });
+      if (db && !restarting && !explicitStop) {
+        updateSessionIfOwned({
+            status: 'interrupted', interruptedAt: new Date().toISOString(),
+            resumeUntil:new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+            activeConnectionId:null, leaseExpiresAt:null, chunkCount, bytesRecv,
+          });
       }
     });
 
@@ -292,8 +390,19 @@ wss.on('connection', (ws, req) => {
   }
 
   // ── Stop everything ────────────────────────────────────────────────────────
-  function stopAll(reason) {
-    if (!active && !ffmpeg) return;
+  function stopAll(reason, wasExplicit = false) {
+    explicitStop = wasExplicit;
+    clearInterval(heartbeatTimer);
+    if (!active && !ffmpeg) {
+      updateSessionIfOwned(wasExplicit ? {
+        status:'stopped', stoppedAt:new Date().toISOString(), activeConnectionId:null, leaseExpiresAt:null,
+      } : {
+        status:'interrupted', interruptedAt:new Date().toISOString(),
+        resumeUntil:new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        activeConnectionId:null, leaseExpiresAt:null,
+      });
+      return;
+    }
     console.log(`[Relay] Stopping: ${reason} — chunks: ${chunkCount}, bytes: ${bytesRecv}`);
     active = false;
     if (ffmpeg) {
@@ -301,9 +410,14 @@ wss.on('connection', (ws, req) => {
       setTimeout(() => { try { ffmpeg?.kill('SIGTERM'); } catch {} ffmpeg = null; }, 2000);
     }
     if (db) {
-      db.collection('nativeStreamSessions').doc(sessionId)
-        .update({ status: 'ended', endedAt: new Date().toISOString(), chunkCount, bytesRecv })
-        .catch(() => {});
+      updateSessionIfOwned(wasExplicit ? {
+          status:'stopped', stoppedAt:new Date().toISOString(),
+          activeConnectionId:null, leaseExpiresAt:null, chunkCount, bytesRecv,
+        } : {
+          status:'interrupted', interruptedAt:new Date().toISOString(),
+          resumeUntil:new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+          activeConnectionId:null, leaseExpiresAt:null, chunkCount, bytesRecv,
+        });
     }
   }
 });

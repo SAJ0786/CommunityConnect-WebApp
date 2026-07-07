@@ -4,16 +4,16 @@
 // Always use localDateStr() which returns the correct local date.
 
 /**
- * Returns today's date as YYYY-MM-DD in the device's local timezone.
+ * Returns today's date as YYYY-MM-DD in the app's event timezone.
  * @param {number} offsetDays - days to add (positive) or subtract (negative)
  */
 export function localDateStr(offsetDays = 0) {
-  const d = new Date();
-  d.setDate(d.getDate() + offsetDays);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const dy = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${dy}`;
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Australia/Sydney', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(new Date());
+  const value = type => Number(parts.find(part => part.type === type)?.value);
+  const date = new Date(Date.UTC(value('year'), value('month') - 1, value('day') + offsetDays));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`;
 }
 
 /**

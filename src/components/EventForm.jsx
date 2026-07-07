@@ -8,6 +8,12 @@ import { getHijriSettings } from '../services/settingsService';
 import { getOrganisations } from '../services/organisationsService';
 import { uploadEventImage, getFallbackImage } from '../services/imageService';
 
+const BUILT_IN_CENTRE_NAMES = {
+  muhammadi: 'Muhammadi Welfare Association',
+  imamhasan: 'Imam Hasan Centre',
+  alamdar: 'Alamdar Granville',
+};
+
 export default function EventForm({
   initialEvent, onSubmit, submitLabel = null,
   user, profile, existingEvents = [],
@@ -25,6 +31,7 @@ export default function EventForm({
     eventType:           'Majlis',
     customEventType:     '',
     eventSubject:        '',
+    notes:               '',
     audienceType:        'Family Event',
     isOnBehalfOf:        false,
     organiserType:       'private',   // 'private' | 'centre' — default always private
@@ -39,6 +46,7 @@ export default function EventForm({
   const [overrides, setOverrides]   = useState([]);
   const [dynamicOrgs, setDynamicOrgs] = useState([]);
   const [duplicates, setDuplicates] = useState([]);
+  const [validationErrors, setValidationErrors] = useState({});
   const [calendarMode, setCalendarMode] = useState('gregorian'); // 'gregorian' | 'hijri'
   const [hijriInput, setHijriInput]     = useState({});
   // Photo upload
@@ -78,11 +86,34 @@ export default function EventForm({
     ));
   }, [form.eventDate, form.startTime, existingEvents, initialEvent]);
 
-  const update = (field, value) => setForm(p => ({ ...p, [field]: value }));
+  const clearValidationError = field => setValidationErrors(current => {
+    if (!current[field]) return current;
+    const next = { ...current };
+    delete next[field];
+    return next;
+  });
+  const update = (field, value) => {
+    setForm(p => ({ ...p, [field]: value }));
+    clearValidationError(field);
+  };
+
+  const getCentreName = organiserType => {
+    if (!organiserType || organiserType === 'private' || organiserType === 'centre') return '';
+    return BUILT_IN_CENTRE_NAMES[organiserType]
+      || dynamicOrgs.find(org => org.slug === organiserType)?.name
+      || '';
+  };
+
+  const handleOrganiserChange = organiserType => setForm(p => ({
+    ...p,
+    organiserType,
+    hostName: getCentreName(organiserType)
+      || (p.isOnBehalfOf ? '' : userName),
+  }));
 
   const toggleOnBehalf = checked => setForm(p => ({
     ...p, isOnBehalfOf: checked,
-    hostName:  checked ? '' : userName,
+    hostName:  getCentreName(p.organiserType) || (checked ? '' : userName),
     hostPhone: checked ? '' : userPhone
   }));
 
@@ -110,6 +141,21 @@ export default function EventForm({
 
   const submit = async e => {
     e.preventDefault();
+    const addressText = typeof form.address === 'string'
+      ? form.address.trim()
+      : String(form.address?.fullAddress || '').trim();
+    const errors = {};
+    if (!seriesMode && !form.eventDate) errors.eventDate = 'Please select the event date.';
+    if (!form.startTime) errors.startTime = 'Please select the event start time.';
+    if (addressText.length < 5) errors.address = 'Please enter the full event address.';
+    if (Object.keys(errors).length) {
+      setValidationErrors(errors);
+      window.setTimeout(() => {
+        document.querySelector('.event-form [aria-invalid="true"]')?.focus();
+      }, 0);
+      return;
+    }
+    setValidationErrors({});
     // Resolve the display event type
     const resolvedType = isCustom && form.customEventType.trim()
       ? form.customEventType.trim()
@@ -134,6 +180,7 @@ export default function EventForm({
 
     onSubmit({
       ...form,
+      hostName: getCentreName(form.organiserType) || form.hostName,
       imageUrl,
       imagePath,
       eventTypeDisplay: resolvedType,    // human-readable label (e.g. "Aqeeqa")
@@ -143,8 +190,19 @@ export default function EventForm({
   };
 
   return (
-    <form className="card" onSubmit={submit}>
-      <h2>{initialEvent ? 'Edit Event' : 'Add Event'}</h2>
+    <form className="card event-form" onSubmit={submit} noValidate>
+      <h2>{initialEvent?.__editSeries ? 'Edit Entire Series' : initialEvent ? 'Edit Event' : 'Add Event'}</h2>
+      {Object.keys(validationErrors).length > 0 && (
+        <div className="event-validation-summary" role="alert">
+          <strong>Complete the highlighted mandatory fields:</strong>
+          <ul>{Object.values(validationErrors).map(message => <li key={message}>{message}</li>)}</ul>
+        </div>
+      )}
+      {initialEvent?.__editSeries && (
+        <p className="small" style={{ marginTop:-8, color:'var(--muted)' }}>
+          Shared details will be updated across the series. Each event keeps its own Gregorian and Hijri date.
+        </p>
+      )}
 
       {/* ── Event Poster ── */}
       <label>Upload Event Poster <span className="small" style={{ fontWeight: 400 }}>(optional)</span></label>
@@ -156,7 +214,7 @@ export default function EventForm({
           <button type="button" onClick={removePhoto} style={{
             position: 'absolute', top: 8, right: 8, width: 32, height: 32,
             borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: 'white',
-            border: 'none', cursor: 'pointer', fontSize: 16, lineHeight: 1,
+            border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>×</button>
         </div>
@@ -167,9 +225,9 @@ export default function EventForm({
           borderRadius: 14, padding: 22, cursor: 'pointer',
           color: 'var(--teal,#0f766e)', marginTop: 4, marginBottom: 14,
         }}>
-          <span style={{ fontSize: 30 }}>📷</span>
-          <span style={{ fontSize: 13, fontWeight: 800 }}>Upload your event poster</span>
-          <span style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
+          <span style={{ fontSize: '1.875rem' }}>📷</span>
+          <span style={{ fontSize: '0.8125rem', fontWeight: 800 }}>Upload your event poster</span>
+          <span style={{ fontSize: '0.6875rem', color: 'var(--muted)', textAlign: 'center' }}>
             Optional — if you don't, your organisation logo will be shown
           </span>
           <input type="file" accept="image/*" onChange={handlePhotoPick}
@@ -193,7 +251,7 @@ export default function EventForm({
           </span>
         </label>
         <select value={form.organiserType}
-          onChange={e => update('organiserType', e.target.value)}>
+          onChange={e => handleOrganiserChange(e.target.value)}>
           <option value="private">🔒 Private (individual host)</option>
           <option value="muhammadi">🏛 Muhammadi Welfare Association</option>
           <option value="imamhasan">🏛 Imam Hasan Centre</option>
@@ -209,7 +267,8 @@ export default function EventForm({
       <label>Host Name *</label>
       <input required
         placeholder={form.isOnBehalfOf ? "Enter the host's name" : 'Your name'}
-        value={form.hostName} onChange={e => update('hostName', e.target.value)} />
+        value={form.hostName} onChange={e => update('hostName', e.target.value)}
+        readOnly={!!getCentreName(form.organiserType)} />
 
       {/* Host phone — shown for all events */}
       <label>Host Phone Number <span className="small">(optional)</span></label>
@@ -239,7 +298,7 @@ export default function EventForm({
               onClick={() => setCalendarMode(mode)}
               style={{
                 padding: '7px 16px', border: 'none', cursor: 'pointer',
-                fontWeight: calendarMode === mode ? 900 : 500, fontSize: 13,
+                fontWeight: calendarMode === mode ? 900 : 500, fontSize: '0.8125rem',
                 background: calendarMode === mode ? 'var(--teal)' : 'transparent',
                 color:      calendarMode === mode ? 'white' : 'var(--muted)',
                 transition: 'all .15s'
@@ -251,7 +310,8 @@ export default function EventForm({
 
         {calendarMode === 'gregorian' ? (
           <>
-            <input type="date" value={form.eventDate}
+            <input type="date" required value={form.eventDate}
+              aria-invalid={!!validationErrors.eventDate}
               onChange={e => {
                 update('eventDate', e.target.value);
                 setForm(p => ({
@@ -272,6 +332,7 @@ export default function EventForm({
               value={hijriInput}
               overrides={overrides}
               onChange={h => {
+                clearValidationError('eventDate');
                 setHijriInput(h);
                 setForm(p => ({
                   ...p,
@@ -286,6 +347,7 @@ export default function EventForm({
             />
           </>
         )}
+        {validationErrors.eventDate && <p className="field-error">{validationErrors.eventDate}</p>}
       </div>
       )}
 
@@ -293,7 +355,9 @@ export default function EventForm({
         <div>
           <label>Start Time *</label>
           <input type="time" required value={form.startTime}
+            aria-invalid={!!validationErrors.startTime}
             onChange={e => update('startTime', e.target.value)} />
+          {validationErrors.startTime && <p className="field-error">{validationErrors.startTime}</p>}
         </div>
         <div>
           <label>End Time <span className="small">(optional)</span></label>
@@ -309,12 +373,12 @@ export default function EventForm({
             ⚠️ {duplicates.length} event{duplicates.length > 1 ? 's' : ''} already exist{duplicates.length === 1 ? 's' : ''} at this date and time:
           </div>
           {duplicates.map(e => (
-            <div key={e.id} style={{ fontSize: 13, color: '#78350f', marginBottom: 3 }}>
+            <div key={e.id} style={{ fontSize: '0.8125rem', color: '#78350f', marginBottom: 3 }}>
               · <strong>{e.eventTypeDisplay || e.eventType}</strong> by <strong>{e.hostName}</strong>
               {e.address?.suburb ? ` · ${e.address.suburb}` : ''} · {e.audienceType}
             </div>
           ))}
-          <div style={{ fontSize: 12, color: '#92400e', marginTop: 6 }}>You can still save — this is a notice only.</div>
+          <div style={{ fontSize: '0.75rem', color: '#92400e', marginTop: 6 }}>You can still save — this is a notice only.</div>
         </div>
       )}
 
@@ -324,9 +388,14 @@ export default function EventForm({
       <label>Address *</label>
       <AddressAutocomplete
         value={form.address}
-        onChange={addr => setForm(p => ({ ...p, address: addr }))}
+        onChange={addr => {
+          setForm(p => ({ ...p, address: addr }));
+          clearValidationError('address');
+        }}
         required
+        invalid={!!validationErrors.address}
       />
+      {validationErrors.address && <p className="field-error">{validationErrors.address}</p>}
 
       {/* Event type */}
       <label>Event Type *</label>
@@ -355,6 +424,17 @@ export default function EventForm({
         placeholder="e.g. Shahadat of Imam Hussain (A.S.), Birthday of…"
         value={form.eventSubject || ''}
         onChange={e => update('eventSubject', e.target.value)}
+      />
+
+      <label>
+        Notes <span className="small">(optional)</span>
+      </label>
+      <textarea
+        rows={3}
+        maxLength={500}
+        placeholder="Add instructions or information to include when this event is shared"
+        value={form.notes || ''}
+        onChange={e => update('notes', e.target.value)}
       />
 
       {/* Audience */}

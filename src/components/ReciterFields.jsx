@@ -26,7 +26,7 @@ export default function ReciterFields({ reciters, setReciters }) {
         }}>
           {/* Row 1: Type selector */}
           <div style={{ marginBottom: 8 }}>
-            <label style={{ fontSize: 12, marginBottom: 4, display: 'block' }}>Type</label>
+            <label style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Type</label>
             <select value={r.type} onChange={e => update(i, 'type', e.target.value)}>
               {RECITER_TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
@@ -35,7 +35,7 @@ export default function ReciterFields({ reciters, setReciters }) {
           {/* Row 2: Custom type name — only when Custom selected */}
           {r.type === 'Custom' && (
             <div style={{ marginBottom: 8 }}>
-              <label style={{ fontSize: 12, marginBottom: 4, display: 'block' }}>Custom Type Name</label>
+              <label style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Custom Type Name</label>
               <input
                 value={r.customType || ''}
                 onChange={e => update(i, 'customType', e.target.value)}
@@ -46,7 +46,7 @@ export default function ReciterFields({ reciters, setReciters }) {
 
           {/* Row 3: Reciter name */}
           <div style={{ marginBottom: 4 }}>
-            <label style={{ fontSize: 12, marginBottom: 4, display: 'block' }}>Reciter Name</label>
+            <label style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Reciter Name</label>
             <input
               value={r.name}
               onChange={e => update(i, 'name', e.target.value)}
@@ -58,7 +58,7 @@ export default function ReciterFields({ reciters, setReciters }) {
           <button
             type="button"
             className="btn-danger"
-            style={{ fontSize: 12, padding: '5px 12px', marginTop: 4 }}
+            style={{ fontSize: '0.75rem', padding: '5px 12px', marginTop: 4 }}
             onClick={() => setReciters(reciters.filter((_, x) => x !== i))}>
             Remove
           </button>

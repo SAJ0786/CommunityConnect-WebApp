@@ -10,8 +10,6 @@ import { doc, getDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../firebase/firebase';
 
-const isPwa = () => window.matchMedia?.('(display-mode: standalone)')?.matches || window.navigator.standalone === true;
-
 function formatAU(raw) {
   let s = String(raw || '').replace(/[\s\-().]/g, '');
   if (s.startsWith('0'))                        s = '+61' + s.slice(1);
@@ -38,6 +36,8 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
   const widgetRef = useRef(null);
 
   const displayError = error || authError;
+  const isInstalledApp = window.matchMedia?.('(display-mode: standalone)')?.matches
+    || window.navigator.standalone === true;
 
   useEffect(() => () => { clearRc(); }, []);
 
@@ -72,7 +72,8 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
       setError(
         e.code === 'auth/too-many-requests'    ? 'Too many attempts. Please wait a few minutes.' :
         e.code === 'auth/invalid-phone-number' ? 'Invalid number. Use 04XX XXX XXX.' :
-        e.code === 'auth/captcha-check-failed' ? 'Captcha failed. Refresh and try again.' :
+        e.code === 'auth/captcha-check-failed' ? 'Security verification failed. Refresh and try again.' :
+        e.code === 'auth/invalid-app-credential' ? 'This app address could not be verified. Please open communityevents.siza.info and try again.' :
         `SMS error: ${e.code || e.message}. Please try again.`
       );
     }
@@ -84,13 +85,11 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
     if (otp.length !== 6 || !confirm) return;
     setError(''); setLoading('verify');
     try {
+      if (onRegistrationStart) onRegistrationStart();
       const res  = await confirm.confirm(otp);
       const user = res.user;
       clearRc();
 
-      if (onRegistrationStart) onRegistrationStart();
-
-      await new Promise(r => setTimeout(r, 500));
       const snap = await getDoc(doc(db, 'users', user.uid));
 
       if (snap.exists() && snap.data()?.fullName) {
@@ -185,117 +184,62 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
+    <div className="auth-page auth-theme">
     <div className="auth-card">
       <div id="recaptcha-container" />
 
       {/* ── MAIN ── */}
       {step === 'main' && (<>
-        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <div className="auth-main-heading">
+          <img src="/icons/icon-192.png" alt="Community Events Australia" className="auth-login-logo" />
           <h2 style={{ margin: '0 0 4px' }}>Sign In</h2>
-          <p className="small" style={{ margin: 0, color: 'var(--muted)' }}>Community Events Australia</p>
+          <p className="small" style={{ margin: 0, color: 'var(--muted)' }}>Use your Australian mobile number to continue</p>
         </div>
 
-        {/* Migration notice for existing Google/Microsoft users */}
-        <div style={{
-          background: '#fefce8', border: '1px solid #fde68a', borderRadius: 12,
-          padding: '10px 14px', marginBottom: 16, fontSize: 12.5, lineHeight: 1.6, color: '#92400e',
-        }}>
-          <strong>📢 Login update:</strong> Google and Microsoft sign-in have been removed.
-          Please use your mobile number to sign in. If you previously used Google or Microsoft,
-          enter the same email address when prompted — we'll connect you to your existing account automatically.
-        </div>
-
-        <button
-          style={{ width: '100%', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-          onClick={() => { if (!accepted) return setError('Please accept the Privacy Policy first.'); setError(''); setStep('phone'); }}>
-          📱 Continue with Mobile Number
-        </button>
-
-        {displayError && <div className="error" style={{ marginBottom: 10 }}>{displayError}</div>}
-
-        <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}>
-          <input type="checkbox" checked={accepted} onChange={e => { setAccepted(e.target.checked); setError(''); }} style={{ width: 'auto', marginTop: 3 }} />
-          <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+        <label className="auth-consent">
+          <input type="checkbox" checked={accepted} onChange={e => { setAccepted(e.target.checked); setError(''); }} />
+          <span>
             I agree to the{' '}
-            <a href="/privacy.html" target="_blank" rel="noreferrer" style={{ color: 'var(--red)' }}>Privacy Policy</a>
+            <a href="/privacy.html" target="_blank" rel="noreferrer">Privacy Policy</a>
             {' '}and{' '}
-            <a href="/terms.html" target="_blank" rel="noreferrer" style={{ color: 'var(--red)' }}>Terms of Use</a>
+            <a href="/terms.html" target="_blank" rel="noreferrer">Terms of Use</a>.
           </span>
         </label>
 
-        <button className="btn-light" style={{ width: '100%', marginTop: 14 }}
-          onClick={() => { if (!accepted) { setError('Please accept the Privacy Policy first.'); return; } onAuthComplete(null); }}>
-          👤 Browse as Guest
+        {displayError && <div className="error" style={{ marginBottom: 10 }}>{displayError}</div>}
+
+        <button className="auth-primary"
+          onClick={() => { if (!accepted) return setError('Please accept the Privacy Policy first.'); setError(''); setStep('phone'); }}>
+          Continue with Mobile Number
         </button>
 
-        {!isPwa() && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '14px 0 0' }}>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-              <span className="small" style={{ color: 'var(--muted)', fontSize: 11 }}>install</span>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-            </div>
-            <button className="btn-light"
-              style={{ width: '100%', marginTop: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
-              onClick={() => document.getElementById('install-modal').style.display = 'flex'}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
-              📲 Install This App
-            </button>
+        <button className="btn-light auth-secondary"
+          onClick={() => { if (!accepted) { setError('Please accept the Privacy Policy first.'); return; } onAuthComplete(null); }}>
+          Browse as Guest
+        </button>
 
-            <div id="install-modal" style={{
-              display: 'none', position: 'fixed', inset: 0, zIndex: 99999,
-              background: 'rgba(0,0,0,0.65)', alignItems: 'center', justifyContent: 'center', padding: 16,
-            }} onClick={e => { if (e.target.id === 'install-modal') e.target.style.display = 'none'; }}>
-              <div style={{ background: 'var(--card,white)', borderRadius: 20, padding: 24, width: '100%', maxWidth: 400, border: '1px solid var(--border)', boxShadow: '0 20px 60px rgba(0,0,0,0.4)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <h2 style={{ margin: 0, fontSize: 19, color: 'var(--text)' }}>📲 Install This App</h2>
-                  <button onClick={() => document.getElementById('install-modal').style.display = 'none'}
-                    style={{ background: 'transparent', border: 'none', fontSize: 22, cursor: 'pointer', color: 'var(--muted)', lineHeight: 1 }}>✕</button>
-                </div>
-                <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-                  {[['iphone', '🍎 iPhone / iPad'], ['android', '🤖 Android']].map(([key, label]) => (
-                    <button key={key} data-tab={key}
-                      onClick={() => {
-                        document.querySelectorAll('[data-platform]').forEach(el => { el.style.display = el.dataset.platform === key ? 'block' : 'none'; });
-                        document.querySelectorAll('[data-tab]').forEach(el => {
-                          el.style.background  = el.dataset.tab === key ? 'var(--red)' : 'var(--bg,white)';
-                          el.style.color       = el.dataset.tab === key ? 'white' : 'var(--text)';
-                          el.style.borderColor = el.dataset.tab === key ? 'var(--red)' : 'var(--border)';
-                        });
-                      }}
-                      style={{ flex: 1, padding: '8px', borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: 'pointer',
-                        background: key === 'iphone' ? 'var(--red)' : 'var(--bg,white)',
-                        color:      key === 'iphone' ? 'white' : 'var(--text)',
-                        border:     `1.5px solid ${key === 'iphone' ? 'var(--red)' : 'var(--border)'}` }}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-                <ol data-platform="iphone" style={{ margin: 0, paddingLeft: 22, color: 'var(--text)', fontSize: 14, lineHeight: 2.1 }}>
-                  <li>Open this link in <strong>Safari</strong> (not Chrome)</li>
-                  <li>Tap the <strong>Share button ⬆️</strong> at the bottom</li>
-                  <li>Scroll down and tap <strong>"Add to Home Screen"</strong></li>
-                  <li>Tap <strong>Add</strong> — ✅ icon appears on your home screen</li>
-                </ol>
-                <ol data-platform="android" style={{ display: 'none', margin: 0, paddingLeft: 22, color: 'var(--text)', fontSize: 14, lineHeight: 2.1 }}>
-                  <li>Open this link in <strong>Chrome</strong></li>
-                  <li>Tap the <strong>three-dot menu ⋮</strong> at the top right</li>
-                  <li>Tap <strong>"Add to Home Screen"</strong> or <strong>"Install App"</strong></li>
-                  <li>Tap <strong>Install</strong> — ✅ icon appears on your home screen</li>
-                </ol>
-                <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--teal-l,#e6f4f1)', borderRadius: 10, fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-                  💡 Once installed the app loads instantly, works offline, and feels like a native app.
-                </div>
-                <button style={{ width: '100%', marginTop: 16 }} onClick={() => document.getElementById('install-modal').style.display = 'none'}>Got it!</button>
-              </div>
-            </div>
-          </>
-        )}
+        {!isInstalledApp && <section className="auth-store-section" aria-labelledby="store-download-heading">
+          <div className="auth-store-divider"><span id="store-download-heading">Install the app from here</span></div>
+          <div className="auth-store-badges">
+            <a className="auth-store-original" href="https://apps.apple.com/au/app/community-events-australia/id6782770347"
+              target="_blank" rel="noreferrer" aria-label="Download Community Events Australia from the Apple App Store">
+              <img src="/store-apple-vector.svg" alt="Apple App Store" />
+            </a>
+            <a className="auth-store-original" href="https://play.google.com/store/apps/details?id=info.siza.communityevents.app"
+              target="_blank" rel="noreferrer" aria-label="Download Community Events Australia from Google Play">
+              <img src="/store-google-play.svg" alt="Google Play" />
+            </a>
+            <a className="auth-store-original" href="https://apps.microsoft.com/detail/9NDGJZHL86KJ"
+              target="_blank" rel="noreferrer" aria-label="Download Community Events Australia from Microsoft Store">
+              <img src="/store-microsoft.svg" alt="Microsoft Store" />
+            </a>
+          </div>
+        </section>}
       </>)}
 
       {/* ── PHONE ── */}
       {step === 'phone' && (<>
-        <button className="btn-muted" style={{ marginBottom: 12, fontSize: 13 }}
+        <button className="btn-muted" style={{ marginBottom: 12, fontSize: '0.8125rem' }}
           onClick={() => { clearRc(); setStep('main'); setError(''); setPhone(''); }}>← Back</button>
         <h3 style={{ margin: '0 0 8px' }}>📱 Mobile Sign In</h3>
         <p className="small" style={{ margin: '0 0 16px', color: 'var(--muted)', lineHeight: 1.5 }}>
@@ -305,7 +249,7 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
         <input type="tel" placeholder="04XX XXX XXX" value={phone} autoFocus
           onChange={e => { setPhone(e.target.value); setError(''); }}
           onKeyDown={e => e.key === 'Enter' && sendOtp()} />
-        <p style={{ fontSize: 11, color: 'var(--muted)', margin: '2px 0 14px' }}>Australian mobiles only (+61).</p>
+        <p style={{ fontSize: '0.6875rem', color: 'var(--muted)', margin: '2px 0 14px' }}>Australian mobiles only (+61).</p>
         {displayError && <div className="error" style={{ marginBottom: 10 }}>{displayError}</div>}
         <button onClick={sendOtp} disabled={!!loading || !isValidAU(formatAU(phone))} style={{ width: '100%' }}>
           {loading === 'otp' ? 'Sending…' : '📲 Send Verification Code'}
@@ -330,14 +274,14 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
             {loading === 'verify' ? 'Verifying…' : '✅ Verify'}
           </button>
         </div>
-        <button className="btn-light" style={{ width: '100%', marginTop: 8, fontSize: 12 }}
+        <button className="btn-light" style={{ width: '100%', marginTop: 8, fontSize: '0.75rem' }}
           disabled={!!loading} onClick={() => { setOtp(''); sendOtp(); }}>Resend code</button>
       </>)}
 
       {/* ── REGISTER (new users) ── */}
       {step === 'register' && (<>
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>👋</div>
+          <div style={{ fontSize: '2.25rem', marginBottom: 8 }}>👋</div>
           <h3 style={{ margin: '0 0 4px' }}>Welcome! One last step.</h3>
           <p className="small" style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.5 }}>
             Your mobile is verified. Please enter your name and email to complete registration.
@@ -347,7 +291,7 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
         {/* Hint for existing users */}
         <div style={{
           background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10,
-          padding: '8px 12px', marginBottom: 14, fontSize: 12, color: '#1e40af', lineHeight: 1.5,
+          padding: '8px 12px', marginBottom: 14, fontSize: '0.75rem', color: '#1e40af', lineHeight: 1.5,
         }}>
           💡 If you previously signed in with Google or Microsoft, enter that same email address below — we'll connect you to your existing account.
         </div>
@@ -363,7 +307,7 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
         <input type="email" placeholder="e.g. ali@example.com" value={email}
           onChange={e => { setEmail(e.target.value); setError(''); }}
           onKeyDown={e => e.key === 'Enter' && checkEmailAndProceed()} />
-        <p style={{ fontSize: 11, color: 'var(--muted)', margin: '2px 0 14px' }}>
+        <p style={{ fontSize: '0.6875rem', color: 'var(--muted)', margin: '2px 0 14px' }}>
           Used for event reminders. Not shared publicly.
         </p>
 
@@ -387,7 +331,7 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
       {/* ── LINK CONFIRM — existing account found by email ── */}
       {step === 'link-confirm' && matchedProfile && (<>
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 42, marginBottom: 8 }}>🔗</div>
+          <div style={{ fontSize: '2.625rem', marginBottom: 8 }}>🔗</div>
           <h3 style={{ margin: '0 0 6px' }}>Existing Account Found</h3>
         </div>
 
@@ -395,18 +339,18 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
           background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 14,
           padding: '14px 16px', marginBottom: 16, lineHeight: 1.7,
         }}>
-          <div style={{ fontSize: 13, color: 'var(--text)' }}>
+          <div style={{ fontSize: '0.8125rem', color: 'var(--text)' }}>
             We found an existing account with this email:
           </div>
-          <div style={{ fontWeight: 800, fontSize: 15, margin: '4px 0 2px', color: 'var(--teal)' }}>
+          <div style={{ fontWeight: 800, fontSize: '0.9375rem', margin: '4px 0 2px', color: 'var(--teal)' }}>
             {matchedProfile.fullName}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+          <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
             {matchedProfile.email}
           </div>
         </div>
 
-        <p style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, margin: '0 0 16px' }}>
+        <p style={{ fontSize: '0.8125rem', color: 'var(--text)', lineHeight: 1.6, margin: '0 0 16px' }}>
           We'll connect your mobile number to this account so you can sign in with your phone going forward. All your existing events, favourites and settings will be preserved.
         </p>
 
@@ -417,7 +361,7 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
           {loading === 'link' ? 'Connecting…' : '✅ Yes, Connect to My Existing Account'}
         </button>
 
-        <button className="btn-light" style={{ width: '100%', fontSize: 13 }}
+        <button className="btn-light" style={{ width: '100%', fontSize: '0.8125rem' }}
           disabled={!!loading}
           onClick={() => {
             // User says this isn't their account — proceed as new user
@@ -428,6 +372,13 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
           ✗ That's not my account — create a new one
         </button>
       </>)}
+    </div>
+    {step === 'main' && (
+      <div className="auth-security-note">
+        <span className="auth-security-icon" aria-hidden="true">🔒</span>
+        <span>Phone verification keeps<br />community accounts secure.</span>
+      </div>
+    )}
     </div>
   );
 }

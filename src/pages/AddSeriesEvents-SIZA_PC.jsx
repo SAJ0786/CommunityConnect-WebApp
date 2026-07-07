@@ -263,7 +263,7 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
 
   if (done) return (
     <div className="card center" style={{ marginTop: 32 }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+      <div style={{ fontSize: '3rem', marginBottom: 12 }}>✅</div>
       <h3 style={{ margin: '0 0 8px' }}>Series Created!</h3>
       <p className="small" style={{ color: 'var(--muted)', marginBottom: 16 }}>
         {preview.length} events added from {getStart()} to {getEnd()}.
@@ -291,7 +291,7 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
               background: calType === t ? 'var(--teal)' : 'transparent',
               color:      calType === t ? 'white'       : 'var(--text)',
               border: `1.5px solid ${calType === t ? 'var(--teal)' : 'var(--border)'}`,
-              borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: 'pointer',
+              borderRadius: 10, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
             }}>
               {t === 'gregorian' ? '📅 Gregorian' : '🌙 Hijri'}
             </button>
@@ -324,7 +324,7 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
 
             {/* Loading state while overrides fetch */}
             {!todayReady && (
-              <p style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--muted)', textAlign: 'center' }}>
                 🌙 Loading Hijri calendar settings…
               </p>
             )}
@@ -332,44 +332,44 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
             {todayReady && (<>
             {/* Start */}
             <div>
-              <label style={{ fontWeight: 600, fontSize: 13, display: 'block', marginBottom: 6 }}>
+              <label style={{ fontWeight: 600, fontSize: '0.8125rem', display: 'block', marginBottom: 6 }}>
                 Start date (Hijri) *
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr 90px', gap: 8 }}>
                 <input placeholder="Day" type="number" min="1" max="30" value={hStartDay}
                   onChange={handleStartDayChange}
-                  style={{ padding: '10px 8px', fontSize: 14, border: '1px solid var(--border)', borderRadius: 10 }} />
+                  style={{ padding: '10px 8px', fontSize: '0.875rem', border: '1px solid var(--border)', borderRadius: 10 }} />
                 <select value={hStartMonth} onChange={handleStartMonthChange}
-                  style={{ padding: '10px 8px', fontSize: 14, border: '1px solid var(--border)', borderRadius: 10 }}>
+                  style={{ padding: '10px 8px', fontSize: '0.875rem', border: '1px solid var(--border)', borderRadius: 10 }}>
                   <option value="">Month</option>
                   {HIJRI_MONTHS.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
                 </select>
                 <input placeholder="Year" type="number" min="1400" max="1500" value={hStartYear}
                   onChange={handleStartYearChange}
-                  style={{ padding: '10px 8px', fontSize: 14, border: '1px solid var(--border)', borderRadius: 10 }} />
+                  style={{ padding: '10px 8px', fontSize: '0.875rem', border: '1px solid var(--border)', borderRadius: 10 }} />
               </div>
-              {effStart && <p style={{ fontSize: 11, color: 'var(--muted)', margin: '4px 0 0' }}>= {effStart}</p>}
+              {effStart && <p style={{ fontSize: '0.6875rem', color: 'var(--muted)', margin: '4px 0 0' }}>= {effStart}</p>}
             </div>
 
             {/* End */}
             <div>
-              <label style={{ fontWeight: 600, fontSize: 13, display: 'block', marginBottom: 6 }}>
+              <label style={{ fontWeight: 600, fontSize: '0.8125rem', display: 'block', marginBottom: 6 }}>
                 End date (Hijri) *
               </label>
               <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr 90px', gap: 8 }}>
                 <input placeholder="Day" type="number" min="1" max="30" value={hEndDay}
                   onChange={handleEndDayChange}
-                  style={{ padding: '10px 8px', fontSize: 14, border: '1px solid var(--border)', borderRadius: 10 }} />
+                  style={{ padding: '10px 8px', fontSize: '0.875rem', border: '1px solid var(--border)', borderRadius: 10 }} />
                 <select value={hEndMonth} onChange={handleEndMonthChange}
-                  style={{ padding: '10px 8px', fontSize: 14, border: '1px solid var(--border)', borderRadius: 10 }}>
+                  style={{ padding: '10px 8px', fontSize: '0.875rem', border: '1px solid var(--border)', borderRadius: 10 }}>
                   <option value="">Month</option>
                   {HIJRI_MONTHS.map((m,i) => <option key={i} value={i+1}>{m}</option>)}
                 </select>
                 <input placeholder="Year" type="number" min="1400" max="1500" value={hEndYear}
                   onChange={handleEndYearChange}
-                  style={{ padding: '10px 8px', fontSize: 14, border: '1px solid var(--border)', borderRadius: 10 }} />
+                  style={{ padding: '10px 8px', fontSize: '0.875rem', border: '1px solid var(--border)', borderRadius: 10 }} />
               </div>
-              {effEnd && <p style={{ fontSize: 11, color: 'var(--muted)', margin: '4px 0 0' }}>= {effEnd}</p>}
+              {effEnd && <p style={{ fontSize: '0.6875rem', color: 'var(--muted)', margin: '4px 0 0' }}>= {effEnd}</p>}
             </div>
             </>)}
           </div>
@@ -378,19 +378,19 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
         {/* Preview */}
         {preview.length > 0 && (
           <div style={{ background: 'var(--teal-l,#e6f4f1)', borderRadius: 10, padding: '8px 12px', marginTop: 12 }}>
-            <p style={{ margin: 0, fontSize: 13, color: 'var(--teal)', fontWeight: 600 }}>
+            <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--teal)', fontWeight: 600 }}>
               ✅ {preview.length} event{preview.length !== 1 ? 's' : ''} will be created
               {preview.length === 60 && ' (maximum 60 days)'}
             </p>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--muted)' }}>
+            <p style={{ margin: '4px 0 0', fontSize: '0.75rem', color: 'var(--muted)' }}>
               {preview.slice(0,5).join(', ')}{preview.length > 5 ? ` … ${preview[preview.length-1]}` : ''}
             </p>
           </div>
         )}
         {effEnd && effStart && effEnd < effStart && (
-          <p style={{ color: 'var(--danger,#dc2626)', fontSize: 13, marginTop: 8 }}>End date must be after start date.</p>
+          <p style={{ color: 'var(--danger,#dc2626)', fontSize: '0.8125rem', marginTop: 8 }}>End date must be after start date.</p>
         )}
-        {error && <p style={{ color: 'var(--danger,#dc2626)', fontSize: 13, marginTop: 8 }}>{error}</p>}
+        {error && <p style={{ color: 'var(--danger,#dc2626)', fontSize: '0.8125rem', marginTop: 8 }}>{error}</p>}
       </div>
 
       {preview.length > 0 && (

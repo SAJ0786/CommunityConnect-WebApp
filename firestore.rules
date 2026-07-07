@@ -33,6 +33,13 @@ service cloud.firestore {
                                    || isAdmin());
     }
 
+    // Historical events are moved here by the scheduled Admin SDK function.
+    // They are excluded from the live app and available only to administrators.
+    match /archivedEvents/{eventId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     // ── Settings ───────────────────────────────────────────────────────────────
     match /settings/{docId} {
       allow read:  if signedIn();
@@ -65,6 +72,17 @@ service cloud.firestore {
     // ── Native Stream Sessions ──────────────────────────────────────────────
     match /nativeStreamSessions/{sessionId} {
       allow read, write: if false;
+    }
+
+    // Stream catalogue is exposed only through listStreamVideos, which omits
+    // YouTube IDs and URLs for guests.
+    match /streamVideos/{videoId} {
+      allow read, write: if false;
+    }
+
+    match /ai_reports/{reportId} {
+      allow create: if signedIn();
+      allow read, update, delete: if isAdmin();
     }
 
     // ── Edit OTPs — Cloud Function only ──────────────────────────────────────

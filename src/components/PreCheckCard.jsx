@@ -20,6 +20,8 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
   const [muted,   setMuted]   = useState(false);
   const [streamOrientation, setStreamOrientation] = useState('portrait');
   const [landscapeRotation, setLandscapeRotation] = useState('ccw');
+  const [audioMode, setAudioMode] = useState('natural');
+  const [qualityInfo, setQualityInfo] = useState({ checking:true, label:'Checking network…' });
 
   const videoRef    = useRef(null);
   const streamerRef = useRef(null);
@@ -43,6 +45,12 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
           videoRef.current.play().catch(() => {});
         }
         setPhase('ready');
+        streamer.detectQuality()
+          .then(info => setQualityInfo({
+            checking:false,
+            label:`${info.label}${info.uploadMbps ? ` · ${info.uploadMbps.toFixed(1)} Mbps upload` : ''}`
+          }))
+          .catch(() => setQualityInfo({ checking:false, label:'720p HD' }));
       })
       .catch((e) => {
         if (!cancelled) { setErrMsg(e.message || 'Camera access denied'); setPhase('error'); }
@@ -86,6 +94,7 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
     setPhase('starting');
     await streamerRef.current?.requestOrientationPermission?.();
     streamerRef.current?.setStreamOrientation(streamOrientation, landscapeRotation);
+    streamerRef.current?.setAudioMode(audioMode);
     onConfirm?.(streamerRef.current);
   };
 
@@ -102,24 +111,26 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
         display:'flex', alignItems:'center', justifyContent:'space-between',
         paddingTop:'max(10px, env(safe-area-inset-top))',
       }}>
-        <div style={{ color:'white', fontWeight:900, fontSize:14 }}>
-          📹 Camera Check
+        <div style={{ color:'white', fontWeight:900, fontSize:'0.875rem' }}>
+          {phase === 'starting' ? 'Starting Live Stream' : '📹 Camera Check'}
         </div>
-        <button onClick={handleCancel}
+        {phase !== 'starting' && <button onClick={handleCancel}
           style={{ background:'rgba(255,255,255,0.15)', border:'none',
             color:'white', borderRadius:8, padding:'6px 14px',
-            fontSize:13, fontWeight:900, cursor:'pointer' }}>
+            fontSize:'0.8125rem', fontWeight:900, cursor:'pointer' }}>
           Cancel
-        </button>
+        </button>}
       </div>
 
       {/* Info banner */}
       <div style={{
-        background:'#0f766e22', color:'#5eead4', fontSize:11.5, fontWeight:700,
+        background:'#0f766e22', color:'#5eead4', fontSize:'0.71875rem', fontWeight:700,
         padding:'7px 14px', textAlign:'center', lineHeight:1.4,
         borderBottom:'1px solid #0f766e44',
       }}>
-        Check your camera and microphone, then tap "Start Streaming" to go live on YouTube.
+        {phase === 'starting'
+          ? 'Please keep this screen open while the secure connection to YouTube is prepared.'
+          : 'Check your camera and microphone, then tap "Start Streaming" to go live on YouTube.'}
       </div>
 
       {/* Camera preview */}
@@ -127,9 +138,9 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
         {phase === 'error' ? (
           <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
             alignItems:'center', justifyContent:'center', color:'white', gap:12, padding:24, textAlign:'center' }}>
-            <div style={{ fontSize:40 }}>⚠️</div>
-            <div style={{ fontWeight:900, fontSize:16 }}>Camera Error</div>
-            <div style={{ fontSize:13, color:'#fca5a5' }}>{errMsg}</div>
+            <div style={{ fontSize:'2.5rem' }}>⚠️</div>
+            <div style={{ fontWeight:900, fontSize:'1rem' }}>Camera Error</div>
+            <div style={{ fontSize:'0.8125rem', color:'#fca5a5' }}>{errMsg}</div>
           </div>
         ) : (
           <>
@@ -139,8 +150,20 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
               <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
                 alignItems:'center', justifyContent:'center', color:'white', gap:12,
                 background:'rgba(0,0,0,0.4)' }}>
-                <div style={{ fontSize:40 }}>📷</div>
-                <div style={{ fontWeight:900, fontSize:16 }}>Opening camera…</div>
+                <div style={{ fontSize:'2.5rem' }}>📷</div>
+                <div style={{ fontWeight:900, fontSize:'1rem' }}>Opening camera…</div>
+              </div>
+            )}
+            {phase === 'starting' && (
+              <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
+                alignItems:'center', justifyContent:'center', color:'white', gap:14,
+                background:'rgba(0,0,0,0.88)', padding:24, textAlign:'center' }}>
+                <div style={{ width:48, height:48, border:'4px solid rgba(255,255,255,.25)',
+                  borderTopColor:'#ef4444', borderRadius:'50%', animation:'streamStartSpin .9s linear infinite' }} />
+                <div style={{ fontWeight:900, fontSize:'1.125rem' }}>Please wait while your stream starts</div>
+                <div style={{ fontSize:'0.8125rem', color:'#d1d5db', lineHeight:1.5, maxWidth:330 }}>
+                  Connecting the camera and preparing the YouTube live video. This may take longer on mobile data.
+                </div>
               </div>
             )}
           </>
@@ -159,19 +182,19 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
               <button onClick={() => setStreamOrientation('portrait')}
                 style={{ background:streamOrientation === 'portrait' ? '#0f766e' : 'transparent',
                   color:'white', border:'none', borderRadius:8, padding:'8px 11px',
-                  fontSize:12, fontWeight:900, cursor:'pointer' }}>
+                  fontSize:'0.75rem', fontWeight:900, cursor:'pointer' }}>
                 Portrait
               </button>
               <button onClick={() => setStreamOrientation('landscape')}
                 style={{ background:streamOrientation === 'landscape' ? '#0f766e' : 'transparent',
                   color:'white', border:'none', borderRadius:8, padding:'8px 11px',
-                  fontSize:12, fontWeight:900, cursor:'pointer' }}>
+                  fontSize:'0.75rem', fontWeight:900, cursor:'pointer' }}>
                 Landscape
               </button>
               {streamOrientation === 'landscape' && (
                 <button onClick={() => setLandscapeRotation(v => v === 'ccw' ? 'cw' : 'ccw')}
                   style={{ background:'rgba(255,255,255,0.16)', color:'white', border:'none',
-                    borderRadius:8, padding:'8px 11px', fontSize:12, fontWeight:900, cursor:'pointer' }}>
+                    borderRadius:8, padding:'8px 11px', fontSize:'0.75rem', fontWeight:900, cursor:'pointer' }}>
                   Rotate Fix
                 </button>
               )}
@@ -184,13 +207,13 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
           <div style={{ position:'absolute', bottom:14, right:14, display:'flex', gap:8 }}>
             <button onClick={handleSwitchCamera}
               style={{ background:'rgba(0,0,0,0.55)', color:'white', border:'1px solid rgba(255,255,255,0.3)',
-                borderRadius:10, padding:'8px 12px', fontSize:12, fontWeight:800, cursor:'pointer' }}>
+                borderRadius:10, padding:'8px 12px', fontSize:'0.75rem', fontWeight:800, cursor:'pointer' }}>
               🔄 Flip
             </button>
             <button onClick={handleToggleMic}
               style={{ background: muted ? '#c0392b' : 'rgba(0,0,0,0.55)', color:'white',
                 border:'1px solid rgba(255,255,255,0.3)',
-                borderRadius:10, padding:'8px 12px', fontSize:12, fontWeight:800, cursor:'pointer' }}>
+                borderRadius:10, padding:'8px 12px', fontSize:'0.75rem', fontWeight:800, cursor:'pointer' }}>
               {muted ? '🔇 Mic Off' : '🎙 Mic On'}
             </button>
           </div>
@@ -200,11 +223,28 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
       {/* Bottom action bar */}
       <div style={{ padding:'14px 16px', background:'#1a1a1a',
         paddingBottom:'max(14px, env(safe-area-inset-bottom))' }}>
+        <div style={{ display:'flex', gap:8, marginBottom:10 }}>
+          {[
+            { key:'natural', label:'Natural/Event audio' },
+            { key:'speech', label:'Speech audio' },
+          ].map(option => (
+            <button key={option.key} type="button" onClick={() => setAudioMode(option.key)}
+              style={{ flex:1, padding:'8px 6px', borderRadius:9, fontSize:'0.6875rem', fontWeight:800,
+                cursor:'pointer', color:'white',
+                border:`1px solid ${audioMode === option.key ? '#5eead4' : '#555'}`,
+                background:audioMode === option.key ? '#0f766e' : '#2b2b2b' }}>
+              {option.label}
+            </button>
+          ))}
+        </div>
+        <div style={{ color:'#5eead4', fontSize:'0.6875rem', textAlign:'center', marginBottom:9, fontWeight:700 }}>
+          {qualityInfo.checking ? '⏳' : '📶'} {qualityInfo.label}
+        </div>
         <button onClick={handleConfirm} disabled={phase !== 'ready'}
           style={{
             width:'100%', padding:'14px', borderRadius:14, border:'none',
             background: phase === 'ready' ? '#c0392b' : '#555',
-            color:'white', fontWeight:900, fontSize:15,
+            color:'white', fontWeight:900, fontSize:'0.9375rem',
             cursor: phase === 'ready' ? 'pointer' : 'not-allowed',
             display:'flex', alignItems:'center', justifyContent:'center', gap:8,
           }}>
@@ -214,10 +254,11 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
               ? <>🔴 Start Streaming — Go Live on YouTube</>
               : 'Preparing camera…'}
         </button>
-        <div style={{ color:'#888', fontSize:11, textAlign:'center', marginTop:8 }}>
+        <div style={{ color:'#888', fontSize:'0.6875rem', textAlign:'center', marginTop:8 }}>
           {event?.eventTypeDisplay || event?.eventType} — {event?.hostName}
         </div>
       </div>
+      <style>{`@keyframes streamStartSpin { to { transform: rotate(360deg); } }`}</style>
     </div>,
     document.body
   );

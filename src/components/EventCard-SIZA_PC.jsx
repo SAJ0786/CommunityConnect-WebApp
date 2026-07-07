@@ -143,6 +143,9 @@ export default function EventCard({
       try { return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short' }); }
       catch { return d; }
     };
+    const reciterLines = (event.reciters || [])
+      .filter(reciter => reciter?.name?.trim())
+      .map(reciter => `🎙️ *${reciter.customType || reciter.type || 'Reciter'}:* ${reciter.name.trim()}`);
     window.__showShareSheet([
       `📅 *${displayType}*`,
       `🏠 *Host:* ${event.hostName}`,
@@ -152,7 +155,9 @@ export default function EventCard({
       sharePrivacy.showPhone && event.hostPhone ? `📞 *Phone:* ${event.hostPhone}` : '',
       hijriDisplay       ? `🌙 *Hijri:* ${hijriDisplay}`        : '',
       event.speakerName  ? `🎤 *Speaker:* ${event.speakerName}`  : '',
+      ...reciterLines,
       event.audienceType ? `👥 ${event.audienceType}`             : '',
+      event.notes?.trim() ? `📝 *Notes:* ${event.notes.trim()}` : '',
       '', '_Shared via Community Events Australia_', '_communityevents.siza.info_',
     ].filter(Boolean).join('\n'));
   };
@@ -162,7 +167,10 @@ export default function EventCard({
     if (isGuest) return;
     const q = encodeURIComponent(fullAddr || suburb);
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    window.open(isIOS ? `maps://maps.apple.com/?q=${q}` : `https://maps.google.com/?q=${q}`, '_blank');
+    const url = isIOS
+      ? `https://maps.apple.com/?daddr=${q}&dirflg=d`
+      : `https://www.google.com/maps/dir/?api=1&destination=${q}`;
+    window.location.assign(url);
   };
 
   // ── Small icon button ─────────────────────────────────────────────────────
@@ -219,14 +227,14 @@ export default function EventCard({
                 borderRadius:8, padding:'3px 6px', textAlign:'center',
                 boxShadow:'0 2px 8px rgba(0,0,0,0.18)', minWidth:34,
               }}>
-                <div style={{ fontSize:8, fontWeight:900, color:'var(--green,#16a34a)', letterSpacing:'0.04em' }}>{chip.mo}</div>
-                <div style={{ fontSize:16, fontWeight:900, color:'var(--text)', lineHeight:1 }}>{chip.dy}</div>
-                <div style={{ fontSize:7, fontWeight:700, color:'var(--muted)' }}>{chip.wd}</div>
+                <div style={{ fontSize:'0.5rem', fontWeight:900, color:'var(--green,#16a34a)', letterSpacing:'0.04em' }}>{chip.mo}</div>
+                <div style={{ fontSize:'1rem', fontWeight:900, color:'var(--text)', lineHeight:1 }}>{chip.dy}</div>
+                <div style={{ fontSize:'0.4375rem', fontWeight:700, color:'var(--muted)' }}>{chip.wd}</div>
               </div>
               {event.isLive && (
                 <div style={{
                   position:'absolute', bottom:0, left:0, right:0,
-                  background:'var(--red,#c0392b)', color:'white', fontSize:8,
+                  background:'var(--red,#c0392b)', color:'white', fontSize:'0.5rem',
                   fontWeight:900, textAlign:'center', padding:'2px 0',
                   animation:'pulse 2s infinite',
                 }}>🔴 LIVE</div>
@@ -238,16 +246,16 @@ export default function EventCard({
         {/* Body */}
         <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', justifyContent:'center' }}>
           {/* Title */}
-          <div style={{ fontWeight:800, fontSize:14, color:'var(--text)', fontFamily:'var(--font)',
+          <div style={{ fontWeight:800, fontSize:'0.875rem', color:'var(--text)', fontFamily:'var(--font)',
             whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginBottom:4 }}>
             {displayType} — {event.hostName}
           </div>
           {/* Meta */}
-          <div style={{ fontSize:11.5, color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)', marginBottom:2 }}>
+          <div style={{ fontSize:'0.71875rem', color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)', marginBottom:2 }}>
             ⏰ {event.startTime}{event.endTime ? ` – ${event.endTime}` : ''}
           </div>
           {suburb && (
-            <div style={{ fontSize:11.5, color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)', marginBottom:6,
+            <div style={{ fontSize:'0.71875rem', color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)', marginBottom:6,
               whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
               📍 {suburb}
             </div>
@@ -259,7 +267,7 @@ export default function EventCard({
               <WatchLiveButton event={event} isGuest={isGuest} onWatchStarted={onStreamStart} compact />
             ) : (
               <span className="pill-audience" style={{
-                fontSize:9.5, fontWeight:800, padding:'4px 10px', borderRadius:20,
+                fontSize:'0.59375rem', fontWeight:800, padding:'4px 10px', borderRadius:20,
                 background: normAudience(event.audienceType) === 'Family Event' ? '#dbeafe' : '#dcfce7',
                 color:      normAudience(event.audienceType) === 'Family Event' ? '#1d4ed8' : '#15803d',
                 letterSpacing:'0.02em', whiteSpace:'nowrap',
@@ -269,7 +277,7 @@ export default function EventCard({
             )}
             {onSaveToggle && (
               <span onClick={ev => { ev.stopPropagation(); if (!isGuest) onSaveToggle(event.id, !isSaved); }}
-                style={{ fontSize:18, color: isSaved ? 'var(--red,#c0392b)' : '#cbd5d3',
+                style={{ fontSize:'1.125rem', color: isSaved ? 'var(--red,#c0392b)' : '#cbd5d3',
                   cursor: isGuest ? 'default' : 'pointer', lineHeight:1, flexShrink:0 }}>
                 {isSaved ? '❤️' : '🤍'}
               </span>
@@ -279,7 +287,7 @@ export default function EventCard({
 
         {/* Chevron */}
         <span style={{
-          fontSize:10, color:'var(--teal,#0f766e)', flexShrink:0, alignSelf:'center',
+          fontSize:'0.625rem', color:'var(--teal,#0f766e)', flexShrink:0, alignSelf:'center',
           transition:'transform 0.3s', display:'inline-block',
           transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
         }}>▼</span>
@@ -302,7 +310,7 @@ export default function EventCard({
               <img src={posterSrc} alt="Event poster"
                 style={{ width:'100%', maxHeight:260, objectFit:'cover', display:'block' }} />
               <div style={{ position:'absolute', bottom:8, right:8,
-                background:'rgba(0,0,0,0.6)', color:'white', fontSize:11, fontWeight:700,
+                background:'rgba(0,0,0,0.6)', color:'white', fontSize:'0.6875rem', fontWeight:700,
                 padding:'4px 10px', borderRadius:20, display:'flex', alignItems:'center', gap:5 }}>
                 🔍 Tap to zoom
               </div>
@@ -312,47 +320,52 @@ export default function EventCard({
           {hijriDisplay && (
             <div style={{ marginBottom:8 }}>
               <span style={{ background:'#fef9e7', color:'#b7950b',
-                fontSize:11, padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
+                fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
                 🌙 {hijriDisplay}
               </span>
             </div>
           )}
           {/* Subject */}
           {event.eventSubject && (
-            <p style={{ margin:'0 0 6px', fontWeight:900, color:'var(--red)', fontSize:14, fontFamily:'var(--font)' }}>
+            <p style={{ margin:'0 0 6px', fontWeight:900, color:'var(--red)', fontSize:'0.875rem', fontFamily:'var(--font)' }}>
               {event.eventSubject}
             </p>
           )}
+          {event.notes?.trim() && (
+            <p style={{ margin:'0 0 8px', fontSize:'0.8125rem', whiteSpace:'pre-wrap', color:'var(--text)', fontWeight:600 }}>
+              <strong>Notes:</strong> {event.notes.trim()}
+            </p>
+          )}
           {/* Address */}
-          <p style={{ margin:'0 0 5px', fontSize:13, color:'var(--text)', fontWeight:600, fontFamily:'var(--font)' }}>
+          <p style={{ margin:'0 0 5px', fontSize:'0.8125rem', color:'var(--text)', fontWeight:600, fontFamily:'var(--font)' }}>
             📍 {addr}
             {isGuest && (
-              <span style={{ fontSize:11, color:'var(--muted)', marginLeft:4 }}>
+              <span style={{ fontSize:'0.6875rem', color:'var(--muted)', marginLeft:4 }}>
                 (login for full address)
               </span>
             )}
           </p>
           {/* Audience */}
           {event.audienceType && (
-            <p style={{ margin:'0 0 5px', fontSize:13, color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)' }}>
+            <p style={{ margin:'0 0 5px', fontSize:'0.8125rem', color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)' }}>
               👥 {event.audienceType}
             </p>
           )}
           {/* Speaker */}
           {showReligious && event.speakerName && (
-            <p style={{ margin:'0 0 4px', fontSize:13, color:'var(--text)', fontWeight:600, fontFamily:'var(--font)' }}>
+            <p style={{ margin:'0 0 4px', fontSize:'0.8125rem', color:'var(--text)', fontWeight:600, fontFamily:'var(--font)' }}>
               🎤 {event.speakerName}
             </p>
           )}
           {/* Reciters */}
           {showReligious && (event.reciters || []).filter(r => r.name).map((r, i) => (
-            <p key={i} style={{ margin:'0 0 4px', fontSize:13, color:'var(--text)', fontWeight:600, fontFamily:'var(--font)' }}>
-              🎵 {r.customType || r.type}: {r.name}
+            <p key={i} style={{ margin:'0 0 4px', fontSize:'0.8125rem', color:'var(--text)', fontWeight:600, fontFamily:'var(--font)' }}>
+              🎙️ {r.customType || r.type}: {r.name}
             </p>
           ))}
           {/* On behalf */}
           {event.isOnBehalfOf && (
-            <p style={{ margin:'0 0 4px', fontSize:12, color:'var(--muted)', fontFamily:'var(--font)' }}>
+            <p style={{ margin:'0 0 4px', fontSize:'0.75rem', color:'var(--muted)', fontFamily:'var(--font)' }}>
               Submitted by {event.submittedByName || event.createdByUserEmail}
             </p>
           )}
@@ -377,7 +390,7 @@ export default function EventCard({
             onClick={e => e.stopPropagation()}>
             {/* Share */}
             <button onClick={handleShare} style={{
-              fontSize:12, padding:'8px 14px', borderRadius:10, border:'none',
+              fontSize:'0.75rem', padding:'8px 14px', borderRadius:10, border:'none',
               background:'#25d366', color:'white', fontWeight:800, fontFamily:'var(--font)',
               display:'flex', alignItems:'center', gap:5, boxShadow:'0 2px 8px rgba(37,211,102,0.4)',
               cursor:'pointer',
@@ -386,7 +399,7 @@ export default function EventCard({
             </button>
             {/* Directions */}
             <button onClick={handleDirections} disabled={isGuest} style={{
-              fontSize:12, padding:'8px 14px', borderRadius:10, border:'none',
+              fontSize:'0.75rem', padding:'8px 14px', borderRadius:10, border:'none',
               background: isGuest ? 'var(--border)' : '#4285f4', color:'white',
               fontWeight:800, fontFamily:'var(--font)',
               display:'flex', alignItems:'center', gap:5,
@@ -398,7 +411,7 @@ export default function EventCard({
             {/* Edit */}
             {canEditEvent(profile, event, user?.uid) && (
               <button onClick={e => { e.stopPropagation(); onEdit(event); }} style={{
-                fontSize:12, padding:'8px 14px', borderRadius:10,
+                fontSize:'0.75rem', padding:'8px 14px', borderRadius:10,
                 background:'var(--red-l,#fdf2f1)', color:'var(--red)',
                 border:'1px solid var(--red-m,#fadbd8)', fontWeight:800, fontFamily:'var(--font)',
                 display:'flex', alignItems:'center', gap:5, boxShadow:'none', cursor:'pointer',
@@ -409,7 +422,7 @@ export default function EventCard({
             {/* Delete */}
             {canDeleteEvent(profile, event, user?.uid) && (
               <button onClick={e => { e.stopPropagation(); onDelete(event.id); }} style={{
-                fontSize:12, padding:'8px 12px', borderRadius:10,
+                fontSize:'0.75rem', padding:'8px 12px', borderRadius:10,
                 background:'var(--red-l,#fdf2f1)', color:'var(--red)',
                 border:'1px solid var(--red-m,#fadbd8)', fontWeight:800, fontFamily:'var(--font)',
                 display:'flex', alignItems:'center', gap:4, boxShadow:'none', cursor:'pointer',
@@ -420,7 +433,7 @@ export default function EventCard({
             {/* Copy */}
             {canCopy && onCopy && (
               <button onClick={e => { e.stopPropagation(); onCopy(event); }} style={{
-                fontSize:12, padding:'8px 14px', borderRadius:10,
+                fontSize:'0.75rem', padding:'8px 14px', borderRadius:10,
                 background:'var(--red-l,#fdf2f1)', color:'var(--red)',
                 border:'1px solid var(--red-m,#fadbd8)', fontWeight:800, fontFamily:'var(--font)',
                 display:'flex', alignItems:'center', gap:4, boxShadow:'none', cursor:'pointer',
@@ -447,7 +460,7 @@ export default function EventCard({
             style={{
               position:'absolute', top:16, right:16, width:44, height:44,
               borderRadius:'50%', background:'rgba(255,255,255,0.15)', color:'white',
-              border:'none', cursor:'pointer', fontSize:24, lineHeight:1,
+              border:'none', cursor:'pointer', fontSize:'1.5rem', lineHeight:1,
               display:'flex', alignItems:'center', justifyContent:'center',
             }}>×</button>
           <img src={posterSrc} alt="Event poster"

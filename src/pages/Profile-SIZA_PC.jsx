@@ -86,6 +86,7 @@ export default function Profile({ user, profile, setProfile }) {
       <div className="divider" />
 
       <h3>Help &amp; Policies</h3>
+      <p><a href="/shia-events-australia.html" target="_blank">Shia Majlis and Muharram programs across Australia</a></p>
       <p><a href="/docs/user-guide.html" target="_blank">📘 User Guide</a></p>
       <p><a href="/privacy.html"       target="_blank">Privacy Policy</a></p>
       <p><a href="/terms.html"         target="_blank">Terms of Use</a></p>

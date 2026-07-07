@@ -33,8 +33,8 @@ export default function BottomNav({ page, setPage, isGuest }) {
         padding: '6px 0', boxShadow: 'none',
         color: active ? 'var(--teal,#0f766e)' : 'var(--muted,#7a8a87)',
       }}>
-        <span style={{ fontSize: 19, lineHeight: 1 }}>{icon}</span>
-        <span style={{ fontSize: 9.5, fontWeight: active ? 800 : 600 }}>{label}</span>
+        <span style={{ fontSize: '1.1875rem', lineHeight: 1 }}>{icon}</span>
+        <span style={{ fontSize: '0.59375rem', fontWeight: active ? 800 : 600 }}>{label}</span>
       </button>
     );
   };
@@ -64,10 +64,10 @@ export default function BottomNav({ page, setPage, isGuest }) {
             background: 'linear-gradient(135deg,#16a34a,#0f766e)',
             border: '4px solid white', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'white', fontSize: 30, fontWeight: 300, lineHeight: 1,
+            color: 'white', fontSize: '1.875rem', fontWeight: 300, lineHeight: 1,
             boxShadow: '0 6px 18px rgba(22,163,74,0.45)', padding: 0,
           }}>+</button>
-          <span style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--teal,#0f766e)', marginTop: 1 }}>
+          <span style={{ fontSize: '0.59375rem', fontWeight: 800, color: 'var(--teal,#0f766e)', marginTop: 1 }}>
             Add Event
           </span>
         </div>

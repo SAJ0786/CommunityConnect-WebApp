@@ -27,7 +27,7 @@ export default function FixLive() {
 
   return (
     <div className="card" style={{ margin: 20, textAlign: 'center', padding: 30 }}>
-      <p style={{ fontSize: 16, fontWeight: 700 }}>{status}</p>
+      <p style={{ fontSize: '1rem', fontWeight: 700 }}>{status}</p>
     </div>
   );
 }

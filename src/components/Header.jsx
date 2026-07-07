@@ -10,6 +10,7 @@ const AUTH_ITEMS = [
   { key: 'series',     label: '📅 Add Series Events' },
   { key: 'bulkshare',  label: '📤 Bulk Share Events', adminOnly: true },
   { key: 'calendar',   label: '📅 Calendar' },
+  { key: 'streams',    label: '▶ Streamed Videos' },
   { key: 'profile',    label: '👤 Profile & Settings' },
 ];
 const ADMIN_ITEMS = [
@@ -18,31 +19,26 @@ const ADMIN_ITEMS = [
 const GUEST_ITEMS = [
   { key: 'home',   label: '🏠 Home' },
   { key: 'search', label: '🤖 AI Search' },
+  { key: 'streams', label: '▶ Streamed Videos' },
 ];
 
 // Minimal header shown on auth/login page
 function MinimalHeader() {
   return (
-    <header style={{
-      background: 'var(--bg,#f8f9fa)',
+    <header className="auth-header" style={{
+      background: 'var(--card,#fff)',
       padding: '14px 18px 12px',
-      display: 'flex', alignItems: 'center', gap: 14,
       borderBottom: '1px solid var(--border)',
       boxShadow: 'var(--shadow-sm)',
     }}>
-      <img src="/logo.png" alt="logo" style={{
-        width: 56, height: 56, borderRadius: 0,
-        background: 'transparent', objectFit: 'contain', flexShrink: 0,
-      }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--text)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>
-          Community Events
+      <img className="auth-header-logo" src="/logo.png" alt="Community Events Australia" />
+      <div className="auth-header-title-wrap">
+        <div className="auth-header-title">
+          Community Events Australia
         </div>
-        <div style={{ height: 2, background: 'var(--red,#c0392b)', borderRadius: 2, margin: '3px 0' }} />
-        <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
-          Create &nbsp;–&nbsp; Share &nbsp;–&nbsp; Connect
-        </div>
+        <div className="auth-header-rule" />
       </div>
+      <div className="auth-header-spacer" aria-hidden="true" />
     </header>
   );
 }
@@ -88,7 +84,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
   return (
     <>
       {/* ── Main header — hamburger left · brand center · bell right ── */}
-      <header style={{
+      <header className="app-header" style={{
         background: 'var(--bg,#f8f9fa)',
         padding: '12px 14px 10px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
@@ -118,7 +114,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
             filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.2))',
           }} />
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--text)',
+            <div className="app-header-brand-title" style={{ fontSize: '1.0625rem', fontWeight: 900, color: 'var(--text)',
               lineHeight: 1.1, letterSpacing: '-0.2px', whiteSpace: 'nowrap' }}>
               Community<br/>Events Australia
             </div>
@@ -131,12 +127,12 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
             background: 'white', border: '1px solid var(--border)',
             borderRadius: 12, width: 42, height: 42, flexShrink: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', boxShadow: 'none', padding: 0, position: 'relative', fontSize: 18,
+            cursor: 'pointer', boxShadow: 'none', padding: 0, position: 'relative', fontSize: '1.125rem',
           }}>
             🔔
             {tomorrowEvents.length > 0 && (
               <span style={{ position: 'absolute', top: -4, right: -4,
-                background: 'var(--red,#c0392b)', color: 'white', fontSize: 9, fontWeight: 800,
+                background: 'var(--red,#c0392b)', color: 'white', fontSize: '0.5625rem', fontWeight: 800,
                 minWidth: 16, height: 16, borderRadius: 8, display: 'flex',
                 alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
                 {tomorrowEvents.length}
@@ -154,12 +150,12 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
           boxShadow: '0 12px 40px rgba(0,0,0,0.22)', overflow: 'hidden',
         }}>
           <div style={{ padding: '13px 15px', borderBottom: '1px solid var(--border)',
-            fontWeight: 800, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            fontWeight: 800, fontSize: '0.8125rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             Tomorrow's Events
-            <span style={{ color: 'var(--teal)', fontSize: 12 }}>{tomorrowEvents.length}</span>
+            <span style={{ color: 'var(--teal)', fontSize: '0.75rem' }}>{tomorrowEvents.length}</span>
           </div>
           {tomorrowEvents.length === 0 ? (
-            <div style={{ padding: '18px 15px', fontSize: 12.5, color: 'var(--muted)', textAlign: 'center' }}>
+            <div style={{ padding: '18px 15px', fontSize: '0.78125rem', color: 'var(--muted)', textAlign: 'center' }}>
               No events scheduled for tomorrow.
             </div>
           ) : tomorrowEvents.map(e => (
@@ -169,11 +165,11 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
               <div style={{ width: 8, height: 8, borderRadius: '50%',
                 background: e.isLive ? 'var(--red)' : 'var(--green,#16a34a)', marginTop: 5, flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap',
+                <div style={{ fontSize: '0.78125rem', fontWeight: 700, whiteSpace: 'nowrap',
                   overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {(e.eventTypeDisplay || e.eventType)} — {e.hostName}
                 </div>
-                <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>
+                <div style={{ fontSize: '0.65625rem', color: 'var(--muted)' }}>
                   {e.startTime}{e.address?.suburb ? ` · ${e.address.suburb}` : ''}
                 </div>
               </div>
@@ -184,7 +180,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
 
       {/* ── Dropdown menu ── */}
       {open && (
-        <div ref={menuRef} style={{
+        <div ref={menuRef} className="app-menu-panel" style={{
           position: 'fixed', top: 82, left: 14, width: 250,
           background: 'var(--card,white)', border: '1px solid var(--border)',
           borderRadius: 20,
@@ -199,16 +195,16 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
           }}>
             {isGuest ? (
               <>
-                <div style={{ fontWeight: 900, fontSize: 14, color: 'var(--red)' }}>Guest User</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>Read-only access</div>
+                <div style={{ fontWeight: 900, fontSize: '0.875rem', color: 'var(--red)' }}>Guest User</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: 2 }}>Read-only access</div>
               </>
             ) : (
               <>
-                <div style={{ fontWeight: 900, fontSize: 14, color: 'var(--red)' }}>{displayName || email}</div>
-                {displayName && <div style={{ fontSize: 12, color: 'var(--muted)' }}>{email}</div>}
+                <div style={{ fontWeight: 900, fontSize: '0.875rem', color: 'var(--red)' }}>{displayName || email}</div>
+                {displayName && <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{email}</div>}
                 <div style={{ marginTop: 5 }}>
                   <span style={{
-                    fontSize: 11, fontWeight: 800, padding: '3px 9px', borderRadius: 99,
+                    fontSize: '0.6875rem', fontWeight: 800, padding: '3px 9px', borderRadius: 99,
                     background: 'var(--red-l,#fdf2f1)', color: 'var(--red)',
                     border: '1px solid var(--red-m,#fadbd8)',
                   }}>
@@ -222,13 +218,13 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
 
           {/* Nav items */}
           {items.map(item => (
-            <button key={item.key} onClick={() => navTo(item.key)} style={{
+            <button className="app-menu-item" key={item.key} onClick={() => navTo(item.key)} style={{
               display: 'block', width: '100%', textAlign: 'left',
               padding: '13px 18px', border: 'none',
               background: page === item.key ? 'var(--red-l,#fdf2f1)' : 'transparent',
               color: page === item.key ? 'var(--red)' : 'var(--text)',
               fontWeight: page === item.key ? 900 : 600,
-              fontSize: 14, cursor: 'pointer',
+              fontSize: '0.875rem', cursor: 'pointer',
               borderBottom: '1px solid var(--border)',
               boxShadow: 'none',
             }}>{item.label}</button>
@@ -240,7 +236,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
               display: 'block', width: '100%', textAlign: 'left',
               padding: '13px 18px', border: 'none',
               background: 'var(--red-l,#fdf2f1)', color: 'var(--red)',
-              fontWeight: 900, fontSize: 14, cursor: 'pointer', boxShadow: 'none',
+              fontWeight: 900, fontSize: '0.875rem', cursor: 'pointer', boxShadow: 'none',
             }}>🔑 Login / Create Account</button>
           )}
 
@@ -253,7 +249,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
               display: 'block', width: '100%', textAlign: 'left',
               padding: '13px 18px', border: 'none', background: 'transparent',
               color: 'var(--danger,#e74c3c)', fontWeight: 800,
-              fontSize: 14, cursor: 'pointer', boxShadow: 'none',
+              fontSize: '0.875rem', cursor: 'pointer', boxShadow: 'none',
             }}>🚪 Sign Out</button>
           )}
         </div>

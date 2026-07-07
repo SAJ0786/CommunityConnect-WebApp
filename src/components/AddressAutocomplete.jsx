@@ -20,7 +20,7 @@ function waitForGoogle(cb, attempts = 0) {
   setTimeout(() => waitForGoogle(cb, attempts + 1), 100);
 }
 
-export default function AddressAutocomplete({ value = {}, onChange, required }) {
+export default function AddressAutocomplete({ value = {}, onChange, required, invalid = false }) {
   const inputRef = useRef(null);
   const acRef    = useRef(null);
   const [ready,  setReady]  = useState(false);
@@ -81,19 +81,25 @@ export default function AddressAutocomplete({ value = {}, onChange, required }) 
       <input
         ref={inputRef}
         required={required}
+        aria-invalid={invalid}
         value={text}
-        onChange={e => { setText(e.target.value); setStatus(''); }}
+        onChange={e => {
+          const fullAddress = e.target.value;
+          setText(fullAddress);
+          setStatus('');
+          onChange({ ...value, fullAddress });
+        }}
         placeholder={ready ? 'Start typing address…' : 'Loading address search…'}
         disabled={!ready}
-        style={inputStyle}
+        style={{ ...inputStyle, borderColor: invalid ? '#b42318' : '#0f766e' }}
       />
       {status && (
-        <p style={{ fontSize: 12, color: 'var(--teal)', margin: '2px 0 8px 2px' }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--teal)', margin: '2px 0 8px 2px' }}>
           📍 {status}
         </p>
       )}
       {!status && (
-        <p style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 12px' }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--muted)', margin: '2px 0 12px' }}>
           Select an address from the dropdown. If it doesn't appear, type the full address.
         </p>
       )}
@@ -102,8 +108,8 @@ export default function AddressAutocomplete({ value = {}, onChange, required }) 
 }
 
 const inputStyle = {
-  width: '100%', padding: 13, fontSize: 15,
-  border: '1px solid var(--border)', borderRadius: 12,
+  width: '100%', padding: 13, fontSize: '0.9375rem',
+  border: '1px solid #0f766e', borderRadius: 12,
   background: 'white', marginTop: 6, marginBottom: 4,
   boxSizing: 'border-box', color: 'var(--text)'
 };
@@ -121,15 +127,15 @@ function ManualAddress({ value = {}, onChange, required }) {
         style={{ ...inputStyle, marginBottom: 12 }} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div>
-          <label style={{ fontWeight: 800, fontSize: 14 }}>Suburb *</label>
+          <label style={{ fontWeight: 800, fontSize: '0.875rem' }}>Suburb *</label>
           <input required value={value.suburb || ''} onChange={e => upd('suburb', e.target.value)} style={inputStyle} />
         </div>
         <div>
-          <label style={{ fontWeight: 800, fontSize: 14 }}>State *</label>
+          <label style={{ fontWeight: 800, fontSize: '0.875rem' }}>State *</label>
           <input required value={value.state || 'NSW'} onChange={e => upd('state', e.target.value)} style={inputStyle} />
         </div>
       </div>
-      <label style={{ fontWeight: 800, fontSize: 14 }}>Postcode *</label>
+      <label style={{ fontWeight: 800, fontSize: '0.875rem' }}>Postcode *</label>
       <input required value={value.postcode || ''} onChange={e => upd('postcode', e.target.value)} style={inputStyle} />
     </>
   );

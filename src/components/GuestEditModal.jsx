@@ -34,7 +34,7 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
         <div onClick={onClose} style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:300 }} />
         <div style={modalStyle}>
           <h3 style={{ margin:'0 0 12px', color:'#dc2626' }}>Cannot Edit</h3>
-          <p style={{ fontSize:14, color:'var(--muted)', margin:'0 0 16px' }}>
+          <p style={{ fontSize:'0.875rem', color:'var(--muted)', margin:'0 0 16px' }}>
             No contact information is stored for this event. Please contact an admin to make changes.
           </p>
           <button onClick={onClose} style={{ width:'100%' }}>Close</button>
@@ -83,7 +83,7 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
         {step === 'input' && (
           <>
             <h3 style={{ margin:'0 0 8px' }}>Edit Your Event</h3>
-            <p style={{ fontSize:13, color:'var(--muted)', margin:'0 0 16px', lineHeight:1.6 }}>
+            <p style={{ fontSize:'0.8125rem', color:'var(--muted)', margin:'0 0 16px', lineHeight:1.6 }}>
               Enter the phone number or email address stored on this event.
               We'll send you a verification code to confirm your identity.
             </p>
@@ -95,7 +95,7 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
               onKeyDown={e => e.key === 'Enter' && sendOtp()}
               autoFocus
             />
-            {error && <p style={{ color:'#dc2626', fontSize:13, margin:'4px 0' }}>{error}</p>}
+            {error && <p style={{ color:'#dc2626', fontSize:'0.8125rem', margin:'4px 0' }}>{error}</p>}
             <div style={{ display:'flex', gap:8, marginTop:12 }}>
               <button className="btn-muted" onClick={onClose} style={{ flex:1 }}>Cancel</button>
               <button onClick={sendOtp} disabled={busy} style={{ flex:2 }}>
@@ -108,7 +108,7 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
         {step === 'verify' && (
           <>
             <h3 style={{ margin:'0 0 8px' }}>Enter Verification Code</h3>
-            <p style={{ fontSize:13, color:'var(--muted)', margin:'0 0 16px', lineHeight:1.6 }}>
+            <p style={{ fontSize:'0.8125rem', color:'var(--muted)', margin:'0 0 16px', lineHeight:1.6 }}>
               A 6-digit code has been sent to <strong>{contact}</strong>.
               Enter it below to edit your event.
             </p>
@@ -121,14 +121,14 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
               inputMode="numeric"
               autoFocus
             />
-            {error && <p style={{ color:'#dc2626', fontSize:13, margin:'4px 0' }}>{error}</p>}
+            {error && <p style={{ color:'#dc2626', fontSize:'0.8125rem', margin:'4px 0' }}>{error}</p>}
             <div style={{ display:'flex', gap:8, marginTop:12 }}>
               <button className="btn-muted" onClick={() => setStep('input')} style={{ flex:1 }}>Back</button>
               <button onClick={verifyOtp} disabled={busy || otp.length !== 6} style={{ flex:2 }}>
                 {busy ? 'Verifying…' : '✅ Verify & Edit'}
               </button>
             </div>
-            <p style={{ fontSize:11, color:'var(--muted)', marginTop:8, textAlign:'center' }}>
+            <p style={{ fontSize:'0.6875rem', color:'var(--muted)', marginTop:8, textAlign:'center' }}>
               Code expires in 10 minutes. Check spam if not received.
             </p>
           </>
@@ -136,7 +136,7 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
 
         {step === 'done' && (
           <div style={{ textAlign:'center', padding:'8px 0' }}>
-            <div style={{ fontSize:40, marginBottom:8 }}>✅</div>
+            <div style={{ fontSize:'2.5rem', marginBottom:8 }}>✅</div>
             <p style={{ fontWeight:800, color:'var(--teal)' }}>Verified! Opening editor…</p>
           </div>
         )}

@@ -5,7 +5,7 @@ import { getHijriSettings } from '../services/settingsService';
 const DAYS = Array.from({ length: 30 }, (_, i) => i + 1);
 
 const SEL_STYLE = {
-  flex: 1, padding: '10px 8px', fontSize: 14,
+  flex: 1, padding: '10px 8px', fontSize: '0.875rem',
   border: '1px solid var(--border)', borderRadius: 10,
   background: 'white', color: 'var(--text)',
   marginTop: 0, marginBottom: 0,
@@ -138,12 +138,12 @@ export default function HijriDatePicker({ value = {}, onChange, overrides: overr
       </div>
 
       {gregResult && (
-        <p style={{ fontSize: 12, color: 'var(--teal)', margin: '2px 0 8px', fontWeight: 700 }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--teal)', margin: '2px 0 8px', fontWeight: 700 }}>
           📅 Gregorian: {gregResult}
         </p>
       )}
       {error && (
-        <p style={{ fontSize: 12, color: 'var(--danger)', margin: '2px 0 8px' }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--danger)', margin: '2px 0 8px' }}>
           ⚠️ {error}
         </p>
       )}

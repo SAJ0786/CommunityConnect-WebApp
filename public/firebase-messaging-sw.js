@@ -18,8 +18,8 @@ messaging.onBackgroundMessage(payload => {
   const { title, body, icon } = payload.notification || {};
   self.registration.showNotification(title || 'Community Events', {
     body:  body  || 'New community update',
-    icon:  icon  || '/icon-192.png',
-    badge: '/icon-192.png',
+    icon:  icon  || '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
   });
 });
 

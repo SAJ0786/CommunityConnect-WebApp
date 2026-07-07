@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 export default function ShareSheet() {
   const [msg,       setMsg]       = useState('');
   const [imageUrl,  setImageUrl]  = useState('');
+  const [shareTitle, setShareTitle] = useState('Share Event');
+  const [fileName, setFileName] = useState('event-poster.jpg');
   const [open,      setOpen]      = useState(false);
   const [copied,    setCopied]    = useState(false);
   const [sharing,   setSharing]   = useState(false);
@@ -14,6 +16,8 @@ export default function ShareSheet() {
       const image = typeof payload === 'string' ? ''      : (payload.imageUrl || '');
       setMsg(text);
       setImageUrl(image);
+      setShareTitle(typeof payload === 'string' ? 'Share Event' : (payload.title || 'Share Event'));
+      setFileName(typeof payload === 'string' ? 'event-poster.jpg' : (payload.fileName || 'event-poster.jpg'));
       setCopied(false);
       setSharing(false);
       setOpen(true);
@@ -42,7 +46,8 @@ export default function ShareSheet() {
       const resp = await fetch(imageUrl);
       const blob = await resp.blob();
       const ext  = blob.type.includes('png') ? 'png' : 'jpg';
-      const file = new File([blob], `event-poster.${ext}`, { type: blob.type });
+      const resolvedFileName = fileName.includes('.') ? fileName : `${fileName}.${ext}`;
+      const file = new File([blob], resolvedFileName, { type: blob.type });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], text: msg });
@@ -83,16 +88,16 @@ export default function ShareSheet() {
         {/* Handle */}
         <div style={{ width: 40, height: 4, borderRadius: 2, background: '#e5e7eb', margin: '0 auto 18px' }} />
 
-        <h3 style={{ margin: '0 0 16px', fontSize: 16, textAlign: 'center' }}>Share Event</h3>
+        <h3 style={{ margin: '0 0 16px', fontSize: '1rem', textAlign: 'center' }}>{shareTitle}</h3>
 
         {/* Poster preview */}
         {hasPoster && (
           <div style={{ marginBottom: 14, borderRadius: 12, overflow: 'hidden',
             border: '1px solid var(--border)', position: 'relative' }}>
-            <img src={imageUrl} alt="Event poster"
+            <img src={imageUrl} alt={`${shareTitle} poster`}
               style={{ width: '100%', maxHeight: 160, objectFit: 'cover', display: 'block' }} />
             <div style={{ position: 'absolute', bottom: 6, right: 8,
-              background: 'rgba(15,118,110,0.9)', color: 'white', fontSize: 10,
+              background: 'rgba(15,118,110,0.9)', color: 'white', fontSize: '0.625rem',
               fontWeight: 700, padding: '3px 9px', borderRadius: 20 }}>
               🖼 Poster will be shared
             </div>
@@ -113,8 +118,8 @@ export default function ShareSheet() {
                 background: 'linear-gradient(135deg,#0f766e,#16a34a)',
                 border: 'none', cursor: 'pointer',
               }}>
-              <span style={{ fontSize: 26 }}>{sharing ? '⏳' : '🖼'}</span>
-              <span style={{ fontSize: 10, fontWeight: 800, color: 'white', textAlign: 'center', lineHeight: 1.2 }}>
+              <span style={{ fontSize: '1.625rem' }}>{sharing ? '⏳' : '🖼'}</span>
+              <span style={{ fontSize: '0.625rem', fontWeight: 800, color: 'white', textAlign: 'center', lineHeight: 1.2 }}>
                 {sharing ? 'Sharing…' : 'Share with\nPoster'}
               </span>
             </button>
@@ -128,8 +133,8 @@ export default function ShareSheet() {
               padding: '12px 6px', borderRadius: 14, background: '#f0fdf4',
               border: '1px solid #bbf7d0', textDecoration: 'none', cursor: 'pointer',
             }}>
-            <span style={{ fontSize: 26 }}>💬</span>
-            <span style={{ fontSize: 10, fontWeight: 800, color: '#166534', textAlign: 'center', lineHeight: 1.2 }}>
+            <span style={{ fontSize: '1.625rem' }}>💬</span>
+            <span style={{ fontSize: '0.625rem', fontWeight: 800, color: '#166534', textAlign: 'center', lineHeight: 1.2 }}>
               WhatsApp{hasPoster ? '\n(text only)' : ''}
             </span>
           </a>
@@ -141,8 +146,8 @@ export default function ShareSheet() {
               padding: '12px 6px', borderRadius: 14, background: '#eff6ff',
               border: '1px solid #bfdbfe', textDecoration: 'none', cursor: 'pointer',
             }}>
-            <span style={{ fontSize: 26 }}>✉️</span>
-            <span style={{ fontSize: 10, fontWeight: 800, color: '#1e40af', textAlign: 'center', lineHeight: 1.2 }}>
+            <span style={{ fontSize: '1.625rem' }}>✉️</span>
+            <span style={{ fontSize: '0.625rem', fontWeight: 800, color: '#1e40af', textAlign: 'center', lineHeight: 1.2 }}>
               SMS{hasPoster ? '\n(text only)' : ''}
             </span>
           </a>
@@ -156,8 +161,8 @@ export default function ShareSheet() {
               border: `1px solid ${copied ? '#86efac' : '#e5e7eb'}`,
               cursor: 'pointer', outline: 'none',
             }}>
-            <span style={{ fontSize: 26 }}>{copied ? '✅' : '📋'}</span>
-            <span style={{ fontSize: 10, fontWeight: 800, textAlign: 'center', lineHeight: 1.2,
+            <span style={{ fontSize: '1.625rem' }}>{copied ? '✅' : '📋'}</span>
+            <span style={{ fontSize: '0.625rem', fontWeight: 800, textAlign: 'center', lineHeight: 1.2,
               color: copied ? '#166534' : '#374151' }}>
               {copied ? 'Copied!' : 'Copy Text'}
             </span>
@@ -166,7 +171,7 @@ export default function ShareSheet() {
 
         {/* Hint when poster sharing is available */}
         {hasPoster && hasNativeShare && (
-          <p style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center',
+          <p style={{ fontSize: '0.6875rem', color: 'var(--muted)', textAlign: 'center',
             margin: '0 0 12px', lineHeight: 1.4 }}>
             💡 Tap <strong>Share with Poster</strong> to send the image + text via any app
           </p>
@@ -175,7 +180,7 @@ export default function ShareSheet() {
         <button onClick={close} style={{
           width: '100%', padding: '13px', borderRadius: 14, border: 'none',
           background: '#f3f4f6', color: '#374151', fontWeight: 800,
-          fontSize: 14, cursor: 'pointer',
+          fontSize: '0.875rem', cursor: 'pointer',
         }}>
           Cancel
         </button>

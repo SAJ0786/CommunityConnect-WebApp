@@ -4,89 +4,76 @@ export async function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   try {
     const reg = await navigator.serviceWorker.register('/sw.js');
+    let pendingWorker = reg.waiting || null;
+    let refreshing = false;
+    let hasControlledPage = Boolean(navigator.serviceWorker.controller);
 
-    // If a new SW is already waiting (installed but not activated yet), show banner
-    if (reg.waiting) {
-      showUpdateBanner(reg.waiting);
-    }
+    const canActivate = () => {
+      try {
+        if (typeof window.__communityCanAutoUpdate === 'function') {
+          return window.__communityCanAutoUpdate();
+        }
+      } catch {}
+      return true;
+    };
+
+    const activateWhenSafe = () => {
+      if (!pendingWorker || !canActivate()) return;
+      pendingWorker.postMessage({ type: 'SKIP_WAITING' });
+      pendingWorker = null;
+    };
+
+    activateWhenSafe();
 
     // Watch for new SW being installed
     reg.addEventListener('updatefound', () => {
       const newWorker = reg.installing;
       if (!newWorker) return;
       newWorker.addEventListener('statechange', () => {
-        // Only show banner if there's an existing controller (not first install)
+        // Install silently, then activate as soon as the app is not streaming
+        // or editing data. First installs activate normally without a controller.
         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-          showUpdateBanner(newWorker);
+          pendingWorker = newWorker;
+          activateWhenSafe();
         }
       });
     });
 
-    // After user taps Update → SW calls skipWaiting → controller changes → reload
-    let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hasControlledPage) {
+        hasControlledPage = true;
+        return;
+      }
       if (!refreshing) {
         refreshing = true;
-        window.location.reload();
+        // Request a fresh app shell. The cache-busting query prevents an old
+        // HTML document from referencing asset files removed by this update.
+        window.location.replace(`/?app-update=${Date.now()}`);
       }
     });
 
-    // Check for updates in background (non-blocking)
+    // Check on launch, every 15 minutes, when returning to the app, and when
+    // connectivity is restored. A short poll activates any safely deferred update.
     reg.update().catch(() => {});
+    const updateTimer = window.setInterval(() => reg.update().catch(() => {}), 15 * 60 * 1000);
+    const activationTimer = window.setInterval(activateWhenSafe, 30 * 1000);
+    const checkOnResume = () => {
+      if (document.visibilityState === 'visible') {
+        reg.update().catch(() => {});
+        activateWhenSafe();
+      }
+    };
+    document.addEventListener('visibilitychange', checkOnResume);
+    window.addEventListener('online', checkOnResume);
+
+    window.addEventListener('pagehide', () => {
+      window.clearInterval(updateTimer);
+      window.clearInterval(activationTimer);
+      document.removeEventListener('visibilitychange', checkOnResume);
+      window.removeEventListener('online', checkOnResume);
+    }, { once: true });
 
   } catch (e) {
     console.warn('SW registration failed:', e.message);
   }
-}
-
-function showUpdateBanner(worker) {
-  // Don't show twice
-  if (document.getElementById('sw-update-banner')) return;
-
-  const banner = document.createElement('div');
-  banner.id = 'sw-update-banner';
-  banner.style.cssText = `
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    background: #0f766e; color: white; padding: 14px 20px;
-    border-radius: 14px; font-size: 14px; font-family: -apple-system, sans-serif;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.35); z-index: 99999;
-    display: flex; align-items: center; gap: 14px;
-    max-width: 360px; width: calc(100% - 32px);
-    border: 1px solid rgba(255,255,255,0.15);
-  `;
-
-  const text = document.createElement('span');
-  text.textContent = '🆕 New version available';
-  text.style.flex = '1';
-
-  const btn = document.createElement('button');
-  btn.textContent = 'Update';
-  btn.style.cssText = `
-    background: white; color: #0f766e; border: none;
-    border-radius: 8px; padding: 7px 16px;
-    font-weight: 700; cursor: pointer; font-size: 13px;
-    flex-shrink: 0; white-space: nowrap;
-  `;
-
-  const dismiss = document.createElement('button');
-  dismiss.textContent = '✕';
-  dismiss.style.cssText = `
-    background: transparent; color: rgba(255,255,255,0.7); border: none;
-    cursor: pointer; font-size: 16px; padding: 0 4px; flex-shrink: 0;
-  `;
-
-  btn.addEventListener('click', () => {
-    worker.postMessage({ type: 'SKIP_WAITING' });
-    banner.remove();
-  });
-
-  dismiss.addEventListener('click', () => banner.remove());
-
-  banner.appendChild(text);
-  banner.appendChild(btn);
-  banner.appendChild(dismiss);
-  document.body.appendChild(banner);
-
-  // Auto-dismiss after 60 seconds if ignored
-  setTimeout(() => { if (banner.parentNode) banner.remove(); }, 60000);
 }

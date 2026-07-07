@@ -59,6 +59,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
         </div>
       )}
 
+      {!loading && myEvents.length > 0 && <div className="desktop-page-event-grid">
       {myEvents.map(e => (
         <div key={e.id}>
           {/* Visibility toggle row */}
@@ -67,7 +68,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
             padding: '4px 4px 2px', flexWrap: 'wrap'
           }}>
             <span style={{
-              fontSize: 11, fontWeight: 600,
+              fontSize: '0.6875rem', fontWeight: 600,
               color: e.hidden ? '#c0392b' : '#27ae60',
             }}>
               {e.hidden ? '🙈 Hidden from home screen' : '👁 Visible on home screen'}
@@ -75,7 +76,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
             <button
               onClick={() => handleToggle(e)}
               style={{
-                fontSize: 11, padding: '3px 10px', borderRadius: 6,
+                fontSize: '0.6875rem', padding: '3px 10px', borderRadius: 6,
                 border: 'none', cursor: 'pointer', fontWeight: 600,
                 background: e.hidden ? '#c0392b' : '#f3f4f6',
                 color: e.hidden ? 'white' : '#7f8c8d',
@@ -100,6 +101,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
           </div>
         </div>
       ))}
+      </div>}
     </>
   );
 }

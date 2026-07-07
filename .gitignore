@@ -101,3 +101,8 @@ Thumbs.db
 .cache/
 .local/
 .npm-global/
+
+# Other
+output/
+tmp/
+IMG_3185.jpg

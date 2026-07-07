@@ -6,7 +6,12 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#0f766e",
+  "orientation": "any",
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "prefer_related_applications": false,
+  "background_color": "#f8faf9",
   "theme_color": "#0f766e",
   "lang": "en-AU",
   "dir": "ltr",

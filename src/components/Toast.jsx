@@ -47,10 +47,10 @@ export default function ToastContainer() {
             animation: 'slideUp .2s ease',
             pointerEvents: 'auto'
           }}>
-            <span style={{ fontWeight: 900, color: c.color, fontSize: 16, flexShrink: 0 }}>
+            <span style={{ fontWeight: 900, color: c.color, fontSize: '1rem', flexShrink: 0 }}>
               {c.icon}
             </span>
-            <span style={{ color: c.color, fontSize: 14, lineHeight: 1.5, fontWeight: 600 }}>
+            <span style={{ color: c.color, fontSize: '0.875rem', lineHeight: 1.5, fontWeight: 600 }}>
               {t.message}
             </span>
           </div>

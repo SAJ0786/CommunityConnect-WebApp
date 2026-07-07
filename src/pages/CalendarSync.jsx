@@ -53,7 +53,7 @@ export default function CalendarSync({ user }) {
         border: 'none', color: 'white'
       }}>
         <h2 style={{ color: 'white', margin: '0 0 6px' }}>Community Event Calendar</h2>
-        <p style={{ color: 'rgba(255,255,255,.88)', margin: 0, fontSize: 14 }}>
+        <p style={{ color: 'rgba(255,255,255,.88)', margin: 0, fontSize: '0.875rem' }}>
           Subscribe once — your calendar automatically stays up to date as events are added or removed.
         </p>
       </div>
@@ -80,11 +80,11 @@ export default function CalendarSync({ user }) {
               width: 48, height: 48, borderRadius: '50%', background: 'var(--card,white)',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
-              <span style={{ fontSize: 32, lineHeight: 1 }}>🍎</span>
+              <span style={{ fontSize: '2rem', lineHeight: 1 }}>🍎</span>
             </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--teal)' }}>iPhone / iPad</div>
-              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Apple Calendar</div>
+              <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--teal)' }}>iPhone / iPad</div>
+              <div style={{ fontSize: '0.6875rem', color: 'var(--muted)', marginTop: 2 }}>Apple Calendar</div>
             </div>
           </button>
 
@@ -103,11 +103,11 @@ export default function CalendarSync({ user }) {
                 width: 48, height: 48, borderRadius: '50%', background: 'var(--card,white)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
-                <span style={{ fontSize: 32, lineHeight: 1 }}>🤖</span>
+                <span style={{ fontSize: '2rem', lineHeight: 1 }}>🤖</span>
               </div>
               <div>
-                <div style={{ fontWeight: 900, fontSize: 15, color: 'var(--red,#c0392b)' }}>Android</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Google Calendar</div>
+                <div style={{ fontWeight: 900, fontSize: '0.9375rem', color: 'var(--red,#c0392b)' }}>Android</div>
+                <div style={{ fontSize: '0.6875rem', color: 'var(--muted)', marginTop: 2 }}>Google Calendar</div>
               </div>
             </button>
             <button
@@ -116,7 +116,7 @@ export default function CalendarSync({ user }) {
                 background: '#f3f4f6', color: 'var(--muted)',
                 border: '1px solid var(--border)',
                 borderRadius: 10, padding: '6px',
-                fontSize: 11, cursor: 'pointer'
+                fontSize: '0.6875rem', cursor: 'pointer'
               }}
             >
               Try alternate link if above fails
@@ -141,7 +141,7 @@ export default function CalendarSync({ user }) {
         </p>
         <div style={{
           background: 'var(--card,#f4f7f7)', borderRadius: 10, padding: '10px 14px',
-          fontSize: 12, wordBreak: 'break-all', color: 'var(--teal)',
+          fontSize: '0.75rem', wordBreak: 'break-all', color: 'var(--teal)',
           fontFamily: 'monospace', border: '1px solid var(--border)', marginBottom: 10
         }}>
           {feedUrl}
@@ -154,7 +154,7 @@ export default function CalendarSync({ user }) {
         </p>
         <div style={{
           background: 'var(--card,#f4f7f7)', borderRadius: 10, padding: '10px 14px',
-          fontSize: 11, wordBreak: 'break-all', color: 'var(--teal)',
+          fontSize: '0.6875rem', wordBreak: 'break-all', color: 'var(--teal)',
           fontFamily: 'monospace', border: '1px solid var(--border)', marginBottom: 10
         }}>
           {rawFeedUrl}
@@ -174,7 +174,7 @@ export default function CalendarSync({ user }) {
         <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
           {Object.entries(TAB_LABELS).map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)} style={{
-              flex: 1, padding: '8px 10px', fontSize: 13, borderRadius: 10,
+              flex: 1, padding: '8px 10px', fontSize: '0.8125rem', borderRadius: 10,
               border: '1px solid var(--border)',
               background: tab === key ? 'var(--teal)' : 'var(--card,white)',
               color: tab === key ? 'white' : 'var(--text)',
@@ -185,7 +185,7 @@ export default function CalendarSync({ user }) {
 
         <ol style={{ margin: 0, paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {inst[tab === 'android' ? 'android' : 'iphone'].map((step, i) => (
-            <li key={i} style={{ fontSize: 14, lineHeight: 1.6 }}>{step}</li>
+            <li key={i} style={{ fontSize: '0.875rem', lineHeight: 1.6 }}>{step}</li>
           ))}
         </ol>
 

@@ -14,8 +14,17 @@ Phone browser (MediaRecorder chunks)
          ↓  FFmpeg stdin pipe
   FFmpeg → libx264 + AAC → FLV
          ↓  RTMP
-  YouTube Live (1080p 30fps)
+  YouTube Live (adaptive 480p / 720p / 1080p at 30fps)
 ```
+
+The browser performs a short upload test before going live. During streaming it
+monitors WebSocket buffering and can step down video quality without changing the
+YouTube watch URL. Audio remains AAC 48 kHz at 192 kbps.
+
+Each session is protected by a random token whose SHA-256 hash is stored in
+Firestore. A connection lease prevents two relay connections from publishing
+into the same event. Unexpected disconnects remain resumable for 10 minutes;
+only the explicit End Stream action completes the broadcast.
 
 ---
 

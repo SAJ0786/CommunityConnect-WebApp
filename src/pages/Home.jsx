@@ -1,26 +1,61 @@
-import React, { useState, useEffect } from 'react';
+import React, { lazy, Suspense, useState, useEffect } from 'react';
 import EventCard from '../components/EventCard';
 import EventFilters from '../components/EventFilters';
-import { todayLocal } from '../services/dateUtils';
+import { localDateStr, todayLocal } from '../services/dateUtils';
+import CitySelector from '../components/CitySelector';
+import { DEFAULT_CITY, getEventMetroArea, normalizeCity } from '../utils/cities';
+
+const DesktopHome = lazy(() => import('../components/DesktopHome'));
 
 export default function Home({ events, user, profile, setPage, setEditingEvent,
   handleDelete, handleCopy, isGuest = false, loadEvents,
-  savedIds = [], onSaveToggle, onStreamStart, focusEventId, setFocusEventId }) {
+  savedIds = [], onSaveToggle, onStreamStart, focusEventId, setFocusEventId,
+  eventsLoading = false }) {
 
   const today    = todayLocal();
-  const upcoming = events.filter(e => e.eventDate >= today);
-
+  const yesterday = localDateStr(-1);
   const [filtered,   setFiltered]   = useState(null);
-  const [expandedId, setExpandedId] = useState('__first__');
-  const [refreshing, setRefreshing] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
+  const [visibleCount, setVisibleCount] = useState(12);
   const [query,      setQuery]      = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedCity, setSelectedCity] = useState(() => normalizeCity(profile?.defaultCity || DEFAULT_CITY));
+  const [wideLayout, setWideLayout] = useState(() => (
+    typeof window !== 'undefined' && window.matchMedia?.('(min-width: 700px) and (min-height: 600px)').matches
+  ));
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(min-width: 700px) and (min-height: 600px)');
+    if (!media) return undefined;
+    const update = event => setWideLayout(event.matches);
+    media.addEventListener?.('change', update);
+    return () => media.removeEventListener?.('change', update);
+  }, []);
+
+  useEffect(() => {
+    setFiltered(null);
+    setVisibleCount(12);
+  }, [selectedCity]);
+
+  useEffect(() => {
+    if (profile?.defaultCity) setSelectedCity(normalizeCity(profile.defaultCity));
+  }, [profile?.defaultCity]);
+
+  const cityEvents = events.filter(event => getEventMetroArea(event) === selectedCity);
+  // A stream may legitimately continue past midnight. Keep it reachable until
+  // the host ends it, even when its scheduled event date is now yesterday.
+  const upcoming = cityEvents.filter(e => e.isLive || e.eventDate >= today);
+  const filterableEvents = cityEvents.filter(e => e.isLive || e.eventDate >= yesterday);
 
   // When opened from a notification, expand + scroll to that event
   useEffect(() => {
     if (focusEventId) {
+      const focusedEvent = events.find(event => event.id === focusEventId);
+      if (focusedEvent) setSelectedCity(getEventMetroArea(focusedEvent));
       setExpandedId(focusEventId);
       setQuery('');
+      const focusedIndex = events.findIndex(event => event.id === focusEventId);
+      if (focusedIndex >= 0) setVisibleCount(count => Math.max(count, focusedIndex + 1));
       const t = setTimeout(() => {
         const el = document.getElementById(`event-${focusEventId}`);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -30,11 +65,9 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
     }
   }, [focusEventId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadEvents();
-    setRefreshing(false);
-  };
+  useEffect(() => {
+    setVisibleCount(12);
+  }, [query, filtered]);
 
   let displayed = filtered ?? upcoming;
   // Smart keyword filter — tokenizes the query, ignores filler words,
@@ -54,9 +87,11 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
 
     if (tokens.length) {
       displayed = displayed.filter(e => {
+        const suburb = e.address?.suburb || e.suburb || '';
+        const audience = e.audienceType || e.audience || '';
         const hay = [
           e.eventType, e.eventTypeDisplay, e.hostName, e.eventSubject,
-          e.address?.suburb, e.audienceType, e.speakerName,
+          suburb, e.address?.fullAddress, audience, e.speakerName,
         ].filter(Boolean).join(' ').toLowerCase();
 
         // Month name in query → match the event's month
@@ -72,7 +107,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
           // Audience synonyms (kids → "kids only", etc.)
           const aud = AUDIENCE_WORDS[tok];
           if (aud) {
-            const a = (e.audienceType || '').toLowerCase();
+            const a = audience.toLowerCase();
             if (aud === 'family') return a.includes('family') || a.includes('mixed');
             if (aud === 'kids')   return a.includes('kids');
             if (aud === 'ladies') return a.includes('ladies');
@@ -85,33 +120,49 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
     }
   }
 
+  const visibleDisplayed = displayed.slice(0, visibleCount);
+  const hasMore = visibleDisplayed.length < displayed.length;
+
+  if (eventsLoading && events.length === 0) {
+    return (
+      <div className="home-event-skeleton" role="status" aria-label="Loading events">
+        <div className="skeleton-line wide" />
+        {Array.from({ length: 4 }, (_, index) => <div className="skeleton-card" key={index} />)}
+      </div>
+    );
+  }
+
   return (
     <>
+      {!wideLayout && <div className="home-mobile-layout">
+      <div style={{ padding:'8px 16px 0' }}>
+        <CitySelector value={selectedCity} onChange={setSelectedCity} />
+      </div>
       {/* ── Search bar — single pill, filter icon inside (right) ── */}
       <div style={{ padding: '8px 16px 6px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8,
           background:'white', border:'1px solid var(--border,#e8edec)',
           borderRadius:14, height:46, padding:'0 8px 0 14px',
           boxShadow:'0 2px 8px rgba(0,0,0,0.03)' }}>
-          <span style={{ color:'var(--muted)', fontSize:16, flexShrink:0 }}>🔍</span>
+          <span style={{ color:'var(--muted)', fontSize:'1rem', flexShrink:0 }}>🔍</span>
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search events…"
-            style={{ flex:1, border:'none', outline:'none', fontSize:14,
+            style={{ flex:1, border:'none', outline:'none', fontSize:'0.875rem',
               background:'transparent', color:'var(--text)', minWidth:0 }} />
           {/* Clear (only when text present) */}
           {query.trim() && (
             <button aria-label="Clear search" onClick={() => setQuery('')}
-              style={{ width:24, height:24, borderRadius:'50%', border:'none',
+              style={{ width:40, height:40, borderRadius:'50%', border:'none',
                 cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center',
                 justifyContent:'center', padding:0, background:'#d6dedc',
-                color:'white', fontSize:13 }}>×</button>
+                color:'white', fontSize:'0.8125rem' }}>×</button>
           )}
           {/* Filter icon — inside the box on the right */}
           <button aria-label="Filters" onClick={() => setShowFilters(s => !s)} style={{
             background:'none', border:'none', cursor:'pointer', boxShadow:'none',
-            flexShrink:0, padding:'4px 2px', display:'flex', alignItems:'center',
+            flexShrink:0, minWidth:40, minHeight:40, padding:'4px 2px', display:'flex', alignItems:'center',
             justifyContent:'center',
             color: showFilters ? 'var(--teal,#0f766e)' : 'var(--muted)' }}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -128,37 +179,34 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
         background:'var(--bg,#f4f7f6)', paddingTop:4 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
           padding:'6px 18px 8px' }}>
-          <h2 style={{ margin:0, fontSize:18, fontWeight:800, color:'var(--text)' }}>
+          <h2 style={{ margin:0, fontSize:'1.125rem', fontWeight:800, color:'var(--text)' }}>
             Upcoming Events
           </h2>
-          <button onClick={handleRefresh} disabled={refreshing}
-            style={{ background:'none', border:'none', cursor:'pointer', boxShadow:'none',
-              color:'var(--teal,#0f766e)', fontSize:12, fontWeight:800, padding:'0 4px' }}>
-            {refreshing ? '⏳' : '🔄'} Refresh
-          </button>
         </div>
       </div>
 
       {/* ── Filters (toggle from filter icon) ── */}
-      {showFilters && <EventFilters events={upcoming} onChange={setFiltered} />}
+      {showFilters && (
+        <EventFilters key={selectedCity} events={filterableEvents} onChange={setFiltered} upcomingOnlyOnEmpty />
+      )}
 
       {/* ── Notices ── */}
-      <div style={{ padding:'0 16px 10px', fontSize:11, color:'var(--muted)', fontWeight:600, lineHeight:1.6 }}>
+      <div style={{ padding:'0 16px 10px', fontSize:'0.6875rem', color:'var(--muted)', fontWeight:600, lineHeight:1.6 }}>
         🌙 <em>Hijri dates subject to moon sighting.</em>
         &nbsp;·&nbsp;
         ℹ️ <em>Events are user-submitted — verify with hosts directly.</em>
       </div>
 
-      {/* ── Login change notice — shown to guests and logged-in users briefly ── */}
+      {/* ── Guest account benefits ── */}
       {isGuest && (
         <div style={{
           margin: '0 16px 12px', padding: '10px 14px', borderRadius: 12,
-          background: '#fefce8', border: '1px solid #fde68a',
-          fontSize: 12, color: '#92400e', lineHeight: 1.6,
+          background: '#eaf7f5', border: '1px solid #acd9d5',
+          fontSize: '0.75rem', color: '#09645f', lineHeight: 1.6,
         }}>
-          📢 <strong>Login update:</strong> Google and Microsoft sign-in have been removed.
-          Please use your mobile number to sign in. If you previously used Google or Microsoft,
-          enter the <strong>same email address</strong> when prompted — we'll connect you to your existing account automatically.
+          🔐 <strong>Sign in for full event details and app benefits.</strong>{' '}
+          Use your mobile number to access private-event contact details and directions, add and manage events,
+          save favourites, receive reminders and use your profile.
         </div>
       )}
 
@@ -170,7 +218,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
       )}
 
       {/* ── Events list (scrolls under the pinned block) ── */}
-      {displayed.map((e, idx) => (
+      {visibleDisplayed.map((e, idx) => (
         <div id={`event-${e.id}`} key={e.id}>
         <EventCard event={e} user={user} profile={profile}
           onEdit={ev => { setEditingEvent(ev); setPage('edit'); }}
@@ -181,9 +229,16 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
           savedIds={savedIds}
           onSaveToggle={isGuest ? null : onSaveToggle}
           onStreamStart={onStreamStart}
+          imagePriority={idx === 0}
         />
         </div>
       ))}
+
+      {hasMore && (
+        <button className="load-more-events" onClick={() => setVisibleCount(count => count + 12)}>
+          Show more events
+        </button>
+      )}
 
       <div style={{ height: 88 }} />
 
@@ -197,11 +252,28 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
         boxShadow:'0 -2px 12px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.1)',
         border:'1px solid var(--border,#e8edec)' }}>
         <span style={{ display:'flex', alignItems:'center', gap:10,
-          fontWeight:900, fontSize:15, color:'var(--text,#1a2b29)' }}>
+          fontWeight:900, fontSize:'0.9375rem', color:'var(--text,#1a2b29)' }}>
           📅 <span>View Calendar</span>
         </span>
-        <span style={{ fontSize:20, color:'var(--teal,#0f766e)', fontWeight:800 }}>›</span>
+        <span style={{ fontSize:'1.25rem', color:'var(--teal,#0f766e)', fontWeight:800 }}>›</span>
       </div>
+      </div>}
+
+      {wideLayout && <div className="home-desktop-layout">
+        <Suspense fallback={<div className="home-event-skeleton"><div className="skeleton-card" /></div>}>
+        <DesktopHome
+          events={cityEvents} displayed={visibleDisplayed} totalCount={displayed.length}
+          hasMore={hasMore} onLoadMore={() => setVisibleCount(count => count + 12)}
+          filterableEvents={filterableEvents}
+          filtered={filtered} setFiltered={setFiltered} query={query} setQuery={setQuery}
+          expandedId={expandedId} setExpandedId={setExpandedId}
+          user={user} profile={profile} setPage={setPage} setEditingEvent={setEditingEvent}
+          handleDelete={handleDelete} handleCopy={handleCopy} isGuest={isGuest}
+          savedIds={savedIds} onSaveToggle={onSaveToggle} onStreamStart={onStreamStart}
+          selectedCity={selectedCity} onCityChange={setSelectedCity}
+        />
+        </Suspense>
+      </div>}
     </>
   );
 }

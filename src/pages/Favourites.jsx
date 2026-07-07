@@ -34,7 +34,7 @@ export default function Favourites({ user, profile, events, setPage, setEditingE
           </p>
         </div>
         {saved.length > 0 && (
-          <span style={{ fontSize:13, color:'var(--teal)', fontWeight:700 }}>
+          <span style={{ fontSize:'0.8125rem', color:'var(--teal)', fontWeight:700 }}>
             {saved.length}
           </span>
         )}
@@ -48,7 +48,7 @@ export default function Favourites({ user, profile, events, setPage, setEditingE
 
       {!loading && saved.length === 0 && (
         <div className="card center" style={{ padding:32 }}>
-          <div style={{ fontSize:48, marginBottom:12 }}>⭐</div>
+          <div style={{ fontSize:'3rem', marginBottom:12 }}>⭐</div>
           <h3 style={{ margin:'0 0 8px', color:'var(--text)' }}>No saved events yet</h3>
           <p className="small" style={{ color:'var(--muted)', marginBottom:16 }}>
             Tap the ⭐ button on any event card to save it here for quick access.
@@ -57,6 +57,7 @@ export default function Favourites({ user, profile, events, setPage, setEditingE
         </div>
       )}
 
+      {!loading && saved.length > 0 && <div className="desktop-page-event-grid">
       {saved.map(e => (
         <div key={e.id}>
           {/* Unsave button */}
@@ -64,7 +65,7 @@ export default function Favourites({ user, profile, events, setPage, setEditingE
             <button
               onClick={() => handleUnsave(e.id)}
               style={{
-                fontSize:11, padding:'3px 10px', borderRadius:6,
+                fontSize:'0.6875rem', padding:'3px 10px', borderRadius:6,
                 border:'none', cursor:'pointer', fontWeight:600,
                 background:'#fef3c7', color:'#92400e',
               }}>
@@ -87,6 +88,7 @@ export default function Favourites({ user, profile, events, setPage, setEditingE
           />
         </div>
       ))}
+      </div>}
     </>
   );
 }

@@ -88,10 +88,10 @@ export default function CalendarView({ events = [], user, profile, setPage,
         <div style={{ display:'flex', alignItems:'center', gap:10, padding:'4px 16px 12px' }}>
           <button onClick={() => setShowSync(false)} style={{
             width:40, height:40, borderRadius:12, background:'var(--teal,#0f766e)',
-            border:'none', cursor:'pointer', color:'white', fontSize:22, fontWeight:800,
+            border:'none', cursor:'pointer', color:'white', fontSize:'1.375rem', fontWeight:800,
             display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1,
             boxShadow:'0 2px 8px rgba(15,118,110,0.3)' }}>‹</button>
-          <h2 style={{ margin:0, fontSize:18, fontWeight:800 }}>Sync Calendar</h2>
+          <h2 style={{ margin:0, fontSize:'1.125rem', fontWeight:800 }}>Sync Calendar</h2>
         </div>
         <CalendarSync user={user} />
       </div>
@@ -99,12 +99,12 @@ export default function CalendarView({ events = [], user, profile, setPage,
   }
 
   return (
-    <div style={{ padding: '8px 0 16px' }}>
+    <div className="calendar-page" style={{ padding: '8px 0 16px' }}>
 
       {/* Header: title */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
         padding:'4px 16px 12px' }}>
-        <h2 style={{ margin:0, fontSize:18, fontWeight:800 }}>Calendar</h2>
+        <h2 style={{ margin:0, fontSize:'1.125rem', fontWeight:800 }}>Calendar</h2>
       </div>
 
       {/* Prominent Sync button */}
@@ -112,7 +112,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
         margin:'0 16px 14px', width:'calc(100% - 32px)',
         background:'linear-gradient(120deg,#0f766e,#0b5d57)', color:'white',
         border:'none', borderRadius:14, padding:'13px', cursor:'pointer',
-        fontSize:14, fontWeight:800, display:'flex', alignItems:'center',
+        fontSize:'0.875rem', fontWeight:800, display:'flex', alignItems:'center',
         justifyContent:'center', gap:8, boxShadow:'0 4px 14px rgba(15,118,110,0.3)' }}>
         🔄 Sync to My Calendar
       </button>
@@ -122,7 +122,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
         padding:3, margin:'0 16px 14px' }}>
         {['month','week'].map(v => (
           <button key={v} onClick={() => setView(v)} style={{
-            flex:1, textAlign:'center', fontSize:13, fontWeight:700, padding:8,
+            flex:1, textAlign:'center', fontSize:'0.8125rem', fontWeight:700, padding:8,
             borderRadius:8, border:'none', cursor:'pointer',
             background: view===v ? 'white' : 'transparent',
             color: view===v ? 'var(--teal,#0f766e)' : 'var(--muted)',
@@ -138,7 +138,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
             padding:14, border:'1px solid var(--border,#e8edec)' }}>
             {/* Month nav */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
-              <b style={{ fontSize:15, fontWeight:800 }}>{MONTHS[cursor.getMonth()]} {cursor.getFullYear()}</b>
+              <b style={{ fontSize:'0.9375rem', fontWeight:800 }}>{MONTHS[cursor.getMonth()]} {cursor.getFullYear()}</b>
               <div style={{ display:'flex', gap:6 }}>
                 <button onClick={() => stepMonth(-1)} style={navBtn}>‹</button>
                 <button onClick={() => stepMonth(1)} style={navBtn}>›</button>
@@ -146,7 +146,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
             </div>
             {/* DOW header */}
             <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', marginBottom:6 }}>
-              {DOW.map((d,i) => <span key={i} style={{ textAlign:'center', fontSize:9,
+              {DOW.map((d,i) => <span key={i} style={{ textAlign:'center', fontSize:'0.5625rem',
                 fontWeight:800, color:'var(--muted)' }}>{d}</span>)}
             </div>
             {/* Days */}
@@ -161,7 +161,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
                   <button key={i} onClick={() => setSelected(ds)} style={{
                     aspectRatio:'1', borderRadius:9, border:'none', cursor:'pointer',
                     display:'flex', flexDirection:'column', alignItems:'center',
-                    justifyContent:'center', gap:2, position:'relative', fontSize:11,
+                    justifyContent:'center', gap:2, position:'relative', fontSize:'0.6875rem',
                     fontWeight: isToday ? 800 : 600,
                     background: isSel ? 'var(--teal,#0f766e)' : isToday ? '#e6f4f1'
                       : evs.length ? '#f0faf8' : 'transparent',
@@ -183,13 +183,13 @@ export default function CalendarView({ events = [], user, profile, setPage,
           </div>
 
           {/* Selected day events */}
-          <div style={{ padding:'16px 18px 6px', fontSize:12, fontWeight:800, color:'var(--muted)' }}>
+          <div style={{ padding:'16px 18px 6px', fontSize:'0.75rem', fontWeight:800, color:'var(--muted)' }}>
             {new Date(selected + 'T00:00:00').toLocaleDateString('en-AU',
               { weekday:'long', day:'numeric', month:'long' }).toUpperCase()}
             {' · '}{selectedEvents.length} EVENT{selectedEvents.length !== 1 ? 'S' : ''}
           </div>
           {selectedEvents.length === 0
-            ? <p style={{ padding:'4px 18px', color:'var(--muted)', fontSize:13 }}>No events on this day.</p>
+            ? <p style={{ padding:'4px 18px', color:'var(--muted)', fontSize:'0.8125rem' }}>No events on this day.</p>
             : selectedEvents.map(renderCard)}
         </>
       )}
@@ -200,7 +200,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
             padding:'0 18px 12px' }}>
             <button onClick={() => stepWeek(-1)} style={navBtn}>‹</button>
-            <b style={{ fontSize:14, fontWeight:800 }}>
+            <b style={{ fontSize:'0.875rem', fontWeight:800 }}>
               {weekDays[0].toLocaleDateString('en-AU',{day:'numeric',month:'short'})}
               {' – '}
               {weekDays[6].toLocaleDateString('en-AU',{day:'numeric',month:'short'})}
@@ -215,11 +215,11 @@ export default function CalendarView({ events = [], user, profile, setPage,
             return (
               <div key={i} style={{ padding:'0 16px', marginBottom:4 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 2px 8px' }}>
-                  <span style={{ fontSize:13, fontWeight:800,
+                  <span style={{ fontSize:'0.8125rem', fontWeight:800,
                     color: isWeekend ? 'var(--teal,#0f766e)' : 'var(--text)' }}>
                     {d.toLocaleDateString('en-AU',{weekday:'short', day:'numeric', month:'short'})}
                   </span>
-                  <span style={{ fontSize:10, color:'var(--muted)' }}>
+                  <span style={{ fontSize:'0.625rem', color:'var(--muted)' }}>
                     · {evs.length ? `${evs.length} event${evs.length!==1?'s':''}` : 'No events'}
                     {isWeekend && evs.length ? ' · weekend' : ''}
                   </span>
@@ -236,7 +236,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
 
 const navBtn = {
   width:40, height:40, borderRadius:12, background:'var(--teal,#0f766e)',
-  border:'none', cursor:'pointer', fontSize:22, fontWeight:800, color:'white',
+  border:'none', cursor:'pointer', fontSize:'1.375rem', fontWeight:800, color:'white',
   display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1,
   boxShadow:'0 2px 8px rgba(15,118,110,0.3)',
 };

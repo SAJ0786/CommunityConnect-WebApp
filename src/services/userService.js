@@ -10,7 +10,8 @@ import { ROLES } from '../utils/constants';
 
 // ── IMPORTANT: Set your Super Admin email here ─────────────────────────────────
 // On first login this email will automatically get superAdmin role.
-const SUPER_ADMIN_EMAIL = 'sajjadzaheer@gmail.com';
+const SUPER_ADMIN_EMAILS = ['sajjadzaheer@gmail.com', 'communityeventstester@outlook.com'];
+const isSuperAdminEmail = email => SUPER_ADMIN_EMAILS.includes(String(email || '').trim().toLowerCase());
 
 export async function ensureUserProfile(user, extraData = {}) {
   const ref  = doc(db, 'users', user.uid);
@@ -29,6 +30,7 @@ export async function ensureUserProfile(user, extraData = {}) {
         phone:     user.phoneNumber || '',
         updatedAt: serverTimestamp(),
         linkedFrom: extraData._linkedFrom,
+        walkthroughCompleted: oldData.walkthroughCompleted ?? true,
       };
       // Write new profile under phone UID
       await setDoc(ref, merged, { merge: true });
@@ -44,7 +46,7 @@ export async function ensureUserProfile(user, extraData = {}) {
 
   if (!snap.exists()) {
     const profileEmail = (extraData.email || user.email || '').trim().toLowerCase();
-    const role = profileEmail === SUPER_ADMIN_EMAIL ? ROLES.SUPER_ADMIN : ROLES.USER;
+    const role = isSuperAdminEmail(profileEmail) ? ROLES.SUPER_ADMIN : ROLES.USER;
     // extraData contains name/email from registration form — use them first
     const p = {
       fullName: extraData.fullName || user.displayName || user.email?.split('@')[0] || '',
@@ -54,10 +56,12 @@ export async function ensureUserProfile(user, extraData = {}) {
       role,
       isActive: true,
       reminderEmailEnabled: true,
+      adminAlertEmailEnabled: true,
       privacyAccepted: true,
       privacyAcceptedAt: serverTimestamp(),
       termsAccepted: true,
       termsAcceptedAt: serverTimestamp(),
+      walkthroughCompleted: false,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
@@ -76,6 +80,9 @@ export async function ensureUserProfile(user, extraData = {}) {
     updates.emailLower = String(existingData.email).trim().toLowerCase();
   }
   if (!existingData.fullName && extraData.fullName) updates.fullName = extraData.fullName;
+  // Profiles created before account-level tour tracking are existing users.
+  // Mark them complete so updates or new devices never replay the tour.
+  if (existingData.walkthroughCompleted === undefined) updates.walkthroughCompleted = true;
   if (Object.keys(updates).length > 0) {
     await updateDoc(ref, { ...updates, updatedAt: serverTimestamp() });
     return { ...existingData, ...updates };
@@ -84,7 +91,7 @@ export async function ensureUserProfile(user, extraData = {}) {
   // If existing user with superAdmin email somehow got downgraded, fix it
   const data = existingData;
   const existingEmail = String(data.email || user.email || '').trim().toLowerCase();
-  if (existingEmail === SUPER_ADMIN_EMAIL && data.role !== ROLES.SUPER_ADMIN) {
+  if (isSuperAdminEmail(existingEmail) && data.role !== ROLES.SUPER_ADMIN) {
     await updateDoc(ref, { role: ROLES.SUPER_ADMIN, updatedAt: serverTimestamp() });
     return { ...data, role: ROLES.SUPER_ADMIN };
   }
@@ -119,8 +126,25 @@ export async function updateReminderPreference(uid, enabled) {
   });
 }
 
+export async function updateAdminAlertPreference(uid, enabled) {
+  return updateDoc(doc(db, 'users', uid), {
+    adminAlertEmailEnabled: enabled,
+    updatedAt: serverTimestamp()
+  });
+}
+
 export async function updateProfile(uid, data) {
   return updateDoc(doc(db, 'users', uid), { ...data, updatedAt: serverTimestamp() });
+}
+
+export async function updateUserContactProfile(targetUid, fullName, email) {
+  const fns = getFunctions(getApp(), 'australia-southeast1');
+  const result = await httpsCallable(fns, 'updateUserContactProfile')({
+    targetUid,
+    fullName,
+    email,
+  });
+  return result.data?.profile;
 }
 
 export async function getSavedEvents(uid) {
@@ -140,8 +164,8 @@ export async function toggleSavedEvent(uid, eventId, save) {
   return updateDoc(ref, { savedEvents: updated, updatedAt: serverTimestamp() });
 }
 
-export async function deleteMyAccountAndEvents(currentUser, keepEvents = false) {
+export async function deleteMyAccountAndEvents(currentUser, archiveEventsNow = false) {
   const fns = getFunctions(getApp(), 'australia-southeast1');
-  await httpsCallable(fns, 'deleteUserData')({ keepEvents });
+  await httpsCallable(fns, 'deleteUserData')({ archiveEventsNow });
   await deleteUser(currentUser);
 }

@@ -1,16 +1,30 @@
 const CHUNK_INTERVAL_MS = 1000;
-const STREAM_WIDTH = 1280;
-const STREAM_HEIGHT = 720;
-const VIDEO_BITRATE = 4000000;
-const AUDIO_BITRATE = 192000;
+const AUDIO_BITRATE = 128000;
+const IS_ANDROID = /android/i.test(navigator.userAgent);
+const RELAY_HTTP_URL = import.meta.env.VITE_NATIVE_STREAM_RELAY_HTTP_URL
+  || 'https://native-stream-relay-209723097611.australia-southeast1.run.app';
+
+export const QUALITY_PROFILES = {
+  '1080p': { label: '1080p HD', width: 1920, height: 1080, videoBitrate: 6000000 },
+  '720p':  { label: '720p HD',  width: 1280, height: 720,  videoBitrate: 4500000 },
+  '480p':  { label: '480p',     width: 854,  height: 480,  videoBitrate: 2200000 },
+};
+const QUALITY_ORDER = ['480p', '720p', '1080p'];
 
 function getBestMimeType() {
-  const candidates = [
-    'video/webm;codecs=h264,opus',
-    'video/webm;codecs=vp8,opus',
-    'video/webm;codecs=vp9,opus',
-    'video/webm',
-  ];
+  const candidates = IS_ANDROID
+    ? [
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=h264,opus',
+        'video/webm',
+      ]
+    : [
+        'video/webm;codecs=h264,opus',
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus',
+        'video/webm',
+      ];
 
   for (const mime of candidates) {
     if (MediaRecorder.isTypeSupported(mime)) return mime;
@@ -56,6 +70,17 @@ export class NativeStreamer {
     this._physicalOrientation = null;
     this._lockedSourceIsLandscape = null;
     this._lastOrientationMismatch = false;
+    this.qualityProfile = '720p';
+    this.audioMode = 'natural';
+    this.uploadMbps = null;
+    this._qualityChanging = false;
+    this._congestedChecks = 0;
+    this._stableChecks = 0;
+    this._wsUrl = '';
+    this._streamToken = '';
+    this._rtmpUrl = 'OAUTH';
+    this._reconnecting = false;
+    this._reconnectStartedAt = 0;
 
     this._onVisibilityChange = () => {
       if (document.visibilityState === 'visible' && this.active) this._acquireWakeLock();
@@ -112,6 +137,46 @@ export class NativeStreamer {
     this.onStatus(`Stream orientation locked to ${this._streamOrientationLock}`);
   }
 
+  setAudioMode(mode) {
+    this.audioMode = mode === 'speech' ? 'speech' : 'natural';
+  }
+
+  setQualityProfile(profile) {
+    if (QUALITY_PROFILES[profile]) this.qualityProfile = profile;
+  }
+
+  async detectQuality() {
+    const bytes = 512 * 1024;
+    const body = new Uint8Array(bytes);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    const started = performance.now();
+    try {
+      const response = await fetch(`${RELAY_HTTP_URL}/speed-test`, {
+        method: 'POST', body, signal: controller.signal,
+        headers: { 'Content-Type': 'application/octet-stream' },
+      });
+      if (!response.ok) throw new Error(`Upload test failed (${response.status})`);
+      const seconds = Math.max((performance.now() - started) / 1000, 0.1);
+      this.uploadMbps = (bytes * 8) / seconds / 1000000;
+      this.qualityProfile = this.uploadMbps >= 8 ? '1080p' : this.uploadMbps >= 5.5 ? '720p' : '480p';
+    } catch (error) {
+      console.warn('[NativeStream] Upload test unavailable:', error.message);
+      const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      const effective = connection?.effectiveType;
+      this.qualityProfile = effective === '4g' ? '720p' : effective === '3g' || effective === '2g' ? '480p' : '720p';
+    } finally {
+      clearTimeout(timer);
+    }
+    // A 1080p canvas plus WebM encoding is too CPU-intensive for many Android
+    // WebViews and causes blocky frames even on a fast network. The relay still
+    // outputs a clean YouTube-compatible frame, while Android captures at 720p.
+    if (IS_ANDROID && this.qualityProfile === '1080p') this.qualityProfile = '720p';
+    const selected = QUALITY_PROFILES[this.qualityProfile];
+    this.onStatus(`Network quality: ${this.uploadMbps ? `${this.uploadMbps.toFixed(1)} Mbps - ` : ''}${selected.label}`);
+    return { profile: this.qualityProfile, uploadMbps: this.uploadMbps, ...selected };
+  }
+
   async requestOrientationPermission() {
     const orientationEvent = window.DeviceOrientationEvent;
     if (typeof orientationEvent?.requestPermission !== 'function') return true;
@@ -147,21 +212,23 @@ export class NativeStreamer {
     this.onStatus('Requesting camera access...');
     this.currentFacingMode = facingMode;
     const preferPortrait = this._forcedStreamOrientation === 'portrait';
+    const quality = QUALITY_PROFILES[this.qualityProfile];
+    const speechMode = this.audioMode === 'speech';
 
     const constraints = {
       video: {
         facingMode,
-        width: { ideal: preferPortrait ? 720 : 1280 },
-        height: { ideal: preferPortrait ? 1280 : 720 },
+        width: { ideal: preferPortrait ? quality.height : quality.width, min: preferPortrait ? 540 : 960 },
+        height: { ideal: preferPortrait ? quality.width : quality.height, min: preferPortrait ? 960 : 540 },
         aspectRatio: { ideal: preferPortrait ? 9 / 16 : 16 / 9 },
         frameRate: { ideal: 30, min: 15 },
       },
       audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
+        echoCancellation: speechMode,
+        noiseSuppression: speechMode,
+        autoGainControl: speechMode,
         sampleRate: { ideal: 48000 },
-        channelCount: { ideal: 2 },
+        channelCount: { ideal: 1 },
         latency: { ideal: 0 },
       },
     };
@@ -184,22 +251,87 @@ export class NativeStreamer {
     return this.requestCamera(facingMode);
   }
 
-  async connect(wsUrl) {
+  _hasLiveCamera() {
+    if (!this.stream?.active) return false;
+    const videoTrack = this.stream.getVideoTracks()[0];
+    const audioTrack = this.stream.getAudioTracks()[0];
+    return videoTrack?.readyState === 'live' && audioTrack?.readyState === 'live';
+  }
+
+  async _prepareCameraForRecording() {
+    // PreCheckCard already owns a working camera. Releasing and immediately
+    // reopening it is unreliable on Android Chrome and can leave YouTube with
+    // a waiting broadcast but no media. Keep that live stream and adjust its
+    // constraints in place where the browser supports it.
+    if (this._hasLiveCamera()) {
+      const quality = QUALITY_PROFILES[this.qualityProfile];
+      const preferPortrait = this._forcedStreamOrientation === 'portrait';
+      const speechMode = this.audioMode === 'speech';
+
+      const videoTrack = this.stream.getVideoTracks()[0];
+      const audioTrack = this.stream.getAudioTracks()[0];
+      await videoTrack.applyConstraints?.({
+        width: { ideal: preferPortrait ? quality.height : quality.width },
+        height: { ideal: preferPortrait ? quality.width : quality.height },
+        aspectRatio: { ideal: preferPortrait ? 9 / 16 : 16 / 9 },
+        frameRate: { ideal: 30, min: 15 },
+      }).catch(error => console.warn('[NativeStream] Video constraints unchanged:', error.message));
+      await audioTrack.applyConstraints?.({
+        echoCancellation: speechMode,
+        noiseSuppression: speechMode,
+        autoGainControl: speechMode,
+        channelCount: { ideal: 1 },
+      }).catch(error => console.warn('[NativeStream] Audio constraints unchanged:', error.message));
+
+      this.onStatus('Using checked camera for streaming');
+      return this.stream;
+    }
+
+    // If Android has already released the preview track, retry acquisition on
+    // this same relay/YouTube session instead of forcing the host to start over.
+    let lastError;
+    for (const delay of [0, 350, 900]) {
+      if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+      try {
+        return await this.requestCamera(this.currentFacingMode || 'environment');
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error('Camera could not be prepared for streaming.');
+  }
+
+  async connect(wsUrl, streamToken) {
+    this._wsUrl = wsUrl;
+    this._streamToken = streamToken;
+    return this._connectSocket();
+  }
+
+  async _connectSocket() {
     this.onStatus('Connecting to streaming server...');
 
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(wsUrl);
+      const ws = new WebSocket(this._wsUrl);
+      let authenticated = false;
       ws.binaryType = 'arraybuffer';
 
       ws.onopen = () => {
         this.ws = ws;
-        this.onStatus('Server connected');
-        resolve();
+        ws.send(JSON.stringify({ type:'authenticate', token:this._streamToken }));
       };
 
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+
+          if (msg.type === 'authenticated') {
+            authenticated = true;
+            if (msg.qualityProfile && QUALITY_PROFILES[msg.qualityProfile]) {
+              this.qualityProfile = msg.qualityProfile;
+            }
+            this.onStatus('Server authenticated');
+            resolve();
+          }
 
           if (msg.type === 'session') {
             this.sessionId = msg.sessionId;
@@ -229,14 +361,9 @@ export class NativeStreamer {
 
           if (msg.type === 'ended') {
             if (!this.ending) {
-              const detail = this._lastRelayMessage ? ` Last relay message: ${this._lastRelayMessage}` : '';
-              const err = new Error(`Stream ended unexpectedly - the server closed the connection.${detail}`);
-              this._readyRejecter?.(err);
-              this._clearStartWaiters();
-              this.onStatus('Stream ended by server');
-              this.onError(err.message);
+              this.onStatus('Stream interrupted - reconnecting');
+              this._beginReconnect();
             }
-            this.stop();
           }
         } catch {
           // Binary/unknown messages are ignored.
@@ -245,21 +372,16 @@ export class NativeStreamer {
 
       ws.onerror = (event) => {
         const err = new Error(event.message || 'WebSocket connection failed.');
-        if (!this.ending) {
-          this._readyRejecter?.(err);
-          this._clearStartWaiters();
-          this.onError(err.message);
-        }
-        reject(err);
+        if (!authenticated) reject(err);
       };
 
       ws.onclose = (event) => {
         if (this.active && !this.ending) {
-          const err = new Error(`Connection closed (code ${event.code})`);
-          this._readyRejecter?.(err);
           this._clearStartWaiters();
-          this.onError(err.message);
-          this.stop();
+          this.onStatus(`Connection interrupted (code ${event.code}) - reconnecting`);
+          this._beginReconnect();
+        } else if (!authenticated) {
+          reject(new Error(`Connection closed before authentication (code ${event.code})`));
         }
       };
     });
@@ -268,13 +390,17 @@ export class NativeStreamer {
   async startRecording(rtmpUrl) {
     if (!this.ws) throw new Error('WebSocket not ready');
 
+    this._rtmpUrl = rtmpUrl || 'OAUTH';
     this.onStatus('Preparing camera for streaming...');
-    await this.reacquireCamera();
+    await this._prepareCameraForRecording();
 
     this._mimeType = getBestMimeType();
     this.onStatus(`Encoding: ${this._mimeType || 'browser default'}`);
 
-    this.ws.send(JSON.stringify({ type: 'start', rtmpUrl, mimeType: this._mimeType }));
+    this.ws.send(JSON.stringify({
+      type: 'start', rtmpUrl, mimeType: this._mimeType,
+      qualityProfile: this.qualityProfile,
+    }));
 
     this.active = true;
     this.ending = false;
@@ -287,7 +413,22 @@ export class NativeStreamer {
 
     this._statsTimer = setInterval(() => {
       const elapsed = Math.round((Date.now() - this.startTime) / 1000);
-      this.onStats({ elapsed, chunks: this.chunkCount, bytesSent: this.bytesSent });
+      const bufferedAmount = this.ws?.bufferedAmount || 0;
+      this.onStats({
+        elapsed, chunks: this.chunkCount, bytesSent: this.bytesSent,
+        bufferedAmount, qualityProfile: this.qualityProfile,
+      });
+      if (bufferedAmount > 4000000) {
+        this._congestedChecks++;
+        this._stableChecks = 0;
+      } else if (bufferedAmount < 200000) {
+        this._stableChecks++;
+        this._congestedChecks = 0;
+      }
+      if (this._congestedChecks >= 4) {
+        this._congestedChecks = 0;
+        this._downgradeQuality();
+      }
     }, 5000);
 
     this.onStatus('Waiting for YouTube stream confirmation...');
@@ -314,16 +455,65 @@ export class NativeStreamer {
     this._readyRejecter = null;
   }
 
+  async _beginReconnect() {
+    if (this._reconnecting || this.ending) return;
+    this._reconnecting = true;
+    this._reconnectStartedAt = Date.now();
+    if (this.recorder && this.recorder.state !== 'inactive') {
+      try { this.recorder.stop(); } catch {}
+    }
+    this.recorder = null;
+    this._stopRecordingComposition();
+    try { this.ws?.close(); } catch {}
+
+    const delays = [1000, 2000, 4000, 8000, 15000, 20000, 30000];
+    let lastError = null;
+    for (const delay of delays) {
+      if (this.ending || Date.now() - this._reconnectStartedAt > 120000) break;
+      this.onStatus(`Reconnecting in ${Math.ceil(delay / 1000)}s...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      if (this.ending) break;
+      try {
+        await this._connectSocket();
+        this.ws.send(JSON.stringify({
+          type:'start', rtmpUrl:this._rtmpUrl, mimeType:this._mimeType,
+          qualityProfile:this.qualityProfile,
+        }));
+        this._startRecorder();
+        await this._waitForRelayReady(25000);
+        this._reconnecting = false;
+        this.onStatus('Streaming to YouTube - reconnected');
+        return;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    this._reconnecting = false;
+    if (!this.ending) this.onError(`Could not reconnect to the same stream. ${lastError?.message || ''}`.trim());
+  }
+
+  retryReconnect() {
+    if (this.ending) return;
+    this._beginReconnect();
+  }
+
   _startRecorder() {
     const recOptions = {};
     if (this._mimeType) recOptions.mimeType = this._mimeType;
-    if (VIDEO_BITRATE) recOptions.videoBitsPerSecond = VIDEO_BITRATE;
+    recOptions.videoBitsPerSecond = QUALITY_PROFILES[this.qualityProfile].videoBitrate;
     if (AUDIO_BITRATE) recOptions.audioBitsPerSecond = AUDIO_BITRATE;
 
     const recorderStream = this._createRecordingStream();
+    const audioTrack = recorderStream?.getAudioTracks?.()[0];
+    if (!audioTrack || audioTrack.readyState !== 'live') {
+      throw new Error('Microphone audio is unavailable. Check microphone permission and try again.');
+    }
+    audioTrack.enabled = true;
+    this.onStatus(`Microphone ready - ${audioTrack.getSettings?.().sampleRate || 'default'} Hz`);
     const recorder = new MediaRecorder(recorderStream, recOptions);
 
     recorder.ondataavailable = (event) => {
+      if (this.ending || this.recorder !== recorder) return;
       if (!event.data || event.data.size === 0 || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
       event.data.arrayBuffer().then(buffer => {
         if (this.ws?.readyState === WebSocket.OPEN) {
@@ -349,9 +539,12 @@ export class NativeStreamer {
       return this.stream;
     }
 
+    const quality = QUALITY_PROFILES[this.qualityProfile];
+    const streamWidth = quality.width;
+    const streamHeight = quality.height;
     const canvas = document.createElement('canvas');
-    canvas.width = STREAM_WIDTH;
-    canvas.height = STREAM_HEIGHT;
+    canvas.width = streamWidth;
+    canvas.height = streamHeight;
 
     const ctx = canvas.getContext('2d', { alpha: false });
     const video = document.createElement('video');
@@ -363,7 +556,7 @@ export class NativeStreamer {
 
     const draw = () => {
       ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, STREAM_WIDTH, STREAM_HEIGHT);
+      ctx.fillRect(0, 0, streamWidth, streamHeight);
 
       const sourceWidth = video.videoWidth || 0;
       const sourceHeight = video.videoHeight || 0;
@@ -398,12 +591,12 @@ export class NativeStreamer {
       const renderWidth = shouldRotateToLandscape ? sourceHeight : sourceWidth;
       const renderHeight = shouldRotateToLandscape ? sourceWidth : sourceHeight;
       const scale = lockedIsLandscape
-        ? Math.max(STREAM_WIDTH / renderWidth, STREAM_HEIGHT / renderHeight)
-        : Math.min(STREAM_WIDTH / renderWidth, STREAM_HEIGHT / renderHeight);
+        ? Math.max(streamWidth / renderWidth, streamHeight / renderHeight)
+        : Math.min(streamWidth / renderWidth, streamHeight / renderHeight);
       const drawWidth = renderWidth * scale;
       const drawHeight = renderHeight * scale;
-      const x = (STREAM_WIDTH - drawWidth) / 2;
-      const y = (STREAM_HEIGHT - drawHeight) / 2;
+      const x = (streamWidth - drawWidth) / 2;
+      const y = (streamHeight - drawHeight) / 2;
 
       if (shouldRotateToLandscape) {
         ctx.save();
@@ -420,14 +613,19 @@ export class NativeStreamer {
 
     draw();
 
-    const canvasStream = canvas.captureStream(30);
-    this.stream.getAudioTracks().forEach(track => canvasStream.addTrack(track));
+    const canvasStream = canvas.captureStream(IS_ANDROID ? 24 : 30);
+    const audioTracks = this.stream.getAudioTracks().filter(track => track.readyState === 'live');
+    audioTracks.forEach(track => { track.enabled = true; });
+    const recordingStream = new MediaStream([
+      ...canvasStream.getVideoTracks(),
+      ...audioTracks,
+    ]);
 
     this._canvas = canvas;
     this._canvasVideo = video;
     this._drawFrame = draw;
-    this.recordingStream = canvasStream;
-    return canvasStream;
+    this.recordingStream = recordingStream;
+    return recordingStream;
   }
 
   _stopRecordingComposition() {
@@ -449,6 +647,33 @@ export class NativeStreamer {
 
     this._canvas = null;
     this._drawFrame = null;
+  }
+
+  async _downgradeQuality() {
+    if (this._qualityChanging || !this.active) return;
+    const currentIndex = QUALITY_ORDER.indexOf(this.qualityProfile);
+    if (currentIndex <= 0) return;
+    const nextProfile = QUALITY_ORDER[currentIndex - 1];
+    this._qualityChanging = true;
+    this.onStatus(`Network congestion detected - reducing quality to ${QUALITY_PROFILES[nextProfile].label}`);
+    try {
+      if (this.recorder && this.recorder.state !== 'inactive') this.recorder.stop();
+      this.recorder = null;
+      this.qualityProfile = nextProfile;
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({
+          type: 'quality-change',
+          mimeType: this._mimeType,
+          qualityProfile: nextProfile,
+        }));
+        await new Promise(resolve => setTimeout(resolve, 800));
+        this._startRecorder();
+      }
+    } catch (error) {
+      console.warn('[NativeStream] Quality downgrade failed:', error.message);
+    } finally {
+      this._qualityChanging = false;
+    }
   }
 
   stop() {

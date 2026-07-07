@@ -1,25 +1,6 @@
-import React, { useState, useEffect } from 'react';
-
-function useIsStandalone() {
-  const [standalone, setStandalone] = useState(() => {
-    try {
-      return window.matchMedia?.('(display-mode: standalone)')?.matches
-        || window.navigator.standalone === true;
-    } catch { return false; }
-  });
-  useEffect(() => {
-    const mq = window.matchMedia?.('(display-mode: standalone)');
-    if (!mq) return;
-    const handler = e => setStandalone(e.matches);
-    mq.addEventListener?.('change', handler);
-    return () => mq.removeEventListener?.('change', handler);
-  }, []);
-  return standalone;
-}
+import React from 'react';
 
 export default function BottomNav({ page, setPage, isGuest }) {
-  const isStandalone = useIsStandalone();
-
   // Always show bottom nav — even for guests (greyed out for restricted items)
   const item = (key, icon, label, disabled = false) => {
     const active = !disabled && page === key;
@@ -35,16 +16,16 @@ export default function BottomNav({ page, setPage, isGuest }) {
           color: disabled ? '#c8d5d3' : active ? 'var(--teal,#0f766e)' : 'var(--muted,#7a8a87)',
           opacity: disabled ? 0.5 : 1,
         }}>
-        <span style={{ fontSize: 19, lineHeight: 1 }}>{icon}</span>
-        <span style={{ fontSize: 9.5, fontWeight: active ? 800 : 600 }}>{label}</span>
+        <span style={{ fontSize: '1.1875rem', lineHeight: 1 }}>{icon}</span>
+        <span style={{ fontSize: '0.6875rem', fontWeight: active ? 800 : 600 }}>{label}</span>
       </button>
     );
   };
 
   return (
     <>
-      <div style={{ height: 'calc(66px + env(safe-area-inset-bottom))' }} />
-      <nav style={{
+      <div className="mobile-bottom-nav-spacer" style={{ height: 'calc(66px + env(safe-area-inset-bottom))' }} />
+      <nav className="mobile-bottom-nav" style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40,
         height: 'calc(66px + env(safe-area-inset-bottom))',
         paddingBottom: 'env(safe-area-inset-bottom)',
@@ -70,13 +51,13 @@ export default function BottomNav({ page, setPage, isGuest }) {
                 : 'linear-gradient(135deg,#16a34a,#0f766e)',
               border: '4px solid white', cursor: isGuest ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontSize: 30, fontWeight: 300, lineHeight: 1,
+              color: 'white', fontSize: '1.875rem', fontWeight: 300, lineHeight: 1,
               boxShadow: isGuest
                 ? '0 4px 12px rgba(0,0,0,0.15)'
                 : '0 6px 18px rgba(22,163,74,0.45)',
               padding: 0, opacity: isGuest ? 0.6 : 1,
             }}>+</button>
-          <span style={{ fontSize: 9.5, fontWeight: 800, marginTop: 1,
+          <span style={{ fontSize: '0.6875rem', fontWeight: 800, marginTop: 1,
             color: isGuest ? '#c8d5d3' : 'var(--teal,#0f766e)' }}>
             Add Event
           </span>
@@ -84,10 +65,8 @@ export default function BottomNav({ page, setPage, isGuest }) {
 
         {item('favourites', '\u2764\uFE0F', 'Favourites', isGuest)}
 
-        {/* 5th slot: Profile (PWA) or Install (browser); greyed if guest */}
-        {isStandalone
-          ? item('profile', '\u{1F464}', 'Profile', isGuest)
-          : item('install', '\u2B07\uFE0F', 'Install')}
+        {/* Profile is always present and remains unavailable to guests. */}
+        {item('profile', '\u{1F464}', 'Profile', isGuest)}
       </nav>
     </>
   );
