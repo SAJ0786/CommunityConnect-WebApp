@@ -3,6 +3,7 @@ import { APP_NAME, TAGLINE, ROLES } from '../utils/constants';
 import { isAdminRole } from '../utils/permissions';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/firebase';
+import { compareEventsByDateTime } from '../services/dateUtils';
 
 const AUTH_ITEMS = [
   { key: 'home',       label: '🏠 Home' },
@@ -71,7 +72,9 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
     const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
     return `${y}-${m}-${day}`;
   })();
-  const tomorrowEvents = (events || []).filter(e => e.eventDate === tomorrowStr);
+  const tomorrowEvents = (events || [])
+    .filter(e => e.eventDate === tomorrowStr)
+    .sort(compareEventsByDateTime);
 
   const isAdmin = isAdminRole(profile?.role);
   const items = isGuest

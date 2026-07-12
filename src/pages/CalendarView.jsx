@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import EventCard from '../components/EventCard';
 import CalendarSync from './CalendarSync';
+import { compareEventsByDateTime } from '../services/dateUtils';
 
 // Category dot colour by audience type
 const dotColor = (a) => {
@@ -41,6 +42,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
       if (!e.eventDate) return;
       (map[e.eventDate] = map[e.eventDate] || []).push(e);
     });
+    Object.values(map).forEach(dayEvents => dayEvents.sort(compareEventsByDateTime));
     return map;
   }, [events]);
 

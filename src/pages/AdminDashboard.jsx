@@ -11,6 +11,8 @@ import { getApp } from 'firebase/app';
 import * as XLSX from 'xlsx';
 import { getOrganisations, addOrganisation, deleteOrganisation, updateOrganisation, fileToBase64, seedBuiltInOrgs } from '../services/organisationsService';
 import { invalidateOrgsCache } from '../services/imageService';
+import { CITY_OPTIONS, DEFAULT_CITY, cityCode, cityLabel, normalizeCity } from '../utils/cities';
+import { compareEventsByDateTime } from '../services/dateUtils';
 
 const ROLE_LABELS = {
   [ROLES.USER]:        { label: 'User',        color: '#6b7280', bg: '#f3f4f6' },
@@ -151,6 +153,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   const [calSyncUids,    setCalSyncUids]     = useState(new Set());
   const [msg,            setMsg]            = useState({ text: '', type: '' });
   const [search,         setSearch]         = useState('');
+  const [cityFilter,     setCityFilter]     = useState('all');
   const [saving,         setSaving]         = useState(false);
   const [editingUser,    setEditingUser]    = useState(null);
   const [editUserName,   setEditUserName]   = useState('');
@@ -209,7 +212,10 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
   const isSuperAdmin = profile?.role === ROLES.SUPER_ADMIN;
   const fns = getFunctions(getApp(), 'australia-southeast1');
-  const displayedAdminEvents = filteredAdminEvents ?? adminEvents ?? [];
+  const displayedAdminEvents = useMemo(
+    () => [...(filteredAdminEvents ?? adminEvents ?? [])].sort(compareEventsByDateTime),
+    [filteredAdminEvents, adminEvents]
+  );
   const seriesCounts = useMemo(() => {
     const counts = new Map();
     for (const event of adminEvents || []) {
@@ -307,7 +313,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         where('status', '==', 'active'),
         orderBy('eventDate', 'asc')
       ));
-      setAdminEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setAdminEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(compareEventsByDateTime));
       setFilteredAdminEvents(null);
       setSelectedEventIds(new Set());
       setShowTransferPanel(false);
@@ -758,9 +764,12 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
   const [calFilter, setCalFilter] = useState(false); // when true, show only calendar-synced users
 
-  const filteredUsers = useMemo(() => users.filter(u =>
-    userMatchesSearch(u, search) && (!calFilter || calSyncUids.has(u.id))
-  ), [users, search, calFilter, calSyncUids]);
+  const filteredUsers = useMemo(() => users.filter(u => {
+    const userCity = normalizeCity(u.defaultCity || DEFAULT_CITY);
+    return userMatchesSearch(u, search)
+      && (!calFilter || calSyncUids.has(u.id))
+      && (cityFilter === 'all' || userCity === cityFilter);
+  }), [users, search, calFilter, calSyncUids, cityFilter]);
 
   const openUserEditor = (target) => {
     setEditingUser(target);
@@ -868,6 +877,17 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   fontWeight:800, cursor:'pointer', whiteSpace:'nowrap' }}>
                 📅 {calFilter ? 'Showing Synced Only' : `Calendar Synced (${calSyncUids.size})`}
               </button>
+              <select value={cityFilter} onChange={event => setCityFilter(event.target.value)}
+                aria-label="Filter users by city"
+                style={{ width:180, padding:'8px 12px', fontSize:'0.8125rem',
+                  borderRadius:10, border:'1px solid var(--border)', margin:0 }}>
+                <option value="all">All locations</option>
+                {CITY_OPTIONS.map(city => (
+                  <option key={city.value} value={city.value}>
+                    {cityCode(city.value)} - {city.label.replace(', Australia', '')}
+                  </option>
+                ))}
+              </select>
               <input placeholder="Search name, email or phone…" aria-label="Search users by name, email or phone" value={search}
                 onChange={e => setSearch(e.target.value)}
                 style={{ width:220, padding:'8px 12px', fontSize:'0.8125rem',
@@ -929,6 +949,12 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   )}
                   <div style={{ marginTop:4, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
                     <RoleBadge role={u.role} />
+                    <span title={cityLabel(normalizeCity(u.defaultCity || DEFAULT_CITY))}
+                      style={{ fontSize:'0.6875rem', fontWeight:900, color:'#0f5f59',
+                        background:'#ecfdf9', border:'1px solid #99d8d1',
+                        borderRadius:6, padding:'2px 7px', letterSpacing:0 }}>
+                      {cityCode(u.defaultCity || DEFAULT_CITY)}
+                    </span>
                     {calSyncUids.has(u.id) && (
                       <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#0f766e',
                         background:'#e6f4f1', border:'1px solid #b8e0db',

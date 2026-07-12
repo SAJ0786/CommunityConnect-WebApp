@@ -24,6 +24,30 @@ export default function ShareSheet() {
   const encoded = encodeURIComponent(msg);
   const close   = () => setOpen(false);
 
+  const openWhatsApp = () => {
+    close();
+    window.location.assign(`https://api.whatsapp.com/send?text=${encoded}`);
+  };
+
+  const openSms = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'Share Event', text: msg });
+        close();
+        return;
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+      }
+    }
+
+    const isAppleMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    close();
+    window.location.href = isAppleMobile
+      ? `sms:&body=${encoded}`
+      : `sms:?body=${encoded}`;
+  };
+
   const copyText = () => {
     navigator.clipboard.writeText(msg).then(() => {
       setCopied(true);
@@ -54,8 +78,7 @@ export default function ShareSheet() {
         {/* Share options */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
           {/* WhatsApp */}
-          <a href={`https://wa.me/?text=${encoded}`} target="_blank" rel="noreferrer"
-            onClick={close}
+          <button type="button" onClick={openWhatsApp}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
               padding: '14px 8px', borderRadius: 16, background: '#f0fdf4',
@@ -63,18 +86,18 @@ export default function ShareSheet() {
             }}>
             <span style={{ fontSize: '1.75rem' }}>💬</span>
             <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#166534' }}>WhatsApp</span>
-          </a>
+          </button>
 
-          {/* SMS */}
-          <a href={`sms:?body=${encoded}`} onClick={close}
+          {/* Native share drawer — text only */}
+          <button type="button" onClick={openSms}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
               padding: '14px 8px', borderRadius: 16, background: '#eff6ff',
               border: '1px solid #bfdbfe', textDecoration: 'none', cursor: 'pointer'
             }}>
-            <span style={{ fontSize: '1.75rem' }}>✉️</span>
-            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1e40af' }}>SMS</span>
-          </a>
+            <span style={{ fontSize: '1.75rem' }}>📤</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#1e40af' }}>Share via Apps</span>
+          </button>
 
           {/* Copy */}
           <button onClick={copyText}

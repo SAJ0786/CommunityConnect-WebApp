@@ -97,19 +97,34 @@ export default function EventForm({
     clearValidationError(field);
   };
 
+  const getDynamicOrgById = id => dynamicOrgs.find(org => org.id === id);
+  const getDynamicOrgBySlug = slug => dynamicOrgs.find(org => org.slug === slug);
+
+  const getSelectedOrganiserValue = () => {
+    if (form.organiserId && getDynamicOrgById(form.organiserId)) return `org:${form.organiserId}`;
+    return form.organiserType || 'private';
+  };
+
   const getCentreName = organiserType => {
     if (!organiserType || organiserType === 'private' || organiserType === 'centre') return '';
+    if (form.organiserId) return getDynamicOrgById(form.organiserId)?.name || '';
     return BUILT_IN_CENTRE_NAMES[organiserType]
-      || dynamicOrgs.find(org => org.slug === organiserType)?.name
+      || getDynamicOrgBySlug(organiserType)?.name
       || '';
   };
 
-  const handleOrganiserChange = organiserType => setForm(p => ({
-    ...p,
-    organiserType,
-    hostName: getCentreName(organiserType)
-      || (p.isOnBehalfOf ? '' : userName),
-  }));
+  const handleOrganiserChange = value => {
+    const selectedOrg = value?.startsWith('org:') ? getDynamicOrgById(value.slice(4)) : null;
+    const organiserType = selectedOrg?.slug || value;
+    const centreName = selectedOrg?.name || BUILT_IN_CENTRE_NAMES[organiserType] || '';
+    setForm(p => ({
+      ...p,
+      organiserType,
+      organiserId: selectedOrg?.id || '',
+      organiserName: selectedOrg?.name || centreName || '',
+      hostName: centreName || (p.isOnBehalfOf ? '' : userName),
+    }));
+  };
 
   const toggleOnBehalf = checked => setForm(p => ({
     ...p, isOnBehalfOf: checked,
@@ -181,6 +196,7 @@ export default function EventForm({
     onSubmit({
       ...form,
       hostName: getCentreName(form.organiserType) || form.hostName,
+      organiserName: getCentreName(form.organiserType) || form.organiserName || '',
       imageUrl,
       imagePath,
       eventTypeDisplay: resolvedType,    // human-readable label (e.g. "Aqeeqa")
@@ -250,14 +266,14 @@ export default function EventForm({
             (Used to show the correct logo when no poster is uploaded)
           </span>
         </label>
-        <select value={form.organiserType}
+        <select value={getSelectedOrganiserValue()}
           onChange={e => handleOrganiserChange(e.target.value)}>
           <option value="private">🔒 Private (individual host)</option>
           <option value="muhammadi">🏛 Muhammadi Welfare Association</option>
           <option value="imamhasan">🏛 Imam Hasan Centre</option>
           <option value="alamdar">🏛 Alamdar Granville</option>
           {dynamicOrgs.map(org => (
-            <option key={org.id} value={org.slug}>🏛 {org.name}{org.location ? ` — ${org.location}` : ''}</option>
+            <option key={org.id} value={`org:${org.id}`}>🏛 {org.name}{org.location ? ` — ${org.location}` : ''}</option>
           ))}
           <option value="centre">🏛 Other Centre / Organisation</option>
         </select>

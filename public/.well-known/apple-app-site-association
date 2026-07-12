@@ -1,0 +1,22 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "2RR593743F.info.siza.communityevents"
+        ],
+        "components": [
+          {
+            "/": "/app",
+            "comment": "Open Community Events Australia app link"
+          },
+          {
+            "/": "/app/*",
+            "comment": "Open Community Events Australia app link paths"
+          }
+        ]
+      }
+    ]
+  }
+}

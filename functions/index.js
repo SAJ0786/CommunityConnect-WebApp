@@ -1,4 +1,4 @@
-const admin      = require("firebase-admin");
+﻿const admin      = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const crypto     = require("crypto");
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
@@ -11,7 +11,7 @@ const db = admin.firestore();
 
 const REGION = "australia-southeast1";
 
-// ── Secrets ───────────────────────────────────────────────────────────────────
+// â”€â”€ Secrets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ANTHROPIC_API_KEY     = defineSecret("ANTHROPIC_API_KEY");
 const SMTP_HOST             = defineSecret("SMTP_HOST");
 const SMTP_PORT             = defineSecret("SMTP_PORT");
@@ -22,13 +22,13 @@ const YOUTUBE_CLIENT_ID     = defineSecret("YOUTUBE_CLIENT_ID");
 const YOUTUBE_CLIENT_SECRET = defineSecret("YOUTUBE_CLIENT_SECRET");
 const YOUTUBE_RTMP_SECRET   = defineSecret("YOUTUBE_STREAM_KEY");
 
-// ─── Health check ─────────────────────────────────────────────────────────────
+// â”€â”€â”€ Health check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.helloWorld = onRequest(
   { region: REGION },
   (req, res) => res.send("Community Events backend is running!")
 );
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Temporary app store reviewer login. Remove after Google/Apple review is complete.
 exports.temporaryStoreTesterLogin = onCall({ region: REGION }, async (request) => {
   const email = String(request.data?.email || "").trim().toLowerCase();
@@ -174,6 +174,8 @@ function buildTransporter(secrets) {
   });
 }
 
+const PROGRAMS_UPDATE_IMAGE_URL = "https://communityevents.siza.info/images/programs-update-header.jpg";
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -183,13 +185,120 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
+function sortEventsForUpdate(events) {
+  return [...events].sort((a, b) => {
+    const timeCompare = String(a.startTime || '').localeCompare(String(b.startTime || ''));
+    if (timeCompare !== 0) return timeCompare;
+    return String(a.hostName || '').localeCompare(String(b.hostName || ''));
+  });
+}
+
+function compareEventsByDateTimeData(a = {}, b = {}) {
+  const dateCompare = String(a.eventDate || "").localeCompare(String(b.eventDate || ""));
+  if (dateCompare) return dateCompare;
+  const timeCompare = String(a.startTime || "99:99").localeCompare(String(b.startTime || "99:99"));
+  if (timeCompare) return timeCompare;
+  return String(a.hostName || "").localeCompare(String(b.hostName || ""));
+}
+
+function buildEmailEventRow(e) {
+  const reciters = (e.reciters || []).filter(r => r.name)
+    .map(r => `${r.type}: ${r.name}`).join(", ");
+  return `<tr>
+    <td style="padding:8px;border-bottom:1px solid #e5e7eb">${escapeHtml(e.startTime || "")}</td>
+    <td style="padding:8px;border-bottom:1px solid #e5e7eb">${escapeHtml(e.hostName || "")}</td>
+    <td style="padding:8px;border-bottom:1px solid #e5e7eb">${escapeHtml(e.eventType || "")}</td>
+    <td style="padding:8px;border-bottom:1px solid #e5e7eb">${escapeHtml((e.audienceType === "Mixed Audience" ? "Family Event" : e.audienceType) || "")}</td>
+    <td style="padding:8px;border-bottom:1px solid #e5e7eb">${escapeHtml(e.address?.fullAddress || "")}</td>
+    <td style="padding:8px;border-bottom:1px solid #e5e7eb">${escapeHtml(e.speakerName || "")}</td>
+    <td style="padding:8px;border-bottom:1px solid #e5e7eb">${escapeHtml(reciters)}</td>
+  </tr>`;
+}
+
+function buildEmailEventTable(title, events) {
+  if (!events.length) return "";
+  const rows = sortEventsForUpdate(events).map(buildEmailEventRow).join("");
+  return `<div style="margin-top:18px">
+    <h3 style="margin:0 0 8px;color:#0f766e;font-size:18px">${title} (${events.length})</h3>
+    <table border="0" cellpadding="0" cellspacing="0"
+      style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb">
+      <thead><tr style="background:#0f766e">
+        <th style="padding:10px;color:white;text-align:left">Time</th>
+        <th style="padding:10px;color:white;text-align:left">Host</th>
+        <th style="padding:10px;color:white;text-align:left">Type</th>
+        <th style="padding:10px;color:white;text-align:left">Audience</th>
+        <th style="padding:10px;color:white;text-align:left">Address</th>
+        <th style="padding:10px;color:white;text-align:left">Speaker</th>
+        <th style="padding:10px;color:white;text-align:left">Reciters</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function buildGroupedEmailEventTables(events) {
+  const centreEvents = events.filter(e => e.organiserType !== "private");
+  const privateEvents = events.filter(e => e.organiserType === "private");
+  return [
+    buildEmailEventTable("Centre Programs", centreEvents),
+    privateEvents.length && centreEvents.length
+      ? '<div style="height:1px;background:#e5e7eb;margin:22px 0 4px"></div>'
+      : '',
+    buildEmailEventTable("Private Programs", privateEvents),
+  ].filter(Boolean).join("");
+}
+
+function buildProgramsUpdateEmailHeader() {
+  return `<div style="background:linear-gradient(135deg,#0f766e,#0b5d57);padding:18px 22px;border-radius:16px 16px 0 0">
+    <table border="0" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">
+      <tr>
+        <td style="width:150px;vertical-align:middle">
+          <img src="${PROGRAMS_UPDATE_IMAGE_URL}" alt="Programs Update" style="display:block;width:140px;max-width:140px;height:auto;border-radius:10px">
+        </td>
+        <td style="vertical-align:middle;padding-left:16px">
+          <h2 style="color:white;margin:0;font-size:24px;line-height:1.2">Community Events</h2>
+          <p style="color:#e0f2fe;margin:6px 0 0;font-size:17px;font-weight:700">Tomorrow's Events</p>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+}
+
+function isISODateString(dateStr) {
+  return typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+}
+
+function normalizeICSTime(timeStr, fallback = "00:00") {
+  const raw = String(timeStr || fallback).trim();
+  const match = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return fallback;
+  const hh = Number(match[1]);
+  const mm = Number(match[2]);
+  if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return fallback;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
 function toICSDate(dateStr, timeStr = "00:00") {
-  // Return local datetime string with TZID — do NOT convert to UTC.
+  // Return local datetime string with TZID; do not convert to UTC.
   // UTC conversion shifts Sydney events by +10/+11 hours causing wrong
   // dates in Apple Calendar and Google Calendar.
+  if (!isISODateString(dateStr)) return "";
   const [y, m, d] = dateStr.split("-");
-  const [hh, mm]  = timeStr.split(":");
+  const [hh, mm] = normalizeICSTime(timeStr).split(":");
   return `${y}${m}${d}T${hh}${mm}00`;
+}
+
+function foldICSLine(line = "") {
+  const text = String(line);
+  const chunks = [];
+  for (let i = 0; i < text.length; i += 73) {
+    chunks.push((i === 0 ? "" : " ") + text.slice(i, i + 73));
+  }
+  return chunks.join("\r\n");
+}
+
+function pushICS(lines, line) {
+  lines.push(foldICSLine(line));
 }
 
 // Convert time value to HH:MM string
@@ -227,7 +336,7 @@ function excelTimeToHHMM(val) {
   return "";
 }
 
-// Convert Excel date to YYYY-MM-DD — handles DD/MM/YYYY, serial numbers, YYYY-MM-DD
+// Convert Excel date to YYYY-MM-DD â€” handles DD/MM/YYYY, serial numbers, YYYY-MM-DD
 function excelDateToYYYYMMDD(val) {
   if (!val && val !== 0) return "";
   // Excel date serial number
@@ -236,7 +345,7 @@ function excelDateToYYYYMMDD(val) {
     return d.toISOString().slice(0, 10);
   }
   const s = String(val).trim();
-  // DD/MM/YYYY — standard Australian format
+  // DD/MM/YYYY â€” standard Australian format
   const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (dmy) {
     const [, d, m, y] = dmy;
@@ -248,10 +357,10 @@ function excelDateToYYYYMMDD(val) {
 }
 
 // Compute Hijri date string for a given Gregorian date and adjustment
-// ── JDN-based Hijri calendar (same algorithm as SIZA Calendar Religiously) ──
+// â”€â”€ JDN-based Hijri calendar (same algorithm as SIZA Calendar Religiously) â”€â”€
 function gregorianToJdn(y,m,d){const a=Math.floor((14-m)/12),yr=y+4800-a,mn=m+12*a-3;return d+Math.floor((153*mn+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045;}
 function jdnToGregorian(jdn){const a=jdn+32044,b=Math.floor((4*a+3)/146097),c=a-Math.floor((146097*b)/4),d=Math.floor((4*c+3)/1461),e=c-Math.floor((1461*d)/4),m=Math.floor((5*e+2)/153);return{day:e-Math.floor((153*m+2)/5)+1,month:m+3-12*Math.floor(m/10),year:100*b+d-4800+Math.floor(m/10)};}
-// ── Override-anchored 30-day cascade (matches client hijriService.js) ──
+// â”€â”€ Override-anchored 30-day cascade (matches client hijriService.js) â”€â”€
 const MONTH_DAYS_SERVER = 30;
 function islamicToJdnAstro(y,m,d){return d+Math.ceil(29.5*(m-1))+(y-1)*354+Math.floor((3+11*y)/30)+1948439;}
 function jdnToIslamicAstro(jdn){const y=Math.floor((30*(jdn-1948439)+10646)/10631),m=Math.min(12,Math.ceil((jdn-29-islamicToJdnAstro(y,1,1))/29.5)+1);return{year:y,month:m,day:jdn-islamicToJdnAstro(y,m,1)+1};}
@@ -292,7 +401,7 @@ function escICS(s = "") {
     .replace(/;/g, "\\;").replace(/\n/g, "\\n");
 }
 
-// ─── LIVE CALENDAR FEED ────────────────────────────────────────────────────────
+// â”€â”€â”€ LIVE CALENDAR FEED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.calendarFeed = onRequest(
   { region: REGION, cors: true },
   async (req, res) => {
@@ -340,23 +449,37 @@ exports.calendarFeed = onRequest(
       "END:VTIMEZONE"
     ];
 
-    snap.docs.forEach(doc => {
+    [...snap.docs]
+      .sort((a, b) => compareEventsByDateTimeData(a.data(), b.data()))
+      .forEach(doc => {
       const e    = doc.data();
-      const stamp   = toICSDate(new Date().toISOString().slice(0, 10));
+      if (!isISODateString(e.eventDate)) {
+        console.warn("Skipping event with invalid calendar date", { eventId: doc.id, eventDate: e.eventDate });
+        return;
+      }
       const dtStart = toICSDate(e.eventDate, e.startTime || "00:00");
-      const dtEnd   = toICSDate(e.eventDate, e.endTime   || e.startTime || "23:59");
+      const dtEnd   = toICSDate(e.eventDate, e.endTime || e.startTime || "23:59");
+      if (!dtStart || !dtEnd) {
+        console.warn("Skipping event with invalid calendar time", {
+          eventId: doc.id,
+          eventDate: e.eventDate,
+          startTime: e.startTime,
+          endTime: e.endTime,
+        });
+        return;
+      }
       const addr    = e.address?.fullAddress || "";
       lines.push(
-        "BEGIN:VEVENT",
-        `UID:${doc.id}@community-events`,
-        `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").split(".")[0]}Z`,
-        `DTSTART;TZID=Australia/Sydney:${dtStart}`,
-        `DTEND;TZID=Australia/Sydney:${dtEnd}`,
-        `SUMMARY:${escICS(`${e.eventType} – ${e.hostName}`)}`,
-        `LOCATION:${escICS(addr)}`,
-        `DESCRIPTION:${escICS(`Audience: ${e.audienceType}`)}`,
-        "END:VEVENT"
+        "BEGIN:VEVENT"
       );
+      pushICS(lines, `UID:${doc.id}@community-events`);
+      pushICS(lines, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").split(".")[0]}Z`);
+      pushICS(lines, `DTSTART;TZID=Australia/Sydney:${dtStart}`);
+      pushICS(lines, `DTEND;TZID=Australia/Sydney:${dtEnd}`);
+      pushICS(lines, `SUMMARY:${escICS(`${e.eventType || "Event"} - ${e.hostName || "Community Events"}`)}`);
+      if (addr) pushICS(lines, `LOCATION:${escICS(addr)}`);
+      pushICS(lines, `DESCRIPTION:${escICS(`Audience: ${e.audienceType || "All audiences"}`)}`);
+      lines.push("END:VEVENT");
     });
     lines.push("END:VCALENDAR");
     res.set("Content-Type", "text/calendar; charset=utf-8");
@@ -365,18 +488,29 @@ exports.calendarFeed = onRequest(
   }
 );
 
-// ─── Calendar subscriber count ────────────────────────────────────────────────
+// â”€â”€â”€ Calendar subscriber count â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.getCalendarStats = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new Error("Unauthenticated");
   const userDoc = await db.collection("users").doc(request.auth.uid).get();
   const role = userDoc.data()?.role;
   if (role !== "admin" && role !== "superAdmin") throw new Error("Insufficient permissions");
   const snap = await db.collection("calendarSubscriptions").get();
-  const uids = snap.docs.map(d => d.id);
-  return { count: snap.size, uids };
+  const activeSince = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  const uids = snap.docs
+    .filter(d => {
+      const lastPolled = d.data()?.lastPolled;
+      const millis = typeof lastPolled?.toMillis === "function"
+        ? lastPolled.toMillis()
+        : lastPolled?.seconds
+          ? lastPolled.seconds * 1000
+          : 0;
+      return millis >= activeSince;
+    })
+    .map(d => d.id);
+  return { count: uids.length, uids, everCount: snap.size };
 });
 
-// ─── AI EVENT SEARCH ──────────────────────────────────────────────────────────
+// â”€â”€â”€ AI EVENT SEARCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Public event list for guests. Firestore rules cannot mask individual fields,
 // so anonymous users receive only this sanitized shape through Cloud Functions.
 exports.getPublicEvents = onCall(
@@ -403,7 +537,7 @@ exports.getPublicEvents = onCall(
     [...upcomingSnap.docs, ...liveSnap.docs].forEach(doc => docsById.set(doc.id, doc));
 
     const events = [...docsById.values()]
-      .sort((a, b) => (a.data().eventDate || "").localeCompare(b.data().eventDate || ""))
+      .sort((a, b) => compareEventsByDateTimeData(a.data(), b.data()))
       .map(doc => {
         const e = doc.data();
         if (e.hidden || e.status !== "active") return null;
@@ -479,12 +613,12 @@ exports.aiEventSearch = onCall(
     const todayStr = new Date().toISOString().slice(0, 10);
     const filteredDocs = snap.docs
       .filter(d => (d.data().eventDate || '') >= todayStr)
-      .sort((a, b) => (a.data().eventDate || '').localeCompare(b.data().eventDate || ''))
+      .sort((a, b) => compareEventsByDateTimeData(a.data(), b.data()))
       .slice(0, 200);
 
     const events = filteredDocs.map(d => {
       const e = d.data();
-      // For guests: suburb only — no full address, no phone
+      // For guests: suburb only â€” no full address, no phone
       return {
         id:           d.id,
         eventType:    e.eventType,
@@ -568,7 +702,7 @@ ${JSON.stringify(events)}`;
   }
 );
 
-// ─── DAILY EMAIL REMINDERS — 8 AM Sydney ──────────────────────────────────────
+// â”€â”€â”€ DAILY EMAIL REMINDERS â€” 8 AM Sydney â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.dailyEmailReminders = onSchedule(
   { schedule: "0 19 * * *", timeZone: "Australia/Sydney", region: REGION,
     secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM] },
@@ -582,51 +716,23 @@ exports.dailyEmailReminders = onSchedule(
       .where("status", "==", "active")
       .where("eventDate", "==", date)
       .get();
-    // Filter hidden in JS — a Firestore "!= true" query drops docs with no
+    // Filter hidden in JS â€” a Firestore "!= true" query drops docs with no
     // `hidden` field at all, which would exclude every legacy/visible event.
     const visibleDocs = eventsSnapRaw.docs.filter(d => d.data().hidden !== true);
     if (visibleDocs.length === 0) return null;
     // Lightweight shim so the rest of the function can keep using eventsSnap
     const eventsSnap = { docs: visibleDocs, size: visibleDocs.length, empty: visibleDocs.length === 0 };
 
-    const rows = eventsSnap.docs.map(d => {
-      const e = d.data();
-      const reciters = (e.reciters || []).filter(r => r.name)
-        .map(r => `${r.type}: ${r.name}`).join(", ");
-      return `<tr>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.startTime || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.hostName || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.eventType || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${(e.audienceType === "Mixed Audience" ? "Family Event" : e.audienceType) || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.address?.fullAddress || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.speakerName || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${reciters}</td>
-      </tr>`;
-    }).join("");
+    const eventSections = buildGroupedEmailEventTables(eventsSnap.docs.map(d => d.data()));
 
     const html = `<div style="font-family:sans-serif;max-width:700px">
-      <div style="background:linear-gradient(135deg,#0f766e,#0b5d57);padding:24px;border-radius:16px 16px 0 0">
-        <h2 style="color:white;margin:0">Community Events</h2>
-        <p style="color:#e0f2fe;margin:4px 0 0">Tomorrow's Events — ${date}</p>
-      </div>
-      <table border="0" cellpadding="0" cellspacing="0"
-        style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb">
-        <thead><tr style="background:#0f766e">
-          <th style="padding:10px;color:white;text-align:left">Time</th>
-          <th style="padding:10px;color:white;text-align:left">Host</th>
-          <th style="padding:10px;color:white;text-align:left">Type</th>
-          <th style="padding:10px;color:white;text-align:left">Audience</th>
-          <th style="padding:10px;color:white;text-align:left">Address</th>
-          <th style="padding:10px;color:white;text-align:left">Speaker</th>
-          <th style="padding:10px;color:white;text-align:left">Reciters</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+      ${buildProgramsUpdateEmailHeader()}
+      <div style="padding:18px;background:#ffffff">${eventSections}</div>
       <p style="color:#6b7280;font-size:12px;padding:16px">
-        To opt out: Profile → Toggle Email Reminder off.
+        To opt out: Profile -> Toggle Email Reminder off.
       </p></div>`;
 
-    // Get all users with reminders enabled (don't filter by isActive — field may not exist)
+    // Get all users with reminders enabled (don't filter by isActive â€” field may not exist)
     const usersSnap = await db.collection("users")
       .where("reminderEmailEnabled", "==", true)
       .get();
@@ -645,7 +751,7 @@ exports.dailyEmailReminders = onSchedule(
           await transporter.sendMail({
             from: EMAIL_FROM.value() || SMTP_USER.value(),
             to: u.email,
-            subject: `Community Events – Tomorrow's Events (${date})`,
+            subject: `Community Events - Tomorrow's Events (${date})`,
             html: html + unsubscribeFooter(doc.id)
           });
           sent++;
@@ -659,12 +765,12 @@ exports.dailyEmailReminders = onSchedule(
         const firstEvent = eventsSnap.docs[0]?.data();
         const pushMsg = {
           notification: {
-            title: `🌙 ${eventCount} Community Event${eventCount !== 1 ? 's' : ''} Tomorrow`,
+            title: `ðŸŒ™ ${eventCount} Community Event${eventCount !== 1 ? 's' : ''} Tomorrow`,
             body: firstEvent
-              ? `${firstEvent.startTime} · ${firstEvent.hostName} · ${firstEvent.address?.suburb || ''}`
+              ? `${firstEvent.startTime} Â· ${firstEvent.hostName} Â· ${firstEvent.address?.suburb || ''}`
               : `Events on ${date}`,
           },
-          data: { date, url: 'https://communityevents.siza.info' },
+          data: { date, url: 'https://communityevents.siza.info/app' },
           tokens,
         };
         try {
@@ -691,7 +797,7 @@ exports.dailyEmailReminders = onSchedule(
   }
 );
 
-// ─── DAILY ARCHIVE — 2 AM Sydney ──────────────────────────────────────────────
+// â”€â”€â”€ DAILY ARCHIVE â€” 2 AM Sydney â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.dailyEventCleanup = onSchedule(
   { schedule: "0 2 * * *", timeZone: "Australia/Sydney", region: REGION },
   async () => {
@@ -728,7 +834,7 @@ exports.dailyEventCleanup = onSchedule(
   }
 );
 
-// ─── MONTHLY HIJRI REMINDER — 1st of month ────────────────────────────────────
+// â”€â”€â”€ MONTHLY HIJRI REMINDER â€” 1st of month â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.monthlyHijriReminder = onSchedule(
   { schedule: "0 8 1 * *", timeZone: "Australia/Sydney", region: REGION,
     secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM] },
@@ -746,7 +852,7 @@ exports.monthlyHijriReminder = onSchedule(
       await transporter.sendMail({
         from: EMAIL_FROM.value() || SMTP_USER.value(),
         to: u.email,
-        subject: "Community Events — Monthly Hijri Calendar Adjustment Reminder",
+        subject: "Community Events - Monthly Hijri Calendar Adjustment Reminder",
         html: `<div style="font-family:sans-serif;max-width:600px">
           <div style="background:linear-gradient(135deg,#0f766e,#0b5d57);padding:24px;border-radius:16px 16px 0 0">
             <h2 style="color:white;margin:0">Hijri Calendar Adjustment Required</h2>
@@ -754,7 +860,7 @@ exports.monthlyHijriReminder = onSchedule(
           <div style="padding:24px;border:1px solid #e5e7eb">
             <p>Hi ${u.fullName || "Super Admin"},</p>
             <p>This is your monthly reminder to verify the <strong>Hijri calendar adjustment</strong> in Community Events.</p>
-            <p>Today is <strong>${today}</strong>. Please go to Admin Dashboard → Settings and enter the Gregorian date that corresponds to the 1st of the current Hijri month.</p>
+            <p>Today is <strong>${today}</strong>. Please go to Admin Dashboard â†’ Settings and enter the Gregorian date that corresponds to the 1st of the current Hijri month.</p>
           </div>
         </div>`
       });
@@ -763,7 +869,7 @@ exports.monthlyHijriReminder = onSchedule(
   }
 );
 
-// ─── DELETE USER DATA (Callable) ──────────────────────────────────────────────
+// â”€â”€â”€ DELETE USER DATA (Callable) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.deleteUserData = onCall({ region: REGION }, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new Error("Unauthenticated");
@@ -959,7 +1065,7 @@ exports.migratePhoneAccountByEmail = onCall({ region: REGION }, async (request) 
   };
 });
 
-// ─── BULK IMPORT EVENTS (Callable) ────────────────────────────────────────────
+// â”€â”€â”€ BULK IMPORT EVENTS (Callable) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new Error("Unauthenticated");
   const userDoc = await db.collection("users").doc(request.auth.uid).get();
@@ -988,17 +1094,17 @@ exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
     const startTime = excelTimeToHHMM(row.startTime);
     const endTime   = excelTimeToHHMM(row.endTime);
 
-    // Resolve the event date — convert Hijri BEFORE validation so required check works
+    // Resolve the event date â€” convert Hijri BEFORE validation so required check works
     let resolvedDate = '';
     if (row.enteredAsHijri && row.hijriDay && row.hijriMonth && row.hijriYear) {
       const converted = hijriToGregorianServer(
         Number(row.hijriDay), Number(row.hijriMonth), Number(row.hijriYear), hijriOverrides
       );
-      console.log(`Hijri conversion: ${row.hijriDay}/${row.hijriMonth}/${row.hijriYear} + adj ${hijriAdj} → ${converted}`);
+      console.log(`Hijri conversion: ${row.hijriDay}/${row.hijriMonth}/${row.hijriYear} + adj ${hijriAdj} â†’ ${converted}`);
       if (converted) {
         resolvedDate = converted;
       } else {
-        rowErrors.push(`Cannot convert Hijri date ${row.hijriDay}/${row.hijriMonth}/${row.hijriYear} — check day, month and year are correct`);
+        rowErrors.push(`Cannot convert Hijri date ${row.hijriDay}/${row.hijriMonth}/${row.hijriYear} â€” check day, month and year are correct`);
         errors.push({ row: i + 1, errors: rowErrors });
         continue;
       }
@@ -1006,15 +1112,15 @@ exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
       resolvedDate = excelDateToYYYYMMDD(row.eventDate);
     }
 
-    // Validation — use resolvedDate so Hijri dates pass the required check
+    // Validation â€” use resolvedDate so Hijri dates pass the required check
     const REQUIRED_CHECK = ["hostName","startTime","eventType","audienceType","street","suburb","state","postcode"];
     REQUIRED_CHECK.forEach(f => {
       const val = f === 'startTime' ? startTime : row[f];
       if (!val?.toString().trim()) rowErrors.push(`${f} is required`);
     });
-    if (!resolvedDate) rowErrors.push("eventDate is required — check day, month and year are all filled");
+    if (!resolvedDate) rowErrors.push("eventDate is required â€” check day, month and year are all filled");
     if (resolvedDate && !/^\d{4}-\d{2}-\d{2}$/.test(resolvedDate)) rowErrors.push("eventDate could not be resolved to a valid date");
-    if (startTime && !/^\d{2}:\d{2}$/.test(startTime)) rowErrors.push("startTime is invalid — use HHMM format e.g. 1930");
+    if (startTime && !/^\d{2}:\d{2}$/.test(startTime)) rowErrors.push("startTime is invalid â€” use HHMM format e.g. 1930");
     if (row.eventType && !VALID_TYPES.includes(row.eventType)) rowErrors.push(`eventType must be one of: ${VALID_TYPES.join(", ")}`);
     if (row.audienceType && !VALID_AUDIENCE.includes(row.audienceType)) rowErrors.push(`audienceType must be one of: ${VALID_AUDIENCE.join(", ")}`);
     if (rowErrors.length > 0) { errors.push({ row: i + 1, errors: rowErrors }); continue; }
@@ -1087,7 +1193,7 @@ exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
   };
 });
 
-// ─── MANUAL REMINDER TRIGGER (Callable — Admin only) ─────────────────────────
+// â”€â”€â”€ MANUAL REMINDER TRIGGER (Callable â€” Admin only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Allows admins to send today's reminder email on demand from the dashboard.
 exports.sendRemindersNow = onCall(
   { region: REGION, secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM] },
@@ -1134,25 +1240,14 @@ exports.sendRemindersNow = onCall(
       ? { empty: true, docs: [], size: 0 }
       : await eventsQuery.get();
 
-    // For custom messages, we don't need events — send to all users regardless
+    // For custom messages, we don't need events â€” send to all users regardless
     if (eventsSnap.empty && !customMode) {
       return { sent: 0, message: `No events found for ${label}. No emails sent.` };
     }
 
-    const rows = eventsSnap.docs.map(d => {
-      const e = d.data();
-      const reciters = (e.reciters || []).filter(r => r.name)
-        .map(r => `${r.type}: ${r.name}`).join(", ");
-      return `<tr>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.startTime || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.hostName || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.eventType || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${(e.audienceType === "Mixed Audience" ? "Family Event" : e.audienceType) || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.address?.fullAddress || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${e.speakerName || ""}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb">${reciters}</td>
-      </tr>`;
-    }).join("");
+    const eventSections = customMode
+      ? ""
+      : buildGroupedEmailEventTables(eventsSnap.docs.map(d => d.data()));
 
     const sentBy = userDoc.data()?.fullName || userDoc.data()?.email || "Admin";
 
@@ -1161,25 +1256,13 @@ exports.sendRemindersNow = onCall(
         <h2 style="color:white;margin:0">Community Events</h2>
         <p style="color:#e0f2fe;margin:4px 0 0">Events for ${label}</p>
       </div>
-      <table border="0" cellpadding="0" cellspacing="0"
-        style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb">
-        <thead><tr style="background:#0f766e">
-          <th style="padding:10px;color:white;text-align:left">Time</th>
-          <th style="padding:10px;color:white;text-align:left">Host</th>
-          <th style="padding:10px;color:white;text-align:left">Type</th>
-          <th style="padding:10px;color:white;text-align:left">Audience</th>
-          <th style="padding:10px;color:white;text-align:left">Address</th>
-          <th style="padding:10px;color:white;text-align:left">Speaker</th>
-          <th style="padding:10px;color:white;text-align:left">Reciters</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+      <div style="padding:18px;background:#ffffff">${eventSections}</div>
       <p style="color:#6b7280;font-size:12px;padding:16px">
         This reminder was manually sent by ${sentBy}.<br>
-        To opt out of reminders: Profile → Toggle Email Reminder off.
+        To opt out of reminders: Profile -> Toggle Email Reminder off.
       </p></div>`;
 
-    // Get all users with reminders enabled (don't filter by isActive — field may not exist)
+    // Get all users with reminders enabled (don't filter by isActive â€” field may not exist)
     const usersSnap = await db.collection("users")
       .where("reminderEmailEnabled", "==", true)
       .get();
@@ -1198,7 +1281,7 @@ exports.sendRemindersNow = onCall(
             ? (customTemplate === 'storeAnnouncement'
                 ? 'Community Events Australia is now on Google Play, the App Store and Microsoft Store'
                 : 'Important Update from Community Events')
-            : `Community Events – Events for ${label}`,
+            : `Community Events - Events for ${label}`,
           html: customMode && customTemplate === 'storeAnnouncement'
             ? buildStoreAnnouncementEmail() + unsubscribeFooter(doc.id)
             : customMode
@@ -1225,13 +1308,13 @@ exports.sendRemindersNow = onCall(
       failed: errors.length,
       events: eventsSnap.size,
       message: customMode
-        ? `Sent to ${sent} user(s)${errors.length ? ` · ${errors.length} failed` : ''}.`
-        : `Sent to ${sent} user(s) · ${eventsSnap.size} event(s) included${errors.length ? ` · ${errors.length} failed` : ''}.`
+        ? `Sent to ${sent} user(s)${errors.length ? ` Â· ${errors.length} failed` : ''}.`
+        : `Sent to ${sent} user(s) Â· ${eventsSnap.size} event(s) included${errors.length ? ` Â· ${errors.length} failed` : ''}.`
     };
   }
 );
 
-// ─── RECALCULATE HIJRI EVENTS ─────────────────────────────────────────────────
+// â”€â”€â”€ RECALCULATE HIJRI EVENTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Called from Admin Dashboard when Hijri adjustment is saved.
 // Updates eventDate (Gregorian) for all events entered as Hijri dates.
 exports.recalculateHijriEvents = onCall(
@@ -1245,7 +1328,7 @@ exports.recalculateHijriEvents = onCall(
 
     const { adjustmentDays } = request.data;
 
-    // Always read overrides directly from Firestore — most up to date
+    // Always read overrides directly from Firestore â€” most up to date
     const settingsSnap = await db.collection("settings").doc("hijriCalendar").get();
     const newOverrides = settingsSnap.exists ? (settingsSnap.data().overrides || []) : [];
     console.log(`recalculate: using ${newOverrides.length} overrides from Firestore`);
@@ -1267,12 +1350,12 @@ exports.recalculateHijriEvents = onCall(
       const isHijriEntered = enteredAsHijri === true && !!(hijriDay && hijriMonth && hijriYear);
 
       if (isHijriEntered) {
-        // ── Hijri-entered event ───────────────────────────────────────────────
+        // â”€â”€ Hijri-entered event â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Recompute Gregorian eventDate from stored Hijri components
         const newGreg = hijriToGregorianServer(hijriDay, hijriMonth, hijriYear, newOverrides || []);
         if (!newGreg) continue;
 
-        // Build hijriDate display from original components (exact — never changes)
+        // Build hijriDate display from original components (exact â€” never changes)
         const HIJRI_MN = ["Muharram","Safar","Rabi al-Awwal","Rabi al-Thani",
           "Jumada al-Awwal","Jumada al-Thani","Rajab","Sha'ban",
           "Ramadan","Shawwal","Dhu al-Qi'dah","Dhu al-Hijjah"];
@@ -1286,8 +1369,8 @@ exports.recalculateHijriEvents = onCall(
         countHijri++;
 
       } else if (eventDate) {
-        // ── Gregorian-entered event ───────────────────────────────────────────
-        // eventDate is fixed — only update the hijriDate display tag
+        // â”€â”€ Gregorian-entered event â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // eventDate is fixed â€” only update the hijriDate display tag
         const newHijriDate = computeHijriDate(eventDate, newOverrides || []);
         if (!newHijriDate) continue;
 
@@ -1316,18 +1399,18 @@ exports.recalculateHijriEvents = onCall(
   }
 );
 
-// Server-side Hijri → Gregorian conversion
+// Server-side Hijri â†’ Gregorian conversion
 function hijriToGregorianServer(hDay, hMonth, hYear, overrides) {
-  // Uses JDN algorithm — same as SIZA Calendar Religiously
+  // Uses JDN algorithm â€” same as SIZA Calendar Religiously
   try {
     const g = hijriToGreg(hYear, hMonth, hDay, overrides || []);
     return `${g.year}-${String(g.month).padStart(2,"0")}-${String(g.day).padStart(2,"0")}`;
   } catch { return null; }
 }
 
-// ─── ADMIN DELETE USER ────────────────────────────────────────────────────────
+// â”€â”€â”€ ADMIN DELETE USER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Allows Super Admins to delete another user's account and all their data.
-// Different from deleteUserData (which is self-deletion) — this is admin-initiated.
+// Different from deleteUserData (which is self-deletion) â€” this is admin-initiated.
 exports.adminDeleteUser = onCall(
   { region: REGION },
   async (request) => {
@@ -1345,10 +1428,10 @@ exports.adminDeleteUser = onCall(
     const { targetUid, ban = false } = request.data;
     if (!targetUid) throw new HttpsError("invalid-argument", "Missing targetUid.");
     if (targetUid === request.auth.uid) {
-      throw new HttpsError("invalid-argument", "You cannot delete your own account this way. Use Profile → Delete Account instead.");
+      throw new HttpsError("invalid-argument", "You cannot delete your own account this way. Use Profile â†’ Delete Account instead.");
     }
 
-    // Safety check — cannot delete the last super admin
+    // Safety check â€” cannot delete the last super admin
     const targetDoc = await db.collection("users").doc(targetUid).get();
     if (!targetDoc.exists) {
       throw new HttpsError("not-found", "User not found in database.");
@@ -1377,7 +1460,7 @@ exports.adminDeleteUser = onCall(
     batch.delete(db.collection("users").doc(targetUid));
     batch.delete(db.collection("calendarSubscriptions").doc(targetUid));
 
-    // If banned — store full profile in bannedUsers so unban can restore it
+    // If banned â€” store full profile in bannedUsers so unban can restore it
     if (ban && targetData.email) {
       batch.set(db.collection("bannedUsers").doc(targetData.email.toLowerCase().replace(/\./g,'_')), {
         email:     targetData.email.toLowerCase(),
@@ -1406,7 +1489,7 @@ exports.adminDeleteUser = onCall(
   }
 );
 
-// ─── TRANSFER EVENT OWNERSHIP ────────────────────────────────────────────────
+// â”€â”€â”€ TRANSFER EVENT OWNERSHIP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.transferEventOwnership = onCall({ region: REGION }, async (request) => {
   const { HttpsError } = require("firebase-functions/v2/https");
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
@@ -1451,7 +1534,7 @@ exports.adminUnbanUser = onCall(
     // Remove ban document
     await db.collection("bannedUsers").doc(bannedDocId).delete();
 
-    // Restore user profile — use all data saved at ban time
+    // Restore user profile â€” use all data saved at ban time
     if (uid) {
       const userRef  = db.collection("users").doc(uid);
       const userSnap = await userRef.get();
@@ -1468,7 +1551,7 @@ exports.adminUnbanUser = onCall(
           updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
         });
       } else {
-        // Profile exists but may have wrong role — restore original
+        // Profile exists but may have wrong role â€” restore original
         const { role } = request.data;
         if (role && userSnap.data().role !== role) {
           await userRef.update({ role, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
@@ -1481,8 +1564,9 @@ exports.adminUnbanUser = onCall(
   }
 );
 
-// ─── EMAIL HELPERS ────────────────────────────────────────────────────────────
+// â”€â”€â”€ EMAIL HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const APP_URL = 'https://communityevents.siza.info';
+const APP_OPEN_URL = 'https://communityevents.siza.info/app';
 
 // Email the support inbox whenever a user reports an AI-generated response.
 exports.onAiReportCreated = onDocumentCreated(
@@ -1596,15 +1680,15 @@ function unsubscribeFooter(uid = '') {
       <p style="font-size:11px;color:#9ca3af;line-height:1.6;margin:0">
         You are receiving this email because you registered with Community Events Australia.<br/>
         <a href="${unsubUrl}" style="color:#6b7280;text-decoration:underline">Unsubscribe from reminder emails</a>
-        &nbsp;·&nbsp;
-        <a href="${APP_URL}" style="color:#6b7280;text-decoration:underline">Open App</a>
-        &nbsp;·&nbsp;
+        &nbsp;Â·&nbsp;
+        <a href="${APP_OPEN_URL}" style="color:#6b7280;text-decoration:underline">Open App</a>
+        &nbsp;Â·&nbsp;
         <a href="mailto:communityeventssydney@gmail.com" style="color:#6b7280;text-decoration:underline">Contact Us</a>
       </p>
     </div>`;
 }
 
-// ─── SUPER ADMIN NOTIFICATIONS ───────────────────────────────────────────────
+// â”€â”€â”€ SUPER ADMIN NOTIFICATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function notifySuperAdmin(subject, bodyHtml, secrets) {
   try {
     // Fetch ALL superAdmin AND admin emails dynamically
@@ -1653,7 +1737,7 @@ exports.onEventCreated = onDocumentCreated(
     if (!data || data.status !== 'active') return;
 
     await notifySuperAdmin(
-      `📅 New event added: ${data.eventType} — ${data.hostName}`,
+      `ðŸ“… New event added: ${data.eventType} â€” ${data.hostName}`,
       `<div style="font-family:Arial,sans-serif;max-width:500px">
         <div style="background:#0f766e;padding:16px;border-radius:8px 8px 0 0">
           <h2 style="color:white;margin:0">New Event Added</h2>
@@ -1687,7 +1771,7 @@ exports.onEventDeleted = onDocumentDeleted(
     if (archived.exists && archived.data()?.archiveReason === 'event_date_expired') return;
 
     await notifySuperAdmin(
-      `🗑 Event deleted: ${data.eventType} — ${data.hostName}`,
+      `ðŸ—‘ Event deleted: ${data.eventType} â€” ${data.hostName}`,
       `<div style="font-family:Arial,sans-serif;max-width:500px">
         <div style="background:#dc2626;padding:16px;border-radius:8px 8px 0 0">
           <h2 style="color:white;margin:0">Event Deleted</h2>
@@ -1712,7 +1796,7 @@ exports.onUserCreated = onDocumentCreated(
   async (event) => {
     const uid = event.params.uid;
 
-    // Wait 3 seconds — phone users get their email/name saved in a
+    // Wait 3 seconds â€” phone users get their email/name saved in a
     // subsequent updateDoc call right after the initial setDoc.
     // This ensures the trigger reads the fully populated document.
     await new Promise(r => setTimeout(r, 3000));
@@ -1723,7 +1807,7 @@ exports.onUserCreated = onDocumentCreated(
     if (!data) return;
 
     await notifySuperAdmin(
-      `👤 New user registered: ${data.fullName || 'Unknown'}`,
+      `ðŸ‘¤ New user registered: ${data.fullName || 'Unknown'}`,
       `<div style="font-family:Arial,sans-serif;max-width:500px">
         <div style="background:#0f766e;padding:16px;border-radius:8px 8px 0 0">
           <h2 style="color:white;margin:0">New User Registered</h2>
@@ -1741,7 +1825,7 @@ exports.onUserCreated = onDocumentCreated(
   }
 );
 
-// ─── UNSUBSCRIBE EMAIL ───────────────────────────────────────────────────────
+// â”€â”€â”€ UNSUBSCRIBE EMAIL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.unsubscribeEmail = onRequest(
   { region: REGION },
   async (req, res) => {
@@ -1759,7 +1843,7 @@ exports.unsubscribeEmail = onRequest(
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Unsubscribe — Community Events</title>
+  <title>Unsubscribe - Community Events</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
@@ -1778,10 +1862,10 @@ exports.unsubscribeEmail = onRequest(
 </head>
 <body>
   <div class="card">
-    <div style="font-size:44px">🔕</div>
+    <div style="font-size:44px">ðŸ”•</div>
     <h1>Unsubscribe from Reminders</h1>
     <p>This link has expired. To unsubscribe, please open the app and turn off reminders in your Profile, or email us and we'll remove you manually.</p>
-    <a class="btn btn-teal" href="https://communityevents.siza.info">Open App → Profile → Settings</a>
+    <a class="btn btn-teal" href="https://communityevents.siza.info">Open App â†’ Profile â†’ Settings</a>
     <a class="btn btn-grey" href="mailto:communityeventssydney@gmail.com?subject=Unsubscribe%20Request">Email Us to Unsubscribe</a>
   </div>
 </body>
@@ -1796,7 +1880,7 @@ exports.unsubscribeEmail = onRequest(
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Unsubscribe — Community Events</title>
+  <title>Unsubscribe - Community Events</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
@@ -1816,11 +1900,11 @@ exports.unsubscribeEmail = onRequest(
 </head>
 <body>
   <div class="card">
-    <div style="font-size:48px">🔕</div>
+    <div style="font-size:48px">ðŸ”•</div>
     <h1>Unsubscribe from Reminders</h1>
     <p>You will no longer receive event reminder emails from Community Events Australia. You can re-enable reminders anytime from your profile in the app.</p>
     <a class="btn btn-red" href="?uid=${uid}&confirm=1">Yes, Unsubscribe Me</a>
-    <a class="btn btn-grey" href="https://communityevents.siza.info">← Back to App</a>
+    <a class="btn btn-grey" href="https://communityevents.siza.info">â† Back to App</a>
   </div>
 </body>
 </html>`);
@@ -1831,7 +1915,7 @@ exports.unsubscribeEmail = onRequest(
     if (!uid) {
       res.set('Content-Type', 'text/html');
       res.status(400).send(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;text-align:center">
-        <h2>❌ Invalid unsubscribe link</h2>
+        <h2>âŒ Invalid unsubscribe link</h2>
         <p>Please contact <a href="mailto:communityeventssydney@gmail.com">communityeventssydney@gmail.com</a></p>
       </body></html>`);
       return;
@@ -1848,7 +1932,7 @@ exports.unsubscribeEmail = onRequest(
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Unsubscribed — Community Events</title>
+  <title>Unsubscribed - Community Events</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
@@ -1866,10 +1950,10 @@ exports.unsubscribeEmail = onRequest(
 </head>
 <body>
   <div class="card">
-    <div style="font-size:48px">✅</div>
+    <div style="font-size:48px">âœ…</div>
     <h1>You've been unsubscribed</h1>
     <p>You will no longer receive reminder emails. You can re-enable reminders anytime from your Profile in the app.</p>
-    <a href="https://communityevents.siza.info">← Back to App</a>
+    <a href="https://communityevents.siza.info">â† Back to App</a>
   </div>
 </body>
 </html>`);
@@ -1877,14 +1961,14 @@ exports.unsubscribeEmail = onRequest(
       console.error('Unsubscribe error:', e.message);
       res.set('Content-Type', 'text/html');
       res.status(500).send(`<!DOCTYPE html><html><body style="font-family:sans-serif;padding:40px;text-align:center">
-        <h2>❌ Something went wrong</h2>
+        <h2>âŒ Something went wrong</h2>
         <p>Please contact <a href="mailto:communityeventssydney@gmail.com">communityeventssydney@gmail.com</a></p>
       </body></html>`);
     }
   }
 );
 
-// ─── SEND LIVE NOTIFICATION ──────────────────────────────────────────────────
+// â”€â”€â”€ SEND LIVE NOTIFICATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.notifyEventLive = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new Error('Unauthenticated');
   const { eventId, eventTitle, hostName } = request.data || {};
@@ -1916,7 +2000,7 @@ exports.notifyEventLive = onCall({ region: REGION }, async (request) => {
       const res = await messaging.sendEachForMulticast({
         tokens: batch,
         notification: {
-          title: '🔴 Event is Live Now!',
+          title: 'ðŸ”´ Event is Live Now!',
           body: `${eventTitle} by ${hostName} is streaming live. Tap to watch!`,
         },
         data: { eventId, type: 'live' },
@@ -1932,7 +2016,7 @@ exports.notifyEventLive = onCall({ region: REGION }, async (request) => {
   return { sent };
 });
 
-// ─── GUEST EVENT EDIT — OTP SEND ─────────────────────────────────────────────
+// â”€â”€â”€ GUEST EVENT EDIT â€” OTP SEND â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.sendEditOtp = onCall(
   { region: REGION, secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM] },
   async (request) => {
@@ -1984,7 +2068,7 @@ exports.sendEditOtp = onCall(
       await transporter.sendMail({
         from: EMAIL_FROM.value() || SMTP_USER.value(),
         to:   contact.trim(),
-        subject: "Community Events — Your edit verification code",
+        subject: "Community Events - Your edit verification code",
         html: `
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
             <div style="background:#0f766e;padding:20px;text-align:center;border-radius:8px 8px 0 0">
@@ -2005,18 +2089,18 @@ exports.sendEditOtp = onCall(
       });
     } else {
       // For phone: store OTP and return a message
-      // Full SMS would need Twilio — for now we return the OTP in the response
+      // Full SMS would need Twilio â€” for now we return the OTP in the response
       // with a note (or you can add Twilio later)
       // For community use, we can show it on screen or send via email fallback
       console.log(`OTP for ${contact}: ${otp}`); // visible in logs for admin debugging
-      // Return token — client will show "check your email" or admin can see in logs
+      // Return token â€” client will show "check your email" or admin can see in logs
     }
 
     return { token, method: isEmail ? 'email' : 'sms' };
   }
 );
 
-// ─── GUEST EVENT EDIT — OTP VERIFY ───────────────────────────────────────────
+// â”€â”€â”€ GUEST EVENT EDIT â€” OTP VERIFY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.verifyEditOtp = onCall(
   { region: REGION },
   async (request) => {
@@ -2045,7 +2129,7 @@ exports.verifyEditOtp = onCall(
       throw new HttpsError("invalid-argument", "Verification code does not match this event.");
     }
 
-    // Grant edit session — store in Firestore with 30min expiry
+    // Grant edit session â€” store in Firestore with 30min expiry
     const sessionToken = require("crypto").randomBytes(32).toString("hex");
     await db.collection("editSessions").doc(sessionToken).set({
       eventId,
@@ -2061,12 +2145,12 @@ exports.verifyEditOtp = onCall(
   }
 );
 
-// ─── YOUTUBE OAUTH2 FLOW ──────────────────────────────────────────────────────
+// â”€â”€â”€ YOUTUBE OAUTH2 FLOW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const YT_REDIRECT_URI = "https://australia-southeast1-community-event-8b639.cloudfunctions.net/youtubeOAuthCallback";
 const YT_SCOPES       = "https://www.googleapis.com/auth/youtube";
 
-// Step 1 — Generate OAuth URL for admin to visit once
+// Step 1 â€” Generate OAuth URL for admin to visit once
 exports.youtubeOAuthUrl = onCall(
   { region: REGION, secrets: [YOUTUBE_CLIENT_ID] },
   async (request) => {
@@ -2086,7 +2170,7 @@ exports.youtubeOAuthUrl = onCall(
   }
 );
 
-// Step 2 — Handle OAuth callback, exchange code for tokens, store in Firestore
+// Step 2 â€” Handle OAuth callback, exchange code for tokens, store in Firestore
 exports.youtubeOAuthCallback = onRequest(
   { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
   async (req, res) => {
@@ -2130,7 +2214,7 @@ exports.youtubeOAuthCallback = onRequest(
       if (!tokens.access_token) {
         res.status(400).send(`
           <html><body style="font-family:sans-serif;padding:20px">
-            <h2>⚠️ OAuth Error</h2>
+            <h2>âš ï¸ OAuth Error</h2>
             <p><strong>Error:</strong> ${tokens.error || 'Unknown'}</p>
             <p><strong>Description:</strong> ${tokens.error_description || 'None'}</p>
             <p><strong>Full response:</strong> <pre>${JSON.stringify(tokens, null, 2)}</pre></p>
@@ -2150,7 +2234,7 @@ exports.youtubeOAuthCallback = onRequest(
       if (!refreshToken) {
         res.status(400).send(`
           <html><body style="font-family:sans-serif;padding:20px">
-            <h2>⚠️ No Refresh Token</h2>
+            <h2>âš ï¸ No Refresh Token</h2>
             <p>Google didn't send a refresh token. This usually means you've authorized this app before.</p>
             <p>Token response keys received: <strong>${Object.keys(tokens).join(', ')}</strong></p>
             <p>Please try these steps:</p>
@@ -2179,10 +2263,10 @@ exports.youtubeOAuthCallback = onRequest(
         <head><meta http-equiv="refresh" content="3;url=https://communityevents.siza.info"></head>
         <body style="font-family:sans-serif;text-align:center;padding:40px;background:#f8f9fa">
           <div style="max-width:400px;margin:0 auto;background:white;padding:40px;border-radius:20px;box-shadow:0 4px 20px rgba(0,0,0,0.1)">
-            <div style="font-size:60px;margin-bottom:16px">✅</div>
+            <div style="font-size:60px;margin-bottom:16px">âœ…</div>
             <h2 style="color:#27ae60;margin:0 0 12px">YouTube Connected!</h2>
             <p style="color:#666;margin:0 0 24px">Community Events is now connected to your YouTube channel.</p>
-            <p style="color:#666;margin:0 0 24px">Redirecting you back to the app in 3 seconds…</p>
+            <p style="color:#666;margin:0 0 24px">Redirecting you back to the app in 3 secondsâ€¦</p>
             <a href="https://communityevents.siza.info" style="background:#27ae60;color:white;border:none;border-radius:10px;padding:12px 28px;font-size:15px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-block">
               Return to App Now
             </a>
@@ -2196,7 +2280,7 @@ exports.youtubeOAuthCallback = onRequest(
   }
 );
 
-// Helper — get valid access token (refreshes if expired)
+// Helper â€” get valid access token (refreshes if expired)
 async function getYouTubeAccessToken() {
   const snap = await db.collection("system").doc("youtube_oauth").get();
   if (!snap.exists) throw new Error("YouTube not connected. Please authenticate first.");
@@ -2233,7 +2317,7 @@ async function getYouTubeAccessToken() {
   return data.access_token;
 }
 
-// Step 3 — Create a new YouTube broadcast and return stream URL
+// Step 3 â€” Create a new YouTube broadcast and return stream URL
 async function createYouTubeBroadcast(accessToken, title, privacyStatus = 'public') {
   const now       = new Date();
   const startTime = new Date(now.getTime() + 30000).toISOString(); // 30 seconds from now
@@ -2357,7 +2441,7 @@ exports.youtubeConnectionStatus = onCall(
   }
 );
 
-// --- SHARED: Stale live event cleanup logic ──────────────────────────────────
+// --- SHARED: Stale live event cleanup logic â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function completeYouTubeBroadcastIfLive(broadcastId) {
   if (!broadcastId) return;
   try {
@@ -2390,11 +2474,11 @@ async function markStreamVideoCompleted(videoRecordId) {
   });
 }
 
-async function syncStreamVideoAvailability() {
+async function syncStreamVideoAvailability({ force = false } = {}) {
   const healthRef = db.collection('system').doc('stream_video_catalog_health');
   const healthSnap = await healthRef.get();
   const lastCheckedAt = new Date(healthSnap.data()?.checkedAt || 0).getTime();
-  if (Date.now() - lastCheckedAt < 60 * 60 * 1000) return;
+  if (!force && Date.now() - lastCheckedAt < 60 * 60 * 1000) return;
 
   const catalogSnap = await db.collection('streamVideos').orderBy('startedAt', 'desc').limit(100).get();
   const checkable = catalogSnap.docs.filter(docSnap => {
@@ -2481,7 +2565,7 @@ exports.listStreamVideos = onCall(
     }
   }
 
-  await syncStreamVideoAvailability().catch(error => {
+  await syncStreamVideoAvailability({ force: true }).catch(error => {
     // A temporary YouTube/API error must not make the archive disappear.
     console.warn('[StreamVideos] Availability sync skipped:', error.message);
   });
@@ -2525,7 +2609,7 @@ async function runStaleLiveCleanup() {
     const startedAt = data.liveStartedAt ? new Date(data.liveStartedAt) : null;
     const hoursLive = startedAt ? (Date.now() - startedAt.getTime()) / 3600000 : 999;
 
-    // Safety net — force end if live for more than 3 hours, or no session at all
+    // Safety net â€” force end if live for more than 3 hours, or no session at all
     if (!sessionId || hoursLive > 3) {
       await markStreamVideoCompleted(data.liveVideoRecordId);
       await docSnap.ref.update({ isLive: false, liveUrl: null, liveWatchUrl: null,
@@ -2557,7 +2641,7 @@ async function runStaleLiveCleanup() {
   return ended;
 }
 
-// ─── CALLABLE: Immediate cleanup (called from client on stream end) ───────────
+// â”€â”€â”€ CALLABLE: Immediate cleanup (called from client on stream end) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Named differently from the scheduled version to avoid Firebase trigger-type conflict
 exports.cleanupStaleLiveEventsNow = onCall(
   { region: REGION, secrets:[YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
@@ -2567,14 +2651,14 @@ exports.cleanupStaleLiveEventsNow = onCall(
   }
 );
 
-// ─── SCHEDULED: Clean up stale live events every 10 minutes ──────────────────
+// â”€â”€â”€ SCHEDULED: Clean up stale live events every 10 minutes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.cleanupStaleLiveEvents = onSchedule(
   { schedule: 'every 2 minutes', region: REGION, secrets:[YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
   async () => { await runStaleLiveCleanup(); }
 );
 
 
-// ─── NATIVE STREAM: Start session ────────────────────────────────────────────
+// â”€â”€â”€ NATIVE STREAM: Start session â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Returns a Cloud Run WebSocket URL for the native streaming relay.
 // The Cloud Run container (deployed separately) accepts WebSocket connections,
 // receives binary MediaRecorder chunks, and pipes them through FFmpeg to YouTube RTMP.
@@ -2583,7 +2667,7 @@ exports.cleanupStaleLiveEvents = onSchedule(
 //   1. Creates a YouTube broadcast via OAuth (or uses a manual stream key)
 //   2. Returns the Cloud Run WebSocket URL + YouTube watch URL to the client
 //
-// NOTE: Cloud Run container must be deployed separately — see /streaming-relay/README.md
+// NOTE: Cloud Run container must be deployed separately â€” see /streaming-relay/README.md
 // Until deployed, this returns a mock URL so the frontend test UI can be developed.
 exports.nativeStreamStart = onCall(
   { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
@@ -2614,12 +2698,12 @@ exports.nativeStreamStart = onCall(
     let watchUrl  = null;
     let broadcastId = null;
 
-    // ── Get RTMP target ──────────────────────────────────────────────────────
+    // â”€â”€ Get RTMP target â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (useOAuth) {
       try {
         const accessToken = await getYouTubeAccessToken();
         const broadcast   = await createYouTubeBroadcast(accessToken, eventTitle || 'Community Events Live Stream', privacyStatus);
-        // Use RTMPS (port 443) — Cloud Run blocks outbound port 1935 (plain RTMP)
+        // Use RTMPS (port 443) â€” Cloud Run blocks outbound port 1935 (plain RTMP)
         const ingestBase = broadcast.rtmpsUrl || broadcast.rtmpUrl;
         rtmpUrl     = `${ingestBase}/${broadcast.streamKey}`;
         watchUrl    = broadcast.watchUrl;
@@ -2629,17 +2713,17 @@ exports.nativeStreamStart = onCall(
         console.error('[NativeStream] OAuth/broadcast failed:', e.message);
         console.error('[NativeStream] Stack:', e.stack?.slice(0, 500));
         throw new HttpsError('internal',
-          `YouTube setup failed: ${e.message}. If this mentions token/auth, go to Admin Dashboard → Settings → reconnect YouTube.`);
+          `YouTube setup failed: ${e.message}. If this mentions token/auth, go to Admin Dashboard â†’ Settings â†’ reconnect YouTube.`);
       }
     } else if (manualRtmpKey) {
-      // RTMPS on port 443 — Cloud Run blocks outbound port 1935 (plain RTMP)
+      // RTMPS on port 443 â€” Cloud Run blocks outbound port 1935 (plain RTMP)
       rtmpUrl  = `rtmps://a.rtmps.youtube.com/live2/${manualRtmpKey}`;
       watchUrl = `https://www.youtube.com/channel/UC9AvesDamQvU7idD2OD1R6w/live`;
     } else {
       throw new HttpsError('invalid-argument', 'Either useOAuth=true or manualRtmpKey required.');
     }
 
-    // ── Get Cloud Run WebSocket URL ──────────────────────────────────────────
+    // â”€â”€ Get Cloud Run WebSocket URL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const RELAY_URL = process.env.NATIVE_STREAM_RELAY_URL
       || 'wss://native-stream-relay-209723097611.australia-southeast1.run.app';
 
@@ -2712,7 +2796,7 @@ exports.nativeStreamStart = onCall(
   }
 );
 
-// ─── NATIVE STREAM: Resume the same YouTube broadcast ────────────────────────
+// â”€â”€â”€ NATIVE STREAM: Resume the same YouTube broadcast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.nativeStreamResume = onCall(
   { region: REGION },
   async (request) => {
@@ -2771,7 +2855,7 @@ exports.nativeStreamResume = onCall(
   }
 );
 
-// ─── NATIVE STREAM: Stop session ─────────────────────────────────────────────
+// â”€â”€â”€ NATIVE STREAM: Stop session â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.nativeStreamStop = onCall(
   { region: REGION, secrets:[YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
   async (request) => {
@@ -2906,8 +2990,8 @@ exports.endExternalYouTubeStream = onCall({ region: REGION }, async (request) =>
   return { ok:true };
 });
 
-// ─── NATIVE STREAM: Check YouTube stream health (diagnostic) ────────────────
-// Returns the streamStatus of the bound liveStream — tells us if YouTube
+// â”€â”€â”€ NATIVE STREAM: Check YouTube stream health (diagnostic) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Returns the streamStatus of the bound liveStream â€” tells us if YouTube
 // is receiving valid data ('active') or not ('ready'/'error'/'inactive').
 exports.nativeStreamCheckHealth = onCall(
   { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
@@ -2919,7 +3003,7 @@ exports.nativeStreamCheckHealth = onCall(
     const sess = await db.collection('nativeStreamSessions').doc(sessionId).get();
     if (!sess.exists) throw new HttpsError('not-found', 'Session not found.');
     const { broadcastId } = sess.data();
-    if (!broadcastId) return { error: 'No broadcastId — manual key mode, cannot check health' };
+    if (!broadcastId) return { error: 'No broadcastId â€” manual key mode, cannot check health' };
 
     const accessToken = await getYouTubeAccessToken();
 
@@ -2944,7 +3028,7 @@ exports.nativeStreamCheckHealth = onCall(
     const streamStatus = sData.items?.[0]?.status?.streamStatus;
     const healthStatus = sData.items?.[0]?.status?.healthStatus;
 
-    console.log(`[NativeStream] Health check — broadcast: ${broadcastStatus}, stream: ${streamStatus}, health:`, JSON.stringify(healthStatus));
+    console.log(`[NativeStream] Health check â€” broadcast: ${broadcastStatus}, stream: ${streamStatus}, health:`, JSON.stringify(healthStatus));
 
     // If stream is active but broadcast hasn't transitioned, manually transition it
     if (streamStatus === 'active' && broadcastStatus !== 'live' && broadcastStatus !== 'complete') {
@@ -2983,7 +3067,7 @@ exports.nativeStreamCheckHealth = onCall(
     }
 
     if (streamStatus === 'active' && broadcastStatus === 'ready') {
-      console.log('[NativeStream] Stream active but broadcast not live — transitioning to live');
+      console.log('[NativeStream] Stream active but broadcast not live â€” transitioning to live');
       const tRes = await fetch(
         `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=live&id=${broadcastId}&part=status`,
         { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}` } }
@@ -2997,9 +3081,9 @@ exports.nativeStreamCheckHealth = onCall(
   }
 );
 
-// ─── NATIVE STREAM: End event (robust server-side cleanup) ───────────────────
+// â”€â”€â”€ NATIVE STREAM: End event (robust server-side cleanup) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Called by the host when confirming "End Stream". Directly clears isLive on
-// the event AND marks the relay session as stopped — bypasses any client-side
+// the event AND marks the relay session as stopped â€” bypasses any client-side
 // race conditions between session-status checks and Firestore writes.
 exports.nativeStreamEndEvent = onCall(
   { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
@@ -3035,14 +3119,14 @@ exports.nativeStreamEndEvent = onCall(
       }
     }
 
-    // 2. Transition YouTube broadcast to 'complete' — this cleanly ends the
+    // 2. Transition YouTube broadcast to 'complete' â€” this cleanly ends the
     //    YouTube stream for all viewers, replacing the endless buffering state
     //    that occurs when the RTMP connection is simply dropped without a proper
     //    broadcast end signal. Fire-and-forget with error logging.
     if (broadcastId) {
       try {
         const accessToken = await getYouTubeAccessToken();
-        // First check current lifecycle status — can only transition from 'live'
+        // First check current lifecycle status â€” can only transition from 'live'
         const statusRes = await fetch(
           `https://www.googleapis.com/youtube/v3/liveBroadcasts?part=status&id=${broadcastId}`,
           { headers: { 'Authorization': `Bearer ${accessToken}` } }
@@ -3063,17 +3147,17 @@ exports.nativeStreamEndEvent = onCall(
             console.log(`[NativeStream] Broadcast ${broadcastId} transitioned to complete`);
           }
         } else {
-          console.log(`[NativeStream] Broadcast ${broadcastId} already in state ${lifeCycle} — no transition needed`);
+          console.log(`[NativeStream] Broadcast ${broadcastId} already in state ${lifeCycle} â€” no transition needed`);
         }
       } catch (e) {
-        // Don't fail the whole end-event call if YouTube transition fails —
+        // Don't fail the whole end-event call if YouTube transition fails â€”
         // the Firestore update below is the critical piece for the app UI
         console.error('[NativeStream] YouTube transition error (non-fatal):', e.message);
       }
       await markStreamVideoCompleted(broadcastId);
     }
 
-    // 3. Force-clear isLive on the event — source of truth for the app UI
+    // 3. Force-clear isLive on the event â€” source of truth for the app UI
     await eventRef.update({
       isLive:       false,
       liveUrl:      null,

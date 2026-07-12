@@ -5,6 +5,7 @@ import { deleteMyAccountAndEvents, updateAdminAlertPreference, updateProfile, up
 import { isAdminRole } from '../utils/permissions';
 import CitySelector from '../components/CitySelector';
 import { DEFAULT_CITY, normalizeCity } from '../utils/cities';
+import { APP_OPEN_LINK } from '../utils/storeLinks';
 
 // Injected at build time by vite.config.js — Date.now() when `npm run build` ran
 const BUILD_TIME = typeof __APP_BUILD_TIME__ !== 'undefined' ? __APP_BUILD_TIME__ : null;
@@ -238,7 +239,7 @@ export default function Profile({ user, profile, setProfile }) {
         Invite your community to join Community Events Australia.
       </p>
       <button style={{ width: '100%' }} onClick={() => {
-        const url = 'https://communityevents.siza.info';
+        const url = APP_OPEN_LINK;
         const msg = [
           '🌙 *Community Events Australia*',
           '_Your free community events app_',
@@ -257,7 +258,7 @@ export default function Profile({ user, profile, setProfile }) {
           '',
           `👉 *${url}*`,
           '',
-          '_Open in Safari (iPhone) or Chrome (Android) → Add to Home Screen_',
+          '_Download Community Events App to keep connected with community_',
         ].join('\n');
         if (window.__showShareSheet) {
           window.__showShareSheet({

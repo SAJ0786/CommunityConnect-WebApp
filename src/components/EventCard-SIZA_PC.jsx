@@ -5,6 +5,7 @@ import { RELIGIOUS_EVENT_TYPES } from '../utils/constants';
 import { getEventImage } from '../services/imageService';
 import { getHijriDisplay, hijriDisplayFromParts } from '../services/hijriService';
 import { getHijriSettings } from '../services/settingsService';
+import { STORE_SHARE_LINES } from '../utils/storeLinks';
 
 let hijriOverridesCache = [];
 let hijriSettingsPromise = null;
@@ -158,7 +159,7 @@ export default function EventCard({
       ...reciterLines,
       event.audienceType ? `👥 ${event.audienceType}`             : '',
       event.notes?.trim() ? `📝 *Notes:* ${event.notes.trim()}` : '',
-      '', '_Shared via Community Events Australia_', '_communityevents.siza.info_',
+      '', ...STORE_SHARE_LINES, '', '_Shared via Community Events Australia_',
     ].filter(Boolean).join('\n'));
   };
 
@@ -295,11 +296,11 @@ export default function EventCard({
 
       {/* ── EXPANDED BODY ── */}
       <div style={{
-        overflow:'hidden',
-        maxHeight: isExpanded ? '600px' : '0px',
+        overflow: isExpanded ? 'visible' : 'hidden',
+        maxHeight: isExpanded ? 'none' : '0px',
         opacity: isExpanded ? 1 : 0,
         marginTop: isExpanded ? 10 : 0,
-        transition: 'max-height 0.35s ease, opacity 0.3s ease, margin-top 0.25s ease',
+        transition: 'opacity 0.3s ease, margin-top 0.25s ease',
       }}>
         <div style={{ borderTop:'1px solid var(--border)', paddingTop:10 }}>
           {/* Poster preview — tap to zoom */}
@@ -332,7 +333,11 @@ export default function EventCard({
             </p>
           )}
           {event.notes?.trim() && (
-            <p style={{ margin:'0 0 8px', fontSize:'0.8125rem', whiteSpace:'pre-wrap', color:'var(--text)', fontWeight:600 }}>
+            <p style={{
+              margin:'0 0 8px', fontSize:'0.8125rem', whiteSpace:'pre-wrap',
+              color:'var(--text)', fontWeight:600, overflowWrap:'anywhere',
+              wordBreak:'break-word', lineHeight:1.45,
+            }}>
               <strong>Notes:</strong> {event.notes.trim()}
             </p>
           )}

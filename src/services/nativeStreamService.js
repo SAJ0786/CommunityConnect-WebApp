@@ -1,6 +1,8 @@
 const CHUNK_INTERVAL_MS = 1000;
 const AUDIO_BITRATE = 128000;
 const IS_ANDROID = /android/i.test(navigator.userAgent);
+const ANDROID_RECORDING_FPS = 24;
+const ANDROID_VIDEO_BITRATE = 2200000;
 const RELAY_HTTP_URL = import.meta.env.VITE_NATIVE_STREAM_RELAY_HTTP_URL
   || 'https://native-stream-relay-209723097611.australia-southeast1.run.app';
 
@@ -61,6 +63,15 @@ export class NativeStreamer {
     this._lastOrientation = this._getOrientationKey();
     this._canvas = null;
     this._canvasVideo = null;
+    this._audioContext = null;
+    this._audioSource = null;
+    this._audioGain = null;
+    this._audioDestination = null;
+    this._micMeterContext = null;
+    this._micMeterSource = null;
+    this._micMeterAnalyser = null;
+    this._micMeterTimer = null;
+    this._lastStats = null;
     this._drawFrame = null;
     this._animationFrame = null;
     this._streamOrientationLock = null;
@@ -168,10 +179,10 @@ export class NativeStreamer {
     } finally {
       clearTimeout(timer);
     }
-    // A 1080p canvas plus WebM encoding is too CPU-intensive for many Android
-    // WebViews and causes blocky frames even on a fast network. The relay still
-    // outputs a clean YouTube-compatible frame, while Android captures at 720p.
-    if (IS_ANDROID && this.qualityProfile === '1080p') this.qualityProfile = '720p';
+    // Android Chrome/Samsung Internet must decode camera, draw to canvas,
+    // encode WebM, and upload while the relay transcodes again. 720p/1080p can
+    // overload mobile encoders and produces blocky frames or missing audio.
+    if (IS_ANDROID) this.qualityProfile = '480p';
     const selected = QUALITY_PROFILES[this.qualityProfile];
     this.onStatus(`Network quality: ${this.uploadMbps ? `${this.uploadMbps.toFixed(1)} Mbps - ` : ''}${selected.label}`);
     return { profile: this.qualityProfile, uploadMbps: this.uploadMbps, ...selected };
@@ -223,7 +234,7 @@ export class NativeStreamer {
         aspectRatio: { ideal: preferPortrait ? 9 / 16 : 16 / 9 },
         frameRate: { ideal: 30, min: 15 },
       },
-      audio: {
+      audio: IS_ANDROID ? true : {
         echoCancellation: speechMode,
         noiseSuppression: speechMode,
         autoGainControl: speechMode,
@@ -276,12 +287,14 @@ export class NativeStreamer {
         aspectRatio: { ideal: preferPortrait ? 9 / 16 : 16 / 9 },
         frameRate: { ideal: 30, min: 15 },
       }).catch(error => console.warn('[NativeStream] Video constraints unchanged:', error.message));
-      await audioTrack.applyConstraints?.({
-        echoCancellation: speechMode,
-        noiseSuppression: speechMode,
-        autoGainControl: speechMode,
-        channelCount: { ideal: 1 },
-      }).catch(error => console.warn('[NativeStream] Audio constraints unchanged:', error.message));
+      if (!IS_ANDROID) {
+        await audioTrack.applyConstraints?.({
+          echoCancellation: speechMode,
+          noiseSuppression: speechMode,
+          autoGainControl: speechMode,
+          channelCount: { ideal: 1 },
+        }).catch(error => console.warn('[NativeStream] Audio constraints unchanged:', error.message));
+      }
 
       this.onStatus('Using checked camera for streaming');
       return this.stream;
@@ -408,7 +421,7 @@ export class NativeStreamer {
     this.bytesSent = 0;
     this.startTime = Date.now();
 
-    this._startRecorder();
+    await this._startRecorder();
     await this._acquireWakeLock();
 
     this._statsTimer = setInterval(() => {
@@ -417,6 +430,10 @@ export class NativeStreamer {
       this.onStats({
         elapsed, chunks: this.chunkCount, bytesSent: this.bytesSent,
         bufferedAmount, qualityProfile: this.qualityProfile,
+        micLevel: this._lastStats?.micLevel || 0,
+        micActive: !!this._lastStats?.micActive,
+        micMuted: !!this._lastStats?.micMuted,
+        micTrackState: this._lastStats?.micTrackState || 'unknown',
       });
       if (bufferedAmount > 4000000) {
         this._congestedChecks++;
@@ -479,7 +496,7 @@ export class NativeStreamer {
           type:'start', rtmpUrl:this._rtmpUrl, mimeType:this._mimeType,
           qualityProfile:this.qualityProfile,
         }));
-        this._startRecorder();
+        await this._startRecorder();
         await this._waitForRelayReady(25000);
         this._reconnecting = false;
         this.onStatus('Streaming to YouTube - reconnected');
@@ -497,19 +514,22 @@ export class NativeStreamer {
     this._beginReconnect();
   }
 
-  _startRecorder() {
+  async _startRecorder() {
     const recOptions = {};
     if (this._mimeType) recOptions.mimeType = this._mimeType;
-    recOptions.videoBitsPerSecond = QUALITY_PROFILES[this.qualityProfile].videoBitrate;
+    recOptions.videoBitsPerSecond = IS_ANDROID
+      ? Math.min(QUALITY_PROFILES[this.qualityProfile].videoBitrate, ANDROID_VIDEO_BITRATE)
+      : QUALITY_PROFILES[this.qualityProfile].videoBitrate;
     if (AUDIO_BITRATE) recOptions.audioBitsPerSecond = AUDIO_BITRATE;
 
-    const recorderStream = this._createRecordingStream();
+    const recorderStream = await this._createRecordingStream();
     const audioTrack = recorderStream?.getAudioTracks?.()[0];
     if (!audioTrack || audioTrack.readyState !== 'live') {
       throw new Error('Microphone audio is unavailable. Check microphone permission and try again.');
     }
     audioTrack.enabled = true;
     this.onStatus(`Microphone ready - ${audioTrack.getSettings?.().sampleRate || 'default'} Hz`);
+    this._startMicLevelMonitor(this.stream || recorderStream);
     const recorder = new MediaRecorder(recorderStream, recOptions);
 
     recorder.ondataavailable = (event) => {
@@ -532,7 +552,7 @@ export class NativeStreamer {
     this.recorder = recorder;
   }
 
-  _createRecordingStream() {
+  async _createRecordingStream() {
     this._stopRecordingComposition();
 
     if (!this.stream || !HTMLCanvasElement.prototype.captureStream) {
@@ -613,8 +633,8 @@ export class NativeStreamer {
 
     draw();
 
-    const canvasStream = canvas.captureStream(IS_ANDROID ? 24 : 30);
-    const audioTracks = this.stream.getAudioTracks().filter(track => track.readyState === 'live');
+    const canvasStream = canvas.captureStream(IS_ANDROID ? ANDROID_RECORDING_FPS : 30);
+    const audioTracks = await this._createRecordingAudioTracks();
     audioTracks.forEach(track => { track.enabled = true; });
     const recordingStream = new MediaStream([
       ...canvasStream.getVideoTracks(),
@@ -626,6 +646,86 @@ export class NativeStreamer {
     this._drawFrame = draw;
     this.recordingStream = recordingStream;
     return recordingStream;
+  }
+
+  async _createRecordingAudioTracks() {
+    const liveTracks = this.stream?.getAudioTracks?.().filter(track => track.readyState === 'live') || [];
+    if (!liveTracks.length) return [];
+    liveTracks.forEach(track => { track.enabled = true; });
+    return liveTracks;
+  }
+
+  _startMicLevelMonitor(stream) {
+    this._stopMicLevelMonitor();
+    const audioTrack = stream?.getAudioTracks?.()[0];
+    if (!audioTrack || audioTrack.readyState !== 'live') {
+      this._lastStats = {
+        ...(this._lastStats || {}),
+        micLevel: 0,
+        micActive: false,
+        micMuted: true,
+        micTrackState: audioTrack?.readyState || 'missing',
+      };
+      return;
+    }
+
+    try {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) return;
+      this._micMeterContext = new AudioContextClass();
+      this._micMeterSource = this._micMeterContext.createMediaStreamSource(new MediaStream([audioTrack]));
+      this._micMeterAnalyser = this._micMeterContext.createAnalyser();
+      this._micMeterAnalyser.fftSize = 1024;
+      this._micMeterAnalyser.smoothingTimeConstant = 0.65;
+      this._micMeterSource.connect(this._micMeterAnalyser);
+      if (this._micMeterContext.state === 'suspended') this._micMeterContext.resume().catch(() => {});
+
+      const samples = new Uint8Array(this._micMeterAnalyser.fftSize);
+      const tick = () => {
+        if (!this._micMeterAnalyser) return;
+        this._micMeterAnalyser.getByteTimeDomainData(samples);
+        let sum = 0;
+        for (let i = 0; i < samples.length; i++) {
+          const centered = samples[i] - 128;
+          sum += centered * centered;
+        }
+        const rms = Math.sqrt(sum / samples.length);
+        const level = Math.min(1, rms / 35);
+        const micState = {
+          micLevel: level,
+          micActive: level > 0.035 && audioTrack.enabled && audioTrack.readyState === 'live',
+          micMuted: !audioTrack.enabled,
+          micTrackState: audioTrack.readyState,
+        };
+        this._lastStats = { ...(this._lastStats || {}), ...micState };
+        this.onStats({
+          elapsed: this.startTime ? Math.round((Date.now() - this.startTime) / 1000) : 0,
+          chunks: this.chunkCount,
+          bytesSent: this.bytesSent,
+          bufferedAmount: this.ws?.bufferedAmount || 0,
+          qualityProfile: this.qualityProfile,
+          ...micState,
+        });
+      };
+      tick();
+      this._micMeterTimer = setInterval(tick, 500);
+    } catch (error) {
+      console.warn('[NativeStream] Mic level monitor unavailable:', error.message);
+    }
+  }
+
+  _stopMicLevelMonitor() {
+    if (this._micMeterTimer) {
+      clearInterval(this._micMeterTimer);
+      this._micMeterTimer = null;
+    }
+    try { this._micMeterSource?.disconnect(); } catch {}
+    this._micMeterSource = null;
+    this._micMeterAnalyser = null;
+    if (this._micMeterContext) {
+      try { this._micMeterContext.close(); } catch {}
+      this._micMeterContext = null;
+    }
   }
 
   _stopRecordingComposition() {
@@ -643,6 +743,24 @@ export class NativeStreamer {
     if (this.recordingStream) {
       this.recordingStream.getVideoTracks().forEach(track => track.stop());
       this.recordingStream = null;
+    }
+
+    this._stopMicLevelMonitor();
+
+    try { this._audioSource?.disconnect(); } catch {}
+    this._audioSource = null;
+
+    try { this._audioGain?.disconnect(); } catch {}
+    this._audioGain = null;
+
+    if (this._audioDestination) {
+      this._audioDestination.stream.getTracks().forEach(track => track.stop());
+      this._audioDestination = null;
+    }
+
+    if (this._audioContext) {
+      try { this._audioContext.close(); } catch {}
+      this._audioContext = null;
     }
 
     this._canvas = null;

@@ -4,7 +4,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase/firebase';
-import { localDateStr } from './dateUtils';
+import { compareEventsByDateTime, localDateStr } from './dateUtils';
 import { classifyMetroArea } from '../utils/cities';
 
 export function validateRequiredEventFields(event) {
@@ -89,7 +89,7 @@ export async function getActiveEvents(isGuest = false) {
 
   return [...byId.values()]
     .filter(e => !e.hidden)
-    .sort((a, b) => (a.eventDate || '').localeCompare(b.eventDate || ''));
+    .sort(compareEventsByDateTime);
 }
 
 // My Events — all events by this user including hidden ones
@@ -102,7 +102,7 @@ export async function getMyEvents(uid) {
       orderBy('eventDate', 'asc')
     )
   );
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(compareEventsByDateTime);
 }
 
 export async function goLive(id, roomCode) {

@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { STORE_SHARE_LINES } from '../utils/storeLinks';
 
-const APP_URL = 'https://communityevents.siza.info';
 
 function buildShareMessage(event, isGuest, user, profile) {
   const displayType  = event.eventTypeDisplay || event.eventType || '';
@@ -24,7 +24,7 @@ function buildShareMessage(event, isGuest, user, profile) {
   if (isReligious && event.speakerName) lines.push(`🎤 Speaker: ${event.speakerName}`);
   if (isReligious) { const r=(event.reciters||[]).filter(x=>x.name); if(r.length) lines.push(`📿 ${r.map(x=>(x.customType||x.type||'Reciter')+': '+x.name).join(' · ')}`); }
   if (event.notes?.trim()) lines.push(`📝 Notes: ${event.notes.trim()}`);
-  lines.push('','🔗 View all community events:',APP_URL,'','_Shared via Community Events app_');
+  lines.push('', ...STORE_SHARE_LINES, '', '_Shared via Community Events app_');
   return lines.join('\n');
 }
 

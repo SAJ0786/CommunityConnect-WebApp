@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import EventCard from './EventCard';
 import EventFilters from './EventFilters';
-import { todayLocal } from '../services/dateUtils';
+import { compareEventsByDateTime, todayLocal } from '../services/dateUtils';
 import CitySelector from './CitySelector';
 
 const LAYOUTS = [
@@ -42,7 +42,9 @@ function LayoutSwitcher({ value, onChange }) {
 
 function TodayRail({ events, setExpandedId, setPage, isGuest }) {
   const today = todayLocal();
-  const todaysEvents = events.filter(event => event.eventDate === today || event.isLive);
+  const todaysEvents = events
+    .filter(event => event.eventDate === today || event.isLive)
+    .sort(compareEventsByDateTime);
 
   return (
     <aside className="desktop-today-rail">
@@ -143,7 +145,9 @@ export default function DesktopHome({
     try { localStorage.setItem('communityEventsDesktopLayout', nextLayout); } catch {}
   };
 
-  const selectedEvents = displayed.filter(event => event.eventDate === selectedDate || event.isLive);
+  const selectedEvents = displayed
+    .filter(event => event.eventDate === selectedDate || event.isLive)
+    .sort(compareEventsByDateTime);
   const groupedEvents = useMemo(() => {
     const groups = [];
     displayed.forEach(event => {
@@ -154,6 +158,7 @@ export default function DesktopHome({
       }
       group.events.push(event);
     });
+    groups.forEach(group => group.events.sort(compareEventsByDateTime));
     return groups;
   }, [displayed]);
 

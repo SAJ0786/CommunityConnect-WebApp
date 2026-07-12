@@ -3,7 +3,7 @@
 export async function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   try {
-    const reg = await navigator.serviceWorker.register('/sw.js');
+    const reg = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
     let pendingWorker = reg.waiting || null;
     let refreshing = false;
     let hasControlledPage = Boolean(navigator.serviceWorker.controller);

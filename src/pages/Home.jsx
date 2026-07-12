@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useState, useEffect } from 'react';
 import EventCard from '../components/EventCard';
 import EventFilters from '../components/EventFilters';
-import { localDateStr, todayLocal } from '../services/dateUtils';
+import { compareEventsByDateTime, localDateStr, todayLocal } from '../services/dateUtils';
 import CitySelector from '../components/CitySelector';
 import { DEFAULT_CITY, getEventMetroArea, normalizeCity } from '../utils/cities';
 
@@ -10,7 +10,7 @@ const DesktopHome = lazy(() => import('../components/DesktopHome'));
 export default function Home({ events, user, profile, setPage, setEditingEvent,
   handleDelete, handleCopy, isGuest = false, loadEvents,
   savedIds = [], onSaveToggle, onStreamStart, focusEventId, setFocusEventId,
-  eventsLoading = false }) {
+  eventsLoading = false, offlineMode = false }) {
 
   const today    = todayLocal();
   const yesterday = localDateStr(-1);
@@ -44,8 +44,8 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
   const cityEvents = events.filter(event => getEventMetroArea(event) === selectedCity);
   // A stream may legitimately continue past midnight. Keep it reachable until
   // the host ends it, even when its scheduled event date is now yesterday.
-  const upcoming = cityEvents.filter(e => e.isLive || e.eventDate >= today);
-  const filterableEvents = cityEvents.filter(e => e.isLive || e.eventDate >= yesterday);
+  const upcoming = cityEvents.filter(e => e.isLive || e.eventDate >= today).sort(compareEventsByDateTime);
+  const filterableEvents = cityEvents.filter(e => e.isLive || e.eventDate >= yesterday).sort(compareEventsByDateTime);
 
   // When opened from a notification, expand + scroll to that event
   useEffect(() => {
@@ -119,6 +119,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
       });
     }
   }
+  displayed = [...displayed].sort(compareEventsByDateTime);
 
   const visibleDisplayed = displayed.slice(0, visibleCount);
   const hasMore = visibleDisplayed.length < displayed.length;
@@ -198,6 +199,16 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
       </div>
 
       {/* ── Guest account benefits ── */}
+      {offlineMode && events.length > 0 && (
+        <div style={{
+          margin: '0 16px 12px', padding: '9px 12px', borderRadius: 12,
+          background: '#e9fbf8', border: '1px solid #99d6cf',
+          fontSize: '0.75rem', color: '#0f766e', lineHeight: 1.5, fontWeight: 700,
+        }}>
+          Offline: showing saved events from this device. Text sharing and directions use the cached event details.
+        </div>
+      )}
+
       {isGuest && (
         <div style={{
           margin: '0 16px 12px', padding: '10px 14px', borderRadius: 12,

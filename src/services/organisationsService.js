@@ -73,9 +73,12 @@ export async function getOrganisations() {
 // Add a new organisation (logoBase64 is a data-URI string)
 export async function addOrganisation({ name, slug, location, logoBase64 }) {
   if (!name || !slug) throw new Error('Name and slug are required');
+  const cleanSlug = slug.trim().toLowerCase();
+  const existing = await getDocs(query(collection(db, COL), where('slug', '==', cleanSlug)));
+  if (!existing.empty) throw new Error(`Organisation ID "${cleanSlug}" is already used. Please choose a unique ID.`);
   return addDoc(collection(db, COL), {
     name:        name.trim(),
-    slug:        slug.trim().toLowerCase(),
+    slug:        cleanSlug,
     location:    (location || '').trim(),
     logoBase64:  logoBase64 || '',
     createdAt:   serverTimestamp(),
@@ -84,6 +87,13 @@ export async function addOrganisation({ name, slug, location, logoBase64 }) {
 
 // Update an existing organisation
 export async function updateOrganisation(id, fields) {
+  if (fields.slug) {
+    const cleanSlug = fields.slug.trim().toLowerCase();
+    const existing = await getDocs(query(collection(db, COL), where('slug', '==', cleanSlug)));
+    const duplicate = existing.docs.find(item => item.id !== id);
+    if (duplicate) throw new Error(`Organisation ID "${cleanSlug}" is already used. Please choose a unique ID.`);
+    fields = { ...fields, slug: cleanSlug };
+  }
   return updateDoc(doc(db, COL, id), { ...fields, updatedAt: serverTimestamp() });
 }
 

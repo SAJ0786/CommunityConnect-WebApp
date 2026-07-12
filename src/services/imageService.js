@@ -59,6 +59,7 @@ const normaliseOrgText = value => String(value || '')
 
 export async function getFallbackImageAsync(event = {}) {
   const orgType = String(event.organiserType || '').trim().toLowerCase();
+  const orgId = String(event.organiserId || '').trim();
   const name = normaliseOrgText(event.hostName || event.organiserName);
 
   // Firestore is authoritative so logos edited in Admin Dashboard appear on
@@ -77,17 +78,21 @@ export async function getFallbackImageAsync(event = {}) {
 
     const withLogos = orgs.filter(org => !!org.logoBase64);
 
-    // 1. The selected organiser slug is authoritative.
+    // 1. The selected organiser document id is authoritative for dynamic orgs.
+    const exactId = orgId ? withLogos.find(org => org.id === orgId) : null;
+    if (exactId) return exactId.logoBase64;
+
+    // 2. The selected organiser slug is authoritative.
     const exactSlug = withLogos.find(org =>
       String(org.slug || '').trim().toLowerCase() === orgType
     );
     if (exactSlug) return exactSlug.logoBase64;
 
-    // 2. Prefer an exact host/organisation name.
+    // 3. Prefer an exact host/organisation name.
     const exactName = withLogos.find(org => normaliseOrgText(org.name) === name);
     if (exactName && name) return exactName.logoBase64;
 
-    // 3. For old "centre" events, choose the longest specific name match.
+    // 4. For old "centre" events, choose the longest specific name match.
     // Generic words such as "centre" can no longer select an arbitrary org.
     const nameMatches = withLogos
       .map(org => {
@@ -114,7 +119,7 @@ export async function getFallbackImageAsync(event = {}) {
 // Synchronous fallback for bundled orgs only (used in compact card before async resolves)
 export function getFallbackImage(event = {}) {
   const org  = (event.organiserType || '').toLowerCase();
-  const name = (event.hostName || event.organiserName || '').toLowerCase();
+  const name = (event.organiserName || event.hostName || '').toLowerCase();
   if (BUNDLED[org]) return BUNDLED[org];
   if (name.includes('muhammadi'))                                return fallbackMuhammadi;
   if (name.includes('imam hasan') || name.includes('imamhasan')) return fallbackImamHasan;

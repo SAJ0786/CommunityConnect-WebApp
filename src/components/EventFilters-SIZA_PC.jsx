@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { compareEventsByDateTime } from '../services/dateUtils';
 
 const FILTER_STYLE = {
   background: 'var(--card,white)',
@@ -58,7 +59,7 @@ export default function EventFilters({ events, onChange }) {
         return tb - ta;
       }
       if (sb === 'live') return 0; // already sorted above
-      return (a.eventDate || '').localeCompare(b.eventDate || '');
+      return compareEventsByDateTime(a, b);
     });
 
     onChange(filtered);
@@ -78,7 +79,7 @@ export default function EventFilters({ events, onChange }) {
     onChange([...events].sort((a, b) => {
       if (a.isLive && !b.isLive) return -1;
       if (!a.isLive && b.isLive) return 1;
-      return (a.eventDate || '').localeCompare(b.eventDate || '');
+      return compareEventsByDateTime(a, b);
     }));
   };
 

@@ -1,8 +1,12 @@
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "info.siza.communityevents",
-    "sha256_cert_fingerprints": ["A5:BA:88:C1:A8:1B:75:A7:D8:B5:E7:82:4A:85:68:52:35:13:0D:B5:1A:E9:BA:55:AF:57:19:29:4D:5E:6D:24"]
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "info.siza.communityevents.app",
+      "sha256_cert_fingerprints": [
+        "A9:D1:04:24:13:E0:FF:A9:45:15:51:89:70:67:7E:F2:4E:9F:26:95:6A:A5:84:D8:A6:CD:AF:2D:7E:29:91:87"
+      ]
+    }
   }
-}]
+]

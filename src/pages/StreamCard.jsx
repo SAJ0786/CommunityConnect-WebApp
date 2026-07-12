@@ -61,6 +61,16 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
   const videoRef    = useRef(null);
   const streamerRef = useRef(nativeStream?.streamer || null);
   const isHost = role === 'host';
+  const micLevel = Math.max(0, Math.min(1, Number(stats?.micLevel || 0)));
+  const micPercent = Math.round(micLevel * 100);
+  const micOk = !!stats?.micActive && !muted;
+  const micLabel = muted
+    ? 'Mic muted'
+    : stats?.micTrackState && stats.micTrackState !== 'live'
+      ? 'Mic unavailable'
+      : micOk
+        ? 'Mic active'
+        : 'No mic input';
 
   // ── Attach camera stream to <video> preview + wire callbacks ─────────────
   useEffect(() => {
@@ -348,6 +358,30 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
                 {stats.qualityProfile ? <span>{stats.qualityProfile}</span> : null}
                 {stats.bytesSent && stats.elapsed
                   ? <span>{Math.round(stats.bytesSent*8/stats.elapsed/1000)}kbps</span> : null}
+              </div>
+            )}
+            {phase !== 'error' && (
+              <div style={{
+                position:'absolute', left:12, right:12, bottom:64, zIndex:3,
+                background:'rgba(0,0,0,0.68)', color:'white', border:'1px solid rgba(255,255,255,0.18)',
+                borderRadius:12, padding:'8px 10px', display:'flex', alignItems:'center', gap:10,
+                boxShadow:'0 6px 20px rgba(0,0,0,0.35)',
+              }}>
+                <div style={{ fontSize:'0.75rem', fontWeight:900, minWidth:86, color: micOk ? '#86efac' : '#fca5a5' }}>
+                  {micLabel}
+                </div>
+                <div aria-label={`Microphone level ${micPercent}%`} style={{
+                  flex:1, height:9, borderRadius:999, background:'rgba(255,255,255,0.18)', overflow:'hidden',
+                }}>
+                  <div style={{
+                    width:`${micPercent}%`, height:'100%', borderRadius:999,
+                    background: micOk ? '#22c55e' : '#ef4444',
+                    transition:'width 160ms ease',
+                  }} />
+                </div>
+                <div style={{ fontSize:'0.6875rem', fontWeight:800, color:'#d1d5db', minWidth:34, textAlign:'right' }}>
+                  {micPercent}%
+                </div>
               </div>
             )}
             {orientationWarning && (

@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Building2, CalendarDays, MapPin, Tag, UserRound, Users, X } from 'lucide-react';
-import { localDateStr } from '../services/dateUtils';
+import { compareEventsByDateTime, localDateStr } from '../services/dateUtils';
 
 const FILTER_STYLE = {
   background: 'var(--card,white)',
@@ -77,7 +77,7 @@ export default function EventFilters({ events, onChange, upcomingOnlyOnEmpty = f
         return tb - ta;
       }
       if (sb === 'live') return 0; // already sorted above
-      return (a.eventDate || '').localeCompare(b.eventDate || '');
+      return compareEventsByDateTime(a, b);
     });
 
     onChange(filtered);

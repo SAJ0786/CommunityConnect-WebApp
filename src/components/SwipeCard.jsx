@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
+import { STORE_SHARE_LINES } from '../utils/storeLinks';
 
 // ── SVG Icons ────────────────────────────────────────────────────────────────
 const WaIcon = ({ size = 24, color = 'white' }) => (
@@ -193,7 +194,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
       cur.audienceType ? `👥 ${cur.audienceType}` : '',
       (showFull && cur.hostPhone) ? `📞 *Contact:* ${cur.hostPhone}` : '',
       cur.notes?.trim() ? `📝 *Notes:* ${cur.notes.trim()}` : '',
-      '', '_Shared via Community Events Australia_', '_communityevents.siza.info_',
+      '', ...STORE_SHARE_LINES, '', '_Shared via Community Events Australia_',
     ].filter(Boolean).join('\n'));
   };
 

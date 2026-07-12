@@ -71,6 +71,7 @@ export default function App() {
   const [profileVerified, setProfileVerified] = useState(false);
   const [events, setEvents]             = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
+  const [offlineMode, setOfflineMode]   = useState(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [loading, setLoading]           = useState(true);
   const [authMode, setAuthMode]         = useState(null);
@@ -112,16 +113,21 @@ export default function App() {
     const requestId = ++eventsRequestRef.current;
     const uid = guestMode ? 'guest' : auth.currentUser?.uid;
     const cached = readEventCache(guestMode, uid);
-    if (cached?.events?.length) setEvents(cached.events);
+    if (cached?.events?.length) {
+      setEvents(cached.events);
+      setOfflineMode(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+    }
     setEventsLoading(true);
     try {
       const latest = await getActiveEvents(guestMode);
       if (requestId !== eventsRequestRef.current) return;
       setEvents(latest);
       writeEventCache(guestMode, uid, latest);
+      setOfflineMode(false);
     } catch (e) {
       if (requestId !== eventsRequestRef.current) return;
       console.error('Failed to load events:', e);
+      setOfflineMode(true);
       if (!cached?.events?.length) setEvents([]);
     } finally {
       if (requestId === eventsRequestRef.current) setEventsLoading(false);
@@ -189,6 +195,20 @@ export default function App() {
       loadEvents(true);
     }, 60000);
     return () => window.clearInterval(timer);
+  }, [authMode, loadEvents]);
+
+  useEffect(() => {
+    const updateOnlineState = () => {
+      const offline = !navigator.onLine;
+      setOfflineMode(offline);
+      if (!offline && authMode) loadEvents(authMode === 'guest');
+    };
+    window.addEventListener('online', updateOnlineState);
+    window.addEventListener('offline', updateOnlineState);
+    return () => {
+      window.removeEventListener('online', updateOnlineState);
+      window.removeEventListener('offline', updateOnlineState);
+    };
   }, [authMode, loadEvents]);
 
   const buildFallbackProfile = useCallback((authenticatedUser) => ({
@@ -311,6 +331,20 @@ export default function App() {
       );
 
       if (!u) {
+        if (!navigator.onLine) {
+          const cachedGuestEvents = readEventCache(true, 'guest');
+          if (cachedGuestEvents?.events?.length) {
+            setUser({ uid: 'guest', isAnonymous: true, offlineOnly: true });
+            setProfile(null);
+            setAuthMode('guest');
+            setAuthError('');
+            setEvents(cachedGuestEvents.events);
+            setEventsLoading(false);
+            setOfflineMode(true);
+            setLoading(false);
+            return;
+          }
+        }
         // Only wait for redirect result if we explicitly started a social login
         // AND it was within the last 3 minutes AND redirect hasn't been checked yet
         try {
@@ -388,7 +422,7 @@ export default function App() {
       setAuthMode('guest');
       setAuthError('');
       setLoading(false);
-      await loadEvents();
+      await loadEvents(true);
     }
   };
 
@@ -491,7 +525,7 @@ export default function App() {
   );
 
   const isGuest    = authMode === 'guest';
-  const shared     = { user, profile, events, eventsLoading, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId };
+  const shared     = { user, profile, events, eventsLoading, offlineMode, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId };
   const guestPage  = ['home','search','calendar','streams'].includes(page) ? page : 'home';
   const activePage = isGuest ? guestPage : page;
 
@@ -586,6 +620,14 @@ export default function App() {
         <div className="card" style={{ margin: '12px auto', maxWidth: 900, borderColor: '#f59e0b', background: '#fffbeb' }}>
           <p className="small" style={{ margin: 0, color: '#92400e', lineHeight: 1.5 }}>
             ⚠️ {authError}
+          </p>
+        </div>
+      )}
+
+      {offlineMode && events.length > 0 && (
+        <div className="card" style={{ margin: '10px auto 0', maxWidth: 900, borderColor: '#99d6cf', background: '#e9fbf8' }}>
+          <p className="small" style={{ margin: 0, color: '#0f766e', lineHeight: 1.5, fontWeight: 700 }}>
+            Offline mode: showing saved events from this device. Sharing and directions can use saved event details; live status and new updates will refresh when internet returns.
           </p>
         </div>
       )}

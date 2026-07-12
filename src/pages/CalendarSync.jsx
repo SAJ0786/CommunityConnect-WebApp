@@ -20,24 +20,13 @@ export default function CalendarSync({ user }) {
   // iOS: webcal:// triggers Apple Calendar directly
   const iosCalendarUrl = `webcal://${feedUrl.replace('https://', '').replace('http://', '')}`;
 
-  // Google Calendar requires webcal:// in the cid parameter (not https://)
+  // Google Calendar previously worked best with webcal:// in the cid parameter.
   const webcalFeedUrl      = feedUrl.replace('https://', 'webcal://').replace('http://', 'webcal://');
   const googleCalendarUrl  = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalFeedUrl)}`;
 
   // Raw function URL as fallback — more reliable for external calendar apps
-  const rawFeedUrl = user?.uid
-    ? `https://australia-southeast1-community-event-8b639.cloudfunctions.net/calendarFeed?t=${user.uid}`
-    : feedUrl;
+  const rawFeedUrl = feedUrl;
   const googleCalendarUrlRaw = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(rawFeedUrl.replace('https://', 'webcal://'))}`;
-
-  const openIphone = () => {
-    window.location.href = iosCalendarUrl;
-  };
-
-  const openGoogle = () => {
-    // Try the short URL first, fall back to raw function URL
-    window.open(googleCalendarUrl, '_blank');
-  };
 
   const TAB_LABELS = {
     iphone:  'iPhone / iPad',
@@ -67,13 +56,16 @@ export default function CalendarSync({ user }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           {/* iPhone / Apple Calendar */}
-          <button
-            onClick={openIphone}
+          <a
+            href={iosCalendarUrl}
+            target="_blank"
+            rel="noopener noreferrer"
             style={{
               background: 'var(--teal-l,#e6f4f1)', border: '1px solid var(--teal,#a7d9ce)',
               borderRadius: 16, padding: '16px 12px',
               display: 'flex', flexDirection: 'column',
-              alignItems: 'center', gap: 10, cursor: 'pointer'
+              alignItems: 'center', gap: 10, cursor: 'pointer',
+              textDecoration: 'none', boxSizing: 'border-box'
             }}
           >
             <div style={{
@@ -86,17 +78,20 @@ export default function CalendarSync({ user }) {
               <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--teal)' }}>iPhone / iPad</div>
               <div style={{ fontSize: '0.6875rem', color: 'var(--muted)', marginTop: 2 }}>Apple Calendar</div>
             </div>
-          </button>
+          </a>
 
           {/* Android / Google Calendar */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <button
-              onClick={openGoogle}
+            <a
+              href={googleCalendarUrl}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 background: 'var(--teal-l,#e6f4f1)', border: '1px solid var(--teal,#a7d9ce)',
                 borderRadius: 16, padding: '16px 12px',
                 display: 'flex', flexDirection: 'column',
-                alignItems: 'center', gap: 10, cursor: 'pointer', width: '100%'
+                alignItems: 'center', gap: 10, cursor: 'pointer', width: '100%',
+                textDecoration: 'none', boxSizing: 'border-box'
               }}
             >
               <div style={{
@@ -109,18 +104,21 @@ export default function CalendarSync({ user }) {
                 <div style={{ fontWeight: 900, fontSize: '0.9375rem', color: 'var(--red,#c0392b)' }}>Android</div>
                 <div style={{ fontSize: '0.6875rem', color: 'var(--muted)', marginTop: 2 }}>Google Calendar</div>
               </div>
-            </button>
-            <button
-              onClick={() => window.open(googleCalendarUrlRaw, '_blank')}
+            </a>
+            <a
+              href={googleCalendarUrlRaw}
+              target="_blank"
+              rel="noopener noreferrer"
               style={{
                 background: '#f3f4f6', color: 'var(--muted)',
                 border: '1px solid var(--border)',
                 borderRadius: 10, padding: '6px',
-                fontSize: '0.6875rem', cursor: 'pointer'
+                fontSize: '0.6875rem', cursor: 'pointer',
+                textDecoration: 'none', textAlign: 'center'
               }}
             >
               Try alternate link if above fails
-            </button>
+            </a>
           </div>
         </div>
 

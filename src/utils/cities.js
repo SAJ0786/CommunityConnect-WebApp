@@ -11,6 +11,17 @@ export const CITY_OPTIONS = [
   { value: 'rest-of-australia', label: 'Rest of Australia' },
 ];
 
+export const CITY_CODES = {
+  sydney: 'SYD',
+  melbourne: 'MEL',
+  canberra: 'CBR',
+  brisbane: 'BNE',
+  adelaide: 'ADL',
+  hobart: 'HBA',
+  perth: 'PER',
+  'rest-of-australia': 'ROA',
+};
+
 const VALID_CITIES = new Set(CITY_OPTIONS.map(city => city.value));
 
 export function normalizeCity(value) {
@@ -41,4 +52,8 @@ export function getEventMetroArea(event = {}) {
 
 export function cityLabel(value) {
   return CITY_OPTIONS.find(city => city.value === value)?.label || CITY_OPTIONS[0].label;
+}
+
+export function cityCode(value) {
+  return CITY_CODES[normalizeCity(value)] || CITY_CODES[DEFAULT_CITY];
 }

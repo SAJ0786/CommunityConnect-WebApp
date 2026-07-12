@@ -2,7 +2,7 @@ const CACHE_VERSION = 2;
 const CACHE_PREFIX = `community-events-v${CACHE_VERSION}`;
 const PROFILE_PREFIX = `community-profile-v${CACHE_VERSION}`;
 const FRESH_AGE_MS = 15 * 60 * 1000;
-const MAX_STALE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_STALE_AGE_MS = 60 * 24 * 60 * 60 * 1000;
 
 const storageFor = () => {
   try { return window.localStorage; }

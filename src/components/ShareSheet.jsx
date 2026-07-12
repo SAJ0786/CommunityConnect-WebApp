@@ -30,6 +30,33 @@ export default function ShareSheet() {
   const encoded = encodeURIComponent(msg);
   const close   = () => setOpen(false);
 
+  const openWhatsApp = () => {
+    close();
+    // Same-window universal link works more reliably in PWAs and store wrappers
+    // than target=_blank, and opens the installed WhatsApp app when available.
+    window.location.assign(`https://api.whatsapp.com/send?text=${encoded}`);
+  };
+
+  const openSms = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: shareTitle, text: msg });
+        close();
+        return;
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        console.warn('Native message sharing failed:', error.message);
+      }
+    }
+
+    const isAppleMobile = /iPhone|iPad|iPod/i.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    close();
+    window.location.href = isAppleMobile
+      ? `sms:&body=${encoded}`
+      : `sms:?body=${encoded}`;
+  };
+
   const copyText = () => {
     navigator.clipboard.writeText(msg).then(() => {
       setCopied(true);
@@ -126,8 +153,7 @@ export default function ShareSheet() {
           )}
 
           {/* WhatsApp — text only */}
-          <a href={`https://wa.me/?text=${encoded}`} target="_blank" rel="noreferrer"
-            onClick={close}
+          <button type="button" onClick={openWhatsApp}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
               padding: '12px 6px', borderRadius: 14, background: '#f0fdf4',
@@ -137,20 +163,20 @@ export default function ShareSheet() {
             <span style={{ fontSize: '0.625rem', fontWeight: 800, color: '#166534', textAlign: 'center', lineHeight: 1.2 }}>
               WhatsApp{hasPoster ? '\n(text only)' : ''}
             </span>
-          </a>
+          </button>
 
-          {/* SMS — text only */}
-          <a href={`sms:?body=${encoded}`} onClick={close}
+          {/* Native share drawer — text only */}
+          <button type="button" onClick={openSms}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
               padding: '12px 6px', borderRadius: 14, background: '#eff6ff',
               border: '1px solid #bfdbfe', textDecoration: 'none', cursor: 'pointer',
             }}>
-            <span style={{ fontSize: '1.625rem' }}>✉️</span>
+            <span style={{ fontSize: '1.625rem' }}>📤</span>
             <span style={{ fontSize: '0.625rem', fontWeight: 800, color: '#1e40af', textAlign: 'center', lineHeight: 1.2 }}>
-              SMS{hasPoster ? '\n(text only)' : ''}
+              Share via Apps{hasPoster ? '\n(text only)' : ''}
             </span>
-          </a>
+          </button>
 
           {/* Copy text */}
           <button onClick={copyText}

@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import EventCard from '../components/EventCard';
 import EventFilters from '../components/EventFilters';
+import { compareEventsByDateTime } from '../services/dateUtils';
 
 export default function Home({ events, user, profile, setPage, setEditingEvent,
   handleDelete, handleCopy, isGuest = false, loadEvents,
   savedIds = [], onSaveToggle, onStreamStart }) {
 
   const today    = new Date().toISOString().slice(0, 10);
-  const upcoming = events.filter(e => e.eventDate >= today);
+  const upcoming = events.filter(e => e.eventDate >= today).sort(compareEventsByDateTime);
 
   const [filtered,   setFiltered]   = useState(null);
   const [expandedId, setExpandedId] = useState('__first__');
@@ -33,6 +34,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
       (e.address?.suburb || '').toLowerCase().includes(q)
     );
   }
+  displayed = [...displayed].sort(compareEventsByDateTime);
 
   return (
     <>

@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Opening Community Events Australia</title>
+  <meta name="robots" content="noindex">
+  <meta name="description" content="Download Community Events App to keep connected with community.">
+  <meta property="og:title" content="Community Events Australia">
+  <meta property="og:description" content="Download Community Events App to keep connected with community.">
+  <meta property="og:image" content="https://communityevents.siza.info/icons/icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:url" content="https://communityevents.siza.info/app">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Community Events Australia">
+  <meta name="twitter:description" content="Download Community Events App to keep connected with community.">
+  <meta name="twitter:image" content="https://communityevents.siza.info/icons/icon-512.png">
+  <style>
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: #ffffff;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #0f172a;
+    }
+
+    .fallback {
+      min-height: 100vh;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .fallback.is-visible {
+      display: flex;
+    }
+
+    a {
+      color: #0f766e;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+  <main class="fallback" id="fallback">
+    <p>Opening Community Events Australia. <a id="fallbackLink" href="/">Tap here if it does not open.</a></p>
+  </main>
+
+  <script>
+    (function () {
+      var ua = navigator.userAgent || "";
+      var isIOS = /iPhone|iPad|iPod/i.test(ua);
+      var isAndroid = /Android/i.test(ua);
+      var iosStore = "https://apps.apple.com/au/app/community-events-australia/id6782770347";
+      var androidStore = "https://play.google.com/store/apps/details?id=info.siza.communityevents.app";
+      var microsoftStore = "https://apps.microsoft.com/detail/9NDGJZHL86KJ";
+      var webApp = "https://communityevents.siza.info/";
+      var fallback = document.getElementById("fallback");
+      var fallbackLink = document.getElementById("fallbackLink");
+
+      function showFallback(url) {
+        fallbackLink.href = url;
+        fallback.className = "fallback is-visible";
+      }
+
+      if (isAndroid) {
+        var intentUrl = "intent://communityevents.siza.info/app#Intent;scheme=https;package=info.siza.communityevents.app;S.browser_fallback_url=" + encodeURIComponent(androidStore) + ";end";
+        fallbackLink.href = androidStore;
+        window.location.replace(intentUrl);
+        setTimeout(function () { showFallback(androidStore); }, 1200);
+        return;
+      }
+
+      if (isIOS) {
+        fallbackLink.href = iosStore;
+        window.location.replace(iosStore);
+        setTimeout(function () { showFallback(iosStore); }, 1200);
+        return;
+      }
+
+      fallbackLink.href = microsoftStore;
+      window.location.replace(microsoftStore || webApp);
+      setTimeout(function () { showFallback(webApp); }, 1200);
+    }());
+  </script>
+</body>
+</html>

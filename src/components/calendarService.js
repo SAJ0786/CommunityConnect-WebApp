@@ -6,7 +6,7 @@ const APP_DOMAIN = 'https://communityevents.siza.info';
 
 export function buildFeedUrl(projectId, region, uid) {
   // Short URL via hosting rewrite — much cleaner than the raw function URL
-  return `${APP_DOMAIN}/cal?t=${uid}`;
+  return `${APP_DOMAIN}/cal?t=${encodeURIComponent(uid || '')}`;
 }
 
 export function icsInstructions() {

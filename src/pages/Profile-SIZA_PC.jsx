@@ -2,6 +2,7 @@ import React from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/firebase';
 import { deleteMyAccountAndEvents, updateReminderPreference } from '../services/userService';
+import { APP_OPEN_LINK } from '../utils/storeLinks';
 
 export default function Profile({ user, profile, setProfile }) {
   const toggleReminder = async () => {
@@ -48,7 +49,7 @@ export default function Profile({ user, profile, setProfile }) {
         Invite your community to join Community Events Australia.
       </p>
       <button style={{ width: '100%' }} onClick={() => {
-        const url = 'https://communityevents.siza.info';
+        const url = APP_OPEN_LINK;
         const msg = [
           '🌙 *Community Events Australia*',
           '_Your free community events app_',
@@ -67,7 +68,7 @@ export default function Profile({ user, profile, setProfile }) {
           '',
           `👉 *${url}*`,
           '',
-          '_Open in Safari (iPhone) or Chrome (Android) → Add to Home Screen_',
+          '_Download Community Events App to keep connected with community_',
         ].join('\n');
         if (window.__showShareSheet) {
           window.__showShareSheet(msg);

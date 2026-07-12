@@ -17,7 +17,9 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then(cache => cache.addAll(PRECACHE).catch(() => {}))
   );
-  // The client sends SKIP_WAITING when it is safe to reload.
+  // Activate the newest worker immediately so returning PWAs do not step
+  // through older deployed versions one by one.
+  self.skipWaiting();
 });
 
 // ── Activate: delete old caches ──────────────────────────────────────────────

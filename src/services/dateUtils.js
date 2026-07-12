@@ -22,3 +22,21 @@ export function localDateStr(offsetDays = 0) {
 export function todayLocal() {
   return localDateStr(0);
 }
+
+export function normaliseEventTime(value = '') {
+  const text = String(value || '').trim();
+  const match = text.match(/^(\d{1,2})(?::?(\d{2}))?/);
+  if (!match) return '99:99';
+  const hour = Math.max(0, Math.min(23, Number(match[1]) || 0));
+  const minute = Math.max(0, Math.min(59, Number(match[2]) || 0));
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+}
+
+export function compareEventsByDateTime(a = {}, b = {}) {
+  const dateCompare = String(a.eventDate || '').localeCompare(String(b.eventDate || ''));
+  if (dateCompare) return dateCompare;
+  const timeCompare = normaliseEventTime(a.startTime).localeCompare(normaliseEventTime(b.startTime));
+  if (timeCompare) return timeCompare;
+  return String(a.hostName || a.eventTypeDisplay || a.eventType || '')
+    .localeCompare(String(b.hostName || b.eventTypeDisplay || b.eventType || ''));
+}

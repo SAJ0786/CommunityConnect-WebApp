@@ -52,18 +52,33 @@
   ],
   "screenshots": [
     {
+      "src": "/screenshots/screenshot-Login.png",
+      "sizes": "1290x2796",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Login Page showing Login process"
+    },
+    {
       "src": "/screenshots/screenshot-home.png",
       "sizes": "1290x2796",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Home screen showing upcoming community events"
     },
-    {
-      "src": "/screenshots/screenshot-calendar.png",
+	{
+      "src": "/screenshots/screenshot-addevent.png",
       "sizes": "1290x2796",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "Calendar view showing events by month and week"
+      "label": "Add Event screen showing adding events process"
+    },
+{
+      "src": "/screenshots/screenshot-profilepage.png",
+      "sizes": "1290x2796",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Profile Page showing your profile options"
     }
+
   ]
 }

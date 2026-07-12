@@ -2,14 +2,24 @@ import React, { useState, useMemo } from 'react';
 import EventFilters from '../components/EventFilters';
 import { getSharePrivacy } from '../utils/permissions';
 import { todayLocal } from '../services/dateUtils';
+import { STORE_SHARE_LINES } from '../utils/storeLinks';
 
-function buildMessage(selectedEvents, profile, uid, messageTitle) {
+function sortEventsForMessage(events) {
+  return [...events].sort((a, b) => {
+    const dateCompare = String(a.eventDate || '').localeCompare(String(b.eventDate || ''));
+    if (dateCompare !== 0) return dateCompare;
+    const timeCompare = String(a.startTime || '').localeCompare(String(b.startTime || ''));
+    if (timeCompare !== 0) return timeCompare;
+    return String(a.hostName || '').localeCompare(String(b.hostName || ''));
+  });
+}
+
+function buildMessage(selectedEvents, profile, uid, messageTitle, messageMode = 'detail') {
   if (!selectedEvents.length) return '';
-  const APP_URL = 'https://communityevents.siza.info';
   const fmt = d => { try { return new Date(d+'T00:00:00').toLocaleDateString('en-AU',{weekday:'short',day:'numeric',month:'short'}); } catch { return d; } };
   const lines = ['📅 *Community Events*', ''];
   if (messageTitle.trim()) lines.push(`*${messageTitle.trim()}*`, '');
-  selectedEvents.forEach(e => {
+  const appendDetailEvent = e => {
     const privacy = getSharePrivacy(profile, e, uid);
     const a = e.address || {};
     const fullAddr = a.fullAddress || [a.street, a.suburb, a.state, a.postcode].filter(Boolean).join(', ');
@@ -33,8 +43,40 @@ function buildMessage(selectedEvents, profile, uid, messageTitle) {
       .forEach(reciter => lines.push(`🎙️ ${reciter.customType || reciter.type || 'Reciter'}: ${reciter.name.trim()}`));
     if (e.notes?.trim()) lines.push(`📝 Notes: ${e.notes.trim()}`);
     lines.push('');
-  });
-  lines.push(`🔗 ${APP_URL}`);
+  };
+  const appendBriefEvent = e => {
+    const suburb = e.address?.suburb || '';
+    const state = e.address?.state || '';
+    const suburbLabel = [suburb, state].filter(Boolean).join(', ');
+    lines.push(`*${e.hostName || 'Community Event'}*`);
+    lines.push(`ðŸ“… ${fmt(e.eventDate)}`);
+    lines.push(`â° ${e.startTime}${e.endTime ? ' â€“ ' + e.endTime : ''}`);
+    if (suburbLabel) lines.push(`ðŸ“ ${suburbLabel}`);
+    lines.push('');
+  };
+  const appendCleanBriefEvent = e => {
+    const suburb = e.address?.suburb || '';
+    const state = e.address?.state || '';
+    const suburbLabel = [suburb, state].filter(Boolean).join(', ');
+    lines.push(`*${e.hostName || 'Community Event'}*`);
+    lines.push(`Date: ${fmt(e.eventDate)}`);
+    lines.push(`Time: ${e.startTime}${e.endTime ? ' - ' + e.endTime : ''}`);
+    if (suburbLabel) lines.push(`Suburb: ${suburbLabel}`);
+    lines.push('');
+  };
+  const appendEvent = messageMode === 'brief' ? appendCleanBriefEvent : appendDetailEvent;
+  const centreEvents = sortEventsForMessage(selectedEvents.filter(e => e.organiserType !== 'private'));
+  const privateEvents = sortEventsForMessage(selectedEvents.filter(e => e.organiserType === 'private'));
+  if (centreEvents.length) {
+    lines.push(`*Centre Programs (${centreEvents.length})*`, '--------------------');
+    centreEvents.forEach(appendEvent);
+  }
+  if (centreEvents.length && privateEvents.length) lines.push('====================', '');
+  if (privateEvents.length) {
+    lines.push(`*Private Programs (${privateEvents.length})*`, '--------------------');
+    privateEvents.forEach(appendEvent);
+  }
+  lines.push(...STORE_SHARE_LINES);
   lines.push('_Shared via Community Events_');
   return lines.join('\n');
 }
@@ -46,6 +88,7 @@ export default function BulkShare({ events, profile, user }) {
   const [selected,  setSelected]  = useState(new Set());
   const [copied,    setCopied]    = useState(false);
   const [messageTitle, setMessageTitle] = useState('');
+  const [messageMode, setMessageMode] = useState('detail');
 
   const displayed = filtered ?? upcoming;
 
@@ -62,8 +105,8 @@ export default function BulkShare({ events, profile, user }) {
 
   const selectedEvents = displayed.filter(e => selected.has(e.id));
   const message = useMemo(
-    () => buildMessage(selectedEvents, profile, user?.uid, messageTitle),
-    [selectedEvents, profile, user, messageTitle]
+    () => buildMessage(selectedEvents, profile, user?.uid, messageTitle, messageMode),
+    [selectedEvents, profile, user, messageTitle, messageMode]
   );
 
   const copy = () => {
@@ -74,7 +117,10 @@ export default function BulkShare({ events, profile, user }) {
   };
 
   const share = () => {
-    if (navigator.share) { navigator.share({ text: message }).catch(() => {}); return; }
+    if (navigator.share) {
+      navigator.share({ title: 'Community Events Programs Update', text: message }).catch(() => {});
+      return;
+    }
     const url = 'https://wa.me/?text=' + encodeURIComponent(message);
     window.open(url, '_blank');
   };
@@ -92,6 +138,45 @@ export default function BulkShare({ events, profile, user }) {
         <input id="bulk-share-title" value={messageTitle}
           onChange={e => setMessageTitle(e.target.value)}
           placeholder="e.g. Events this weekend" maxLength={120} />
+        <div style={{ marginTop: 14 }}>
+          <label style={{ display:'block', marginBottom: 6 }}>
+            Message format
+          </label>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 6,
+            background: '#eef7f5',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 4,
+          }}>
+            <button type="button" onClick={() => setMessageMode('detail')}
+              style={{
+                border: 'none',
+                borderRadius: 9,
+                padding: '10px 8px',
+                background: messageMode === 'detail' ? 'var(--teal)' : 'transparent',
+                color: messageMode === 'detail' ? 'white' : 'var(--text)',
+                fontWeight: 900,
+                cursor: 'pointer',
+              }}>
+              Detailed message
+            </button>
+            <button type="button" onClick={() => setMessageMode('brief')}
+              style={{
+                border: 'none',
+                borderRadius: 9,
+                padding: '10px 8px',
+                background: messageMode === 'brief' ? 'var(--teal)' : 'transparent',
+                color: messageMode === 'brief' ? 'white' : 'var(--text)',
+                fontWeight: 900,
+                cursor: 'pointer',
+              }}>
+              Brief message
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Filters */}
