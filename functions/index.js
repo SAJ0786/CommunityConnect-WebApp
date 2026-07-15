@@ -1,6 +1,9 @@
 ﻿const admin      = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const crypto     = require("crypto");
+const fs         = require("fs");
+const path       = require("path");
+const sharp      = require("sharp");
 const { onRequest, onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { onSchedule }        = require("firebase-functions/v2/scheduler");
@@ -175,6 +178,16 @@ function buildTransporter(secrets) {
 }
 
 const PROGRAMS_UPDATE_IMAGE_URL = "https://communityevents.siza.info/images/programs-update-header.jpg";
+const EMAIL_ICON_CALENDAR = String.fromCodePoint(0x1F4C5);
+const EMAIL_ICON_MOON = String.fromCodePoint(0x1F319);
+const EMAIL_ICON_KEY = String.fromCodePoint(0x1F511);
+const EMAIL_ICON_NEW_EVENT = String.fromCodePoint(0x1F4C5);
+const EMAIL_ICON_DELETE = String.fromCodePoint(0x1F5D1, 0xFE0F);
+const EMAIL_ICON_USER = String.fromCodePoint(0x1F464);
+const EMAIL_ICON_LIVE = String.fromCodePoint(0x1F534);
+const DEEP_STORIES_INDEX_URL = process.env.DEEP_STORIES_INDEX_URL || "";
+const DEEP_STORIES_INDEX_PATH = path.join(__dirname, "assets", "deep-stories-story-index.html");
+const DEEP_STORIES_REPORT_URL = "https://communityevents.siza.info/report-ai-content.html";
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -261,6 +274,106 @@ function buildProgramsUpdateEmailHeader() {
         </td>
       </tr>
     </table>
+  </div>`;
+}
+
+function decodeHtmlEntities(value) {
+  return String(value || "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#(\d+);/g, (_, code) => {
+      const n = Number(code);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : "";
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)));
+}
+
+function stripTags(value) {
+  return decodeHtmlEntities(String(value || "").replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function loadDeepStoriesIndexHtml() {
+  if (DEEP_STORIES_INDEX_URL) {
+    const response = await fetch(DEEP_STORIES_INDEX_URL, {
+      headers: { "user-agent": "CommunityEventsAustralia/1.0" },
+    });
+    if (!response.ok) {
+      throw new Error(`Deep Stories index returned HTTP ${response.status}`);
+    }
+    return response.text();
+  }
+  return fs.promises.readFile(DEEP_STORIES_INDEX_PATH, "utf8");
+}
+
+function parseDeepStoriesIndex(html) {
+  const stories = [];
+  const storyRegex = /<li\s+class=["']story["'][^>]*>([\s\S]*?)<\/li>/gi;
+  let match;
+  while ((match = storyRegex.exec(html || ""))) {
+    const block = match[1];
+    const titleMatch = block.match(/<a\s+class=["']title["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+    const summaryMatch = block.match(/<p\s+class=["']brief["'][^>]*>([\s\S]*?)<\/p>/i);
+    if (!titleMatch || !summaryMatch) continue;
+
+    const title = stripTags(titleMatch[2]);
+    const summary = stripTags(summaryMatch[1]);
+    const url = decodeHtmlEntities(titleMatch[1]).trim();
+    if (title && summary && /^https?:\/\//i.test(url)) {
+      stories.push({ title, summary, url });
+    }
+  }
+  return stories;
+}
+
+async function selectDeepStoryForEmail() {
+  try {
+    const html = await loadDeepStoriesIndexHtml();
+    const stories = parseDeepStoriesIndex(html);
+    if (!stories.length) return null;
+
+    const ref = db.collection("settings").doc("deepStoriesFeatured");
+    const snap = await ref.get().catch(() => null);
+    const lastUrl = snap?.exists ? String(snap.data()?.lastUrl || "") : "";
+    const pool = stories.length > 1 ? stories.filter(story => story.url !== lastUrl) : stories;
+    const selected = pool[Math.floor(Math.random() * pool.length)];
+
+    await ref.set({
+      lastUrl: selected.url,
+      lastTitle: selected.title,
+      selectedAt: admin.firestore.FieldValue.serverTimestamp(),
+      source: DEEP_STORIES_INDEX_URL || "bundled-static-index",
+    }, { merge: true });
+
+    return selected;
+  } catch (err) {
+    console.warn("[Deep Stories] Skipping book section:", err.message || err);
+    return null;
+  }
+}
+
+function buildDeepStoryEmailSection(story) {
+  if (!story) return "";
+  const reportUrl = `${DEEP_STORIES_REPORT_URL}?source=deep-stories-email&title=${encodeURIComponent(story.title)}&url=${encodeURIComponent(story.url)}`;
+  return `<div style="margin-top:24px;border-top:1px solid #d1d5db;padding-top:20px">
+    <h3 style="margin:0 0 10px;color:#0f766e;font-size:19px">Book Read of the Day</h3>
+    <div style="border:1px solid #99f6e4;background:#f0fdfa;border-radius:14px;padding:16px">
+      <p style="margin:0 0 6px;color:#134e4a;font-size:18px;font-weight:700">${escapeHtml(story.title)}</p>
+      <p style="margin:0 0 14px;color:#374151;font-size:14px;line-height:1.6">${escapeHtml(story.summary)}</p>
+      <p style="margin:0 0 14px">
+        <a href="${escapeHtml(story.url)}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:10px 16px">Read this story</a>
+      </p>
+      <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.5">
+        Deep Stories is an AI-assisted under trial stories platform. If you notice incorrect, inappropriate or concerning content,
+        <a href="${escapeHtml(reportUrl)}" style="color:#0f766e;font-weight:700">report an issue</a>.
+      </p>
+    </div>
   </div>`;
 }
 
@@ -724,10 +837,11 @@ exports.dailyEmailReminders = onSchedule(
     const eventsSnap = { docs: visibleDocs, size: visibleDocs.length, empty: visibleDocs.length === 0 };
 
     const eventSections = buildGroupedEmailEventTables(eventsSnap.docs.map(d => d.data()));
+    const deepStorySection = buildDeepStoryEmailSection(await selectDeepStoryForEmail());
 
     const html = `<div style="font-family:sans-serif;max-width:700px">
       ${buildProgramsUpdateEmailHeader()}
-      <div style="padding:18px;background:#ffffff">${eventSections}</div>
+      <div style="padding:18px;background:#ffffff">${eventSections}${deepStorySection}</div>
       <p style="color:#6b7280;font-size:12px;padding:16px">
         To opt out: Profile -> Toggle Email Reminder off.
       </p></div>`;
@@ -751,7 +865,7 @@ exports.dailyEmailReminders = onSchedule(
           await transporter.sendMail({
             from: EMAIL_FROM.value() || SMTP_USER.value(),
             to: u.email,
-            subject: `Community Events - Tomorrow's Events (${date})`,
+            subject: `${EMAIL_ICON_CALENDAR} Community Events - Tomorrow's Events (${date})`,
             html: html + unsubscribeFooter(doc.id)
           });
           sent++;
@@ -765,9 +879,9 @@ exports.dailyEmailReminders = onSchedule(
         const firstEvent = eventsSnap.docs[0]?.data();
         const pushMsg = {
           notification: {
-            title: `ðŸŒ™ ${eventCount} Community Event${eventCount !== 1 ? 's' : ''} Tomorrow`,
+            title: `${EMAIL_ICON_MOON} ${eventCount} Community Event${eventCount !== 1 ? 's' : ''} Tomorrow`,
             body: firstEvent
-              ? `${firstEvent.startTime} Â· ${firstEvent.hostName} Â· ${firstEvent.address?.suburb || ''}`
+              ? `${firstEvent.startTime} - ${firstEvent.hostName} - ${firstEvent.address?.suburb || ''}`
               : `Events on ${date}`,
           },
           data: { date, url: 'https://communityevents.siza.info/app' },
@@ -852,7 +966,7 @@ exports.monthlyHijriReminder = onSchedule(
       await transporter.sendMail({
         from: EMAIL_FROM.value() || SMTP_USER.value(),
         to: u.email,
-        subject: "Community Events - Monthly Hijri Calendar Adjustment Reminder",
+        subject: `${EMAIL_ICON_MOON} Community Events - Monthly Hijri Calendar Adjustment Reminder`,
         html: `<div style="font-family:sans-serif;max-width:600px">
           <div style="background:linear-gradient(135deg,#0f766e,#0b5d57);padding:24px;border-radius:16px 16px 0 0">
             <h2 style="color:white;margin:0">Hijri Calendar Adjustment Required</h2>
@@ -1082,7 +1196,7 @@ exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
 
   const VALID_TYPES    = ["Majlis", "Milad", "Birthday", "Informal get together", "Custom"];
   const VALID_AUDIENCE = ["Gents only", "Ladies only", "Kids only", "Mixed Audience"];
-  const VALID_RECITERS = ["Soz", "Salam", "Manqebat", "Noha", "Reciter", "Peshkhani", "Other"];
+  const VALID_RECITERS = ["Soz", "Salam", "Manqebat", "Noha", "Marsiya", "Hadees-e-Kisa", "Reciter", "Peshkhani", "Other"];
   const REQUIRED       = ["hostName","eventDate","startTime","eventType","audienceType","street","suburb","state","postcode"];
 
   const created = []; const errors = [];
@@ -1148,6 +1262,9 @@ exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
     const suburb      = row.suburb?.toString().trim() || "";
     const state       = row.state?.toString().trim()  || "";
     const postcode    = row.postcode?.toString().trim() || "";
+    const latitude    = Number.isFinite(Number(row.latitude)) ? Number(row.latitude) : null;
+    const longitude   = Number.isFinite(Number(row.longitude)) ? Number(row.longitude) : null;
+    const fullAddress = row.fullAddress?.toString().trim() || `${street}, ${suburb} ${state} ${postcode}`.trim();
 
     await db.collection("events").add({
       hostName:    row.hostName.toString().trim(),
@@ -1168,8 +1285,8 @@ exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
       hostContactOptional: row.hostContact?.toString().trim() || "",
       address: {
         street, suburb, state, postcode,
-        fullAddress: `${street}, ${suburb} ${state} ${postcode}`.trim(),
-        latitude: null, longitude: null
+        fullAddress,
+        latitude, longitude
       },
       speakerName: isReligious ? (row.speakerName?.toString().trim() || "") : "",
       reciters:    isReligious ? reciters : [],
@@ -1281,7 +1398,7 @@ exports.sendRemindersNow = onCall(
             ? (customTemplate === 'storeAnnouncement'
                 ? 'Community Events Australia is now on Google Play, the App Store and Microsoft Store'
                 : 'Important Update from Community Events')
-            : `Community Events - Events for ${label}`,
+            : `${EMAIL_ICON_CALENDAR} Community Events - Events for ${label}`,
           html: customMode && customTemplate === 'storeAnnouncement'
             ? buildStoreAnnouncementEmail() + unsubscribeFooter(doc.id)
             : customMode
@@ -1568,6 +1685,61 @@ exports.adminUnbanUser = onCall(
 const APP_URL = 'https://communityevents.siza.info';
 const APP_OPEN_URL = 'https://communityevents.siza.info/app';
 
+exports.submitAiContentReport = onRequest(
+  { region: REGION, cors: true },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.status(204).send("");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Use POST." });
+      return;
+    }
+
+    try {
+      const body = req.body || {};
+      const reason = String(body.reason || "").trim().slice(0, 120);
+      const comments = String(body.comments || "").trim().slice(0, 2000);
+      const source = String(body.source || "deep-stories-email").trim().slice(0, 120);
+      const contentTitle = String(body.contentTitle || "").trim().slice(0, 250);
+      const contentUrl = String(body.contentUrl || "").trim().slice(0, 1000);
+      const userEmail = String(body.userEmail || "").trim().toLowerCase().slice(0, 254);
+
+      if (!reason) {
+        res.status(400).json({ error: "Please select a reason." });
+        return;
+      }
+      if (!contentTitle && !contentUrl) {
+        res.status(400).json({ error: "Missing content details." });
+        return;
+      }
+
+      await db.collection("ai_reports").add({
+        source,
+        reason,
+        comments,
+        contentTitle,
+        contentUrl,
+        userEmail,
+        userId: "public-email-report",
+        userRole: "public",
+        prompt: `Deep Stories content report\nTitle: ${contentTitle || "Not provided"}\nURL: ${contentUrl || "Not provided"}`,
+        aiResponse: comments || "No additional comments provided.",
+        page: "deep-stories-report-page",
+        appVersion: "email-link",
+        userAgent: String(req.get("user-agent") || "").slice(0, 500),
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      res.status(200).json({ ok: true });
+    } catch (err) {
+      console.error("[AI Content Report] Failed to submit report", err);
+      res.status(500).json({ error: "Could not submit report. Please try again." });
+    }
+  }
+);
+
 // Email the support inbox whenever a user reports an AI-generated response.
 exports.onAiReportCreated = onDocumentCreated(
   { document: 'ai_reports/{reportId}', region: REGION,
@@ -1737,7 +1909,7 @@ exports.onEventCreated = onDocumentCreated(
     if (!data || data.status !== 'active') return;
 
     await notifySuperAdmin(
-      `ðŸ“… New event added: ${data.eventType} â€” ${data.hostName}`,
+      `${EMAIL_ICON_NEW_EVENT} New event added: ${data.eventType} - ${data.hostName}`,
       `<div style="font-family:Arial,sans-serif;max-width:500px">
         <div style="background:#0f766e;padding:16px;border-radius:8px 8px 0 0">
           <h2 style="color:white;margin:0">New Event Added</h2>
@@ -1771,7 +1943,7 @@ exports.onEventDeleted = onDocumentDeleted(
     if (archived.exists && archived.data()?.archiveReason === 'event_date_expired') return;
 
     await notifySuperAdmin(
-      `ðŸ—‘ Event deleted: ${data.eventType} â€” ${data.hostName}`,
+      `${EMAIL_ICON_DELETE} Event deleted: ${data.eventType} - ${data.hostName}`,
       `<div style="font-family:Arial,sans-serif;max-width:500px">
         <div style="background:#dc2626;padding:16px;border-radius:8px 8px 0 0">
           <h2 style="color:white;margin:0">Event Deleted</h2>
@@ -1807,7 +1979,7 @@ exports.onUserCreated = onDocumentCreated(
     if (!data) return;
 
     await notifySuperAdmin(
-      `ðŸ‘¤ New user registered: ${data.fullName || 'Unknown'}`,
+      `${EMAIL_ICON_USER} New user registered: ${data.fullName || 'Unknown'}`,
       `<div style="font-family:Arial,sans-serif;max-width:500px">
         <div style="background:#0f766e;padding:16px;border-radius:8px 8px 0 0">
           <h2 style="color:white;margin:0">New User Registered</h2>
@@ -2000,7 +2172,7 @@ exports.notifyEventLive = onCall({ region: REGION }, async (request) => {
       const res = await messaging.sendEachForMulticast({
         tokens: batch,
         notification: {
-          title: 'ðŸ”´ Event is Live Now!',
+          title: `${EMAIL_ICON_LIVE} Event is Live Now!`,
           body: `${eventTitle} by ${hostName} is streaming live. Tap to watch!`,
         },
         data: { eventId, type: 'live' },
@@ -2068,7 +2240,7 @@ exports.sendEditOtp = onCall(
       await transporter.sendMail({
         from: EMAIL_FROM.value() || SMTP_USER.value(),
         to:   contact.trim(),
-        subject: "Community Events - Your edit verification code",
+        subject: `${EMAIL_ICON_KEY} Community Events - Your edit verification code`,
         html: `
           <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto">
             <div style="background:#0f766e;padding:20px;text-align:center;border-radius:8px 8px 0 0">
@@ -2317,6 +2489,190 @@ async function getYouTubeAccessToken() {
   return data.access_token;
 }
 
+const YOUTUBE_THUMBNAIL_TEMPLATE = path.join(__dirname, "assets", "youtube-stream-thumbnail-template.png");
+
+function escapeSvgText(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function titleCaseLoose(value) {
+  const text = String(value || "").trim().replace(/\s+/g, " ");
+  if (!text) return "";
+  return text.toLowerCase().replace(/\b([a-z])/g, match => match.toUpperCase())
+    .replace(/\bNsw\b/g, "NSW")
+    .replace(/\bAct\b/g, "ACT")
+    .replace(/\bQld\b/g, "QLD")
+    .replace(/\bA\.s\.\b/gi, "A.S.");
+}
+
+function wrapSvgLines(text, maxChars = 31, maxLines = 2) {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+      if (lines.length >= maxLines) break;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current && lines.length < maxLines) lines.push(current);
+  return lines;
+}
+
+function getThumbnailTimeZone(eventData = {}) {
+  const explicit = eventData.timeZone || eventData.timezone || eventData.eventTimeZone;
+  if (explicit) return explicit;
+  const state = String(eventData.address?.state || "").trim().toUpperCase();
+  if (state === "WA") return "Australia/Perth";
+  if (state === "SA") return "Australia/Adelaide";
+  if (state === "QLD") return "Australia/Brisbane";
+  if (state === "NT") return "Australia/Darwin";
+  if (state === "TAS") return "Australia/Hobart";
+  if (state === "VIC") return "Australia/Melbourne";
+  return "Australia/Sydney";
+}
+
+function cleanThumbText(value) {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function formatThumbDate(dateStr = "", timeZone = "Australia/Sydney") {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return "";
+  const date = new Date(`${dateStr}T12:00:00+10:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-AU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+    timeZone,
+  });
+}
+
+function buildThumbnailFields(eventData = {}, fallbackTitle = "") {
+  const address = eventData.address || {};
+  const timeZone = getThumbnailTimeZone(eventData);
+  const type = cleanThumbText(eventData.eventTypeDisplay || eventData.eventType || fallbackTitle || "Community Event");
+  const subject = cleanThumbText(eventData.eventSubject || "");
+  const host = cleanThumbText(eventData.hostName || eventData.organiserName || eventData.createdByName || "");
+  const suburb = cleanThumbText(address.suburb || eventData.suburb || "");
+  const date = formatThumbDate(eventData.eventDate, timeZone);
+  const time = [eventData.startTime, eventData.endTime].filter(Boolean).join(" - ");
+  return {
+    type,
+    subject,
+    host,
+    suburb,
+    date,
+    time: cleanThumbText(time),
+    bottomLine: `${type || "Event"} streamed through Community Events Australia`,
+  };
+}
+
+async function generateYouTubeThumbnailBuffer(eventData = {}, fallbackTitle = "") {
+  const fields = buildThumbnailFields(eventData, fallbackTitle);
+  const subjectLines = wrapSvgLines(fields.subject || "Community Live Stream", 33, 2);
+  const hostLines = wrapSvgLines(fields.host || "Community Events Australia", 30, 1);
+  const suburbLines = wrapSvgLines(fields.suburb || "Australia", 31, 1);
+  const dateLines = wrapSvgLines(fields.date || "", 30, 1);
+  const timeLine = fields.time || "";
+  const bottomLines = wrapSvgLines(fields.bottomLine, 42, 2);
+
+  const textLine = (value, x, y, size, color = "#071733", weight = 800) =>
+    `<text x="${x}" y="${y}" font-family="Arial, Helvetica, sans-serif" font-size="${size}" font-weight="${weight}" fill="${color}">${escapeSvgText(value)}</text>`;
+
+  const svg = `
+    <svg width="1280" height="720" viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg">
+      <rect x="490" y="160" width="480" height="440" rx="18" fill="#ffffff" fill-opacity="1"/>
+      <line x1="508" y1="238" x2="938" y2="238" stroke="#b8d9d4" stroke-width="2"/>
+      <line x1="508" y1="330" x2="938" y2="330" stroke="#b8d9d4" stroke-width="2"/>
+      <line x1="508" y1="408" x2="938" y2="408" stroke="#b8d9d4" stroke-width="2"/>
+      <line x1="508" y1="488" x2="938" y2="488" stroke="#b8d9d4" stroke-width="2"/>
+      ${textLine(fields.type || "Community Event", 508, 212, 42, "#0f766e", 900)}
+      ${subjectLines.map((line, index) => textLine(line, 508, 282 + index * 38, index === 0 ? 31 : 26, index === 0 ? "#071733" : "#475569", index === 0 ? 900 : 700)).join("")}
+      ${hostLines.map((line, index) => textLine(line, 508, 382 + index * 36, 34, "#071733", 900)).join("")}
+      ${suburbLines.map((line, index) => textLine(line, 508, 462 + index * 36, 33, "#071733", 900)).join("")}
+      ${dateLines.map((line, index) => textLine(line, 508, 530 + index * 30, 28, "#071733", 900)).join("")}
+      ${timeLine ? textLine(timeLine, 508, 570, 25, "#0f766e", 900) : ""}
+      <rect x="462" y="620" width="560" height="68" rx="34" fill="#0f766e"/>
+      ${bottomLines.map((line, index) => textLine(line, 542, 646 + index * 23, 22, index === 0 ? "#ffffff" : "#facc15", 800)).join("")}
+    </svg>`;
+
+  return sharp(YOUTUBE_THUMBNAIL_TEMPLATE)
+    .resize(1280, 720, { fit: "cover" })
+    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+    .jpeg({ quality: 90, mozjpeg: true })
+    .toBuffer();
+}
+
+async function uploadYouTubeThumbnail(accessToken, videoId, imageBuffer) {
+  const response = await fetch(
+    `https://www.googleapis.com/upload/youtube/v3/thumbnails/set?videoId=${encodeURIComponent(videoId)}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "image/jpeg",
+        "Content-Length": String(imageBuffer.length),
+      },
+      body: imageBuffer,
+    }
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload.error) {
+    throw new Error(payload.error?.message || `Thumbnail upload failed (${response.status})`);
+  }
+  return payload;
+}
+
+async function setStreamThumbnailForVideo({ videoId, eventData = {}, fallbackTitle = "" }) {
+  if (!videoId) return { ok: false, reason: "missing-video-id" };
+  const accessToken = await getYouTubeAccessToken();
+  const imageBuffer = await generateYouTubeThumbnailBuffer(eventData, fallbackTitle);
+  await uploadYouTubeThumbnail(accessToken, videoId, imageBuffer);
+  await db.collection("streamVideos").doc(videoId).set({
+    customThumbnailSetAt: new Date().toISOString(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { ok: true, bytes: imageBuffer.length };
+}
+
+function eventDataFromStreamRecord(data = {}) {
+  const parts = String(data.youtubeTitle || data.eventTitle || "")
+    .split(/\s+[—-]\s+/)
+    .map(part => part.trim())
+    .filter(Boolean);
+  const type = data.eventTypeDisplay || data.eventType || parts[0] || "Community Event";
+  const host = data.hostName || parts[1] || "";
+  const subject = data.eventSubject || (
+    parts.length >= 3
+      ? parts.slice(2).join(" - ")
+      : (parts.length === 2 && parts[1] !== host ? parts[1] : "")
+  );
+  return {
+    eventType: type,
+    eventTypeDisplay: type,
+    eventSubject: subject,
+    hostName: host,
+    eventDate: data.eventDate || "",
+    startTime: data.startTime || "",
+    endTime: data.endTime || "",
+    address: {
+      suburb: data.suburb || data.address?.suburb || "",
+      state: data.state || data.address?.state || "",
+      postcode: data.postcode || data.address?.postcode || "",
+    },
+  };
+}
+
 // Step 3 â€” Create a new YouTube broadcast and return stream URL
 async function createYouTubeBroadcast(accessToken, title, privacyStatus = 'public') {
   const now       = new Date();
@@ -2492,17 +2848,21 @@ async function syncStreamVideoAvailability({ force = false } = {}) {
 
   const accessToken = await getYouTubeAccessToken();
   const availableIds = new Set();
+  const youtubeTitleById = new Map();
   for (let offset = 0; offset < checkable.length; offset += 50) {
     const ids = checkable.slice(offset, offset + 50).map(docSnap => docSnap.data().videoId);
     const response = await fetch(
-      `https://www.googleapis.com/youtube/v3/videos?part=id&id=${encodeURIComponent(ids.join(','))}`,
+      `https://www.googleapis.com/youtube/v3/videos?part=id,snippet&id=${encodeURIComponent(ids.join(','))}`,
       { headers: { 'Authorization': `Bearer ${accessToken}` } }
     );
     const payload = await response.json();
     if (!response.ok || payload.error) {
       throw new Error(payload.error?.message || `YouTube availability check failed (${response.status})`);
     }
-    (payload.items || []).forEach(item => availableIds.add(item.id));
+    (payload.items || []).forEach(item => {
+      availableIds.add(item.id);
+      if (item.snippet?.title) youtubeTitleById.set(item.id, item.snippet.title);
+    });
   }
 
   const checkedAt = new Date().toISOString();
@@ -2511,6 +2871,7 @@ async function syncStreamVideoAvailability({ force = false } = {}) {
     batch.set(docSnap.ref, {
       youtubeAvailable: availableIds.has(docSnap.data().videoId),
       youtubeCheckedAt: checkedAt,
+      ...(youtubeTitleById.get(docSnap.data().videoId) ? { youtubeTitle: youtubeTitleById.get(docSnap.data().videoId) } : {}),
     }, { merge: true });
   });
   batch.set(healthRef, { checkedAt }, { merge: true });
@@ -2549,8 +2910,16 @@ exports.listStreamVideos = onCall(
           eventId: session.eventId || null,
           eventTitle: eventData.eventSubject || eventData.eventTypeDisplay || eventData.eventType || 'Community Event Stream',
           eventDate: eventData.eventDate || '',
+          eventType: eventData.eventType || '',
+          eventTypeDisplay: eventData.eventTypeDisplay || eventData.eventType || '',
+          eventSubject: eventData.eventSubject || '',
           hostName: eventData.hostName || '',
           organiserType: eventData.organiserType || '',
+          startTime: eventData.startTime || '',
+          endTime: eventData.endTime || '',
+          suburb: eventData.address?.suburb || '',
+          state: eventData.address?.state || '',
+          postcode: eventData.address?.postcode || '',
           ownerUid: eventData.createdByUserId || session.uid || '',
           startedByUid: session.uid || '',
           source: 'native',
@@ -2571,17 +2940,21 @@ exports.listStreamVideos = onCall(
   });
 
   const snap = await db.collection('streamVideos').orderBy('startedAt', 'desc').limit(100).get();
-  const videos = snap.docs.filter(docSnap => docSnap.data().youtubeAvailable !== false).map(docSnap => {
+  const videos = snap.docs
+  .filter(docSnap => docSnap.data().youtubeAvailable !== false)
+  .filter(docSnap => docSnap.data().appVisibility !== 'private')
+  .map(docSnap => {
     const data = docSnap.data();
     const item = {
       id: docSnap.id,
       eventId: data.eventId || null,
-      eventTitle: data.eventTitle || 'Community Event Stream',
+      eventTitle: data.youtubeTitle || data.eventTitle || 'Community Event Stream',
       eventDate: data.eventDate || '',
       hostName: data.hostName || '',
       organiserType: data.organiserType || '',
       source: data.source || 'native',
       privacyStatus: data.privacyStatus === 'unlisted' ? 'unlisted' : 'public',
+      appVisibility: data.appVisibility === 'private' ? 'private' : 'public',
       status: data.status || 'completed',
       startedAt: data.startedAt || '',
       endedAt: data.endedAt || null,
@@ -2594,6 +2967,59 @@ exports.listStreamVideos = onCall(
   });
 
   return { videos, canWatch: isRegistered };
+  }
+);
+
+exports.refreshStreamVideoThumbnails = onCall(
+  { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+    const userDoc = await db.collection('users').doc(request.auth.uid).get();
+    if (userDoc.data()?.role !== 'superAdmin') {
+      throw new HttpsError('permission-denied', 'Super Admin access required.');
+    }
+
+    const limit = Math.max(1, Math.min(Number(request.data?.limit || 10), 25));
+    const force = request.data?.force === true;
+    const snap = await db.collection('streamVideos').orderBy('startedAt', 'desc').limit(100).get();
+    const candidates = snap.docs
+      .filter(docSnap => docSnap.data().youtubeAvailable !== false)
+      .filter(docSnap => !!docSnap.data().videoId)
+      .filter(docSnap => force || !docSnap.data().customThumbnailSetAt)
+      .slice(0, limit);
+
+    let updated = 0;
+    const errors = [];
+    for (const docSnap of candidates) {
+      const data = docSnap.data();
+      let eventData = eventDataFromStreamRecord(data);
+      if (data.eventId) {
+        const eventSnap = await db.collection('events').doc(data.eventId).get();
+        if (eventSnap.exists) {
+          eventData = eventSnap.data();
+        } else {
+          const archivedSnap = await db.collection('archivedEvents').doc(data.eventId).get();
+          if (archivedSnap.exists) eventData = archivedSnap.data();
+        }
+      }
+      try {
+        await setStreamThumbnailForVideo({
+          videoId: data.videoId,
+          eventData,
+          fallbackTitle: data.youtubeTitle || data.eventTitle || 'Community Event Stream',
+        });
+        updated++;
+      } catch (error) {
+        errors.push({ id: docSnap.id, videoId: data.videoId, message: error.message });
+      }
+    }
+
+    return {
+      updated,
+      attempted: candidates.length,
+      errors,
+      message: `Updated ${updated} of ${candidates.length} stream thumbnail${candidates.length === 1 ? '' : 's'}.`,
+    };
   }
 );
 
@@ -2612,7 +3038,7 @@ async function runStaleLiveCleanup() {
     // Safety net â€” force end if live for more than 3 hours, or no session at all
     if (!sessionId || hoursLive > 3) {
       await markStreamVideoCompleted(data.liveVideoRecordId);
-      await docSnap.ref.update({ isLive: false, liveUrl: null, liveWatchUrl: null,
+      await docSnap.ref.update({ isLive: false, liveUrl: null, liveWatchUrl: null, liveAppVisibility: null,
         liveVideoRecordId: null, liveEndedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
       ended++; continue;
     }
@@ -2631,7 +3057,7 @@ async function runStaleLiveCleanup() {
           await sessDoc.ref.update({ status:'stopped', stoppedAt:new Date().toISOString() }).catch(() => {});
         }
         await markStreamVideoCompleted(sessionData?.broadcastId);
-        await docSnap.ref.update({ isLive: false, liveUrl: null, liveWatchUrl: null,
+        await docSnap.ref.update({ isLive: false, liveUrl: null, liveWatchUrl: null, liveAppVisibility: null,
           liveVideoRecordId: null, liveEndedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
         ended++;
       }
@@ -2675,6 +3101,7 @@ exports.nativeStreamStart = onCall(
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
     const { useOAuth, manualRtmpKey, eventTitle, eventId, qualityProfile, audioMode, testMode, protocolVersion } = request.data || {};
     const privacyStatus = request.data?.privacyStatus === 'unlisted' ? 'unlisted' : 'public';
+    const appVisibility = privacyStatus === 'unlisted' ? 'private' : 'public';
     let eventData = null;
     if (eventId) {
       const eventSnap = await db.collection('events').doc(eventId).get();
@@ -2699,10 +3126,12 @@ exports.nativeStreamStart = onCall(
     let broadcastId = null;
 
     // â”€â”€ Get RTMP target â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    const resolvedStreamTitle = eventTitle || eventData?.eventSubject || eventData?.eventTypeDisplay || eventData?.eventType || 'Community Events Live Stream';
+
     if (useOAuth) {
       try {
         const accessToken = await getYouTubeAccessToken();
-        const broadcast   = await createYouTubeBroadcast(accessToken, eventTitle || 'Community Events Live Stream', privacyStatus);
+        const broadcast   = await createYouTubeBroadcast(accessToken, resolvedStreamTitle, privacyStatus);
         // Use RTMPS (port 443) â€” Cloud Run blocks outbound port 1935 (plain RTMP)
         const ingestBase = broadcast.rtmpsUrl || broadcast.rtmpUrl;
         rtmpUrl     = `${ingestBase}/${broadcast.streamKey}`;
@@ -2746,6 +3175,7 @@ exports.nativeStreamStart = onCall(
         qualityProfile: ['1080p','720p','480p'].includes(qualityProfile) ? qualityProfile : '720p',
         audioMode: audioMode === 'speech' ? 'speech' : 'natural',
         privacyStatus,
+        appVisibility,
         resumeUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       });
 
@@ -2758,8 +3188,9 @@ exports.nativeStreamStart = onCall(
           isLive: true,
           liveUrl: sessionId,
           liveRoomCode: sessionId,
-          liveWatchUrl: watchUrl || null,
+          liveWatchUrl: appVisibility === 'public' ? (watchUrl || null) : null,
           liveSource: 'native',
+          liveAppVisibility: appVisibility,
           liveVideoRecordId: broadcastId || null,
           liveStartedAt: new Date().toISOString(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2771,19 +3202,36 @@ exports.nativeStreamStart = onCall(
           videoId: broadcastId,
           watchUrl,
           eventId: eventId || null,
-          eventTitle: eventTitle || eventData?.eventSubject || eventData?.eventTypeDisplay || eventData?.eventType || 'Community Event Stream',
+          eventTitle: resolvedStreamTitle,
+          youtubeTitle: resolvedStreamTitle,
           eventDate: eventData?.eventDate || '',
+          eventType: eventData?.eventType || '',
+          eventTypeDisplay: eventData?.eventTypeDisplay || eventData?.eventType || '',
+          eventSubject: eventData?.eventSubject || '',
           hostName: eventData?.hostName || '',
           organiserType: eventData?.organiserType || '',
+          startTime: eventData?.startTime || '',
+          endTime: eventData?.endTime || '',
+          suburb: eventData?.address?.suburb || '',
+          state: eventData?.address?.state || '',
+          postcode: eventData?.address?.postcode || '',
           ownerUid: eventData?.createdByUserId || request.auth.uid,
           startedByUid: request.auth.uid,
           source: 'native',
           privacyStatus,
+          appVisibility,
           status: 'live',
           startedAt: new Date().toISOString(),
           endedAt: null,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
+        setStreamThumbnailForVideo({
+          videoId: broadcastId,
+          eventData: eventData || {},
+          fallbackTitle: resolvedStreamTitle,
+        }).catch(error => {
+          console.warn(`[StreamThumbnails] Could not set thumbnail for ${broadcastId}:`, error.message);
+        });
       }
     } catch (e) {
       console.error('[NativeStream] Firestore session write failed:', e.message, e.code);
@@ -2882,6 +3330,7 @@ exports.startExternalYouTubeStream = onCall({ region: REGION }, async (request) 
   const eventId = String(request.data?.eventId || '').trim();
   const rawUrl = String(request.data?.youtubeUrl || '').trim();
   const privacyStatus = request.data?.privacyStatus === 'unlisted' ? 'unlisted' : 'public';
+  const appVisibility = privacyStatus === 'unlisted' ? 'private' : 'public';
   if (!eventId || !rawUrl) throw new HttpsError('invalid-argument', 'Event and YouTube URL are required.');
 
   const eventRef = db.collection('events').doc(eventId);
@@ -2910,13 +3359,15 @@ exports.startExternalYouTubeStream = onCall({ region: REGION }, async (request) 
     throw new HttpsError('invalid-argument', 'Use a YouTube video link such as youtube.com/watch?v=... or youtu.be/...');
   }
   const watchUrl = `https://www.youtube.com/watch?v=${videoId}`;
+  let videoTitle = eventData.eventSubject || eventData.eventTypeDisplay || eventData.eventType || 'Community Event Stream';
 
   try {
     const response = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(watchUrl)}&format=json`, {
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) throw new Error(`YouTube returned ${response.status}`);
-    await response.json();
+    const payload = await response.json();
+    if (payload?.title) videoTitle = payload.title;
   } catch (error) {
     console.warn(`[ExternalStream] URL verification failed for ${videoId}: ${error.message}`);
     throw new HttpsError('invalid-argument', 'YouTube could not verify this video. Make sure it is available, then try again.');
@@ -2927,8 +3378,9 @@ exports.startExternalYouTubeStream = onCall({ region: REGION }, async (request) 
   await eventRef.update({
     isLive:true,
     liveUrl:null,
-    liveWatchUrl:watchUrl,
+    liveWatchUrl:appVisibility === 'public' ? watchUrl : null,
     liveSource:'external-youtube',
+    liveAppVisibility:appVisibility,
     liveStartedAt:now,
     liveStartedBy:request.auth.uid,
     liveVideoRecordId:videoRecordId,
@@ -2939,18 +3391,35 @@ exports.startExternalYouTubeStream = onCall({ region: REGION }, async (request) 
     watchUrl,
     eventId,
     eventTitle:eventData.eventSubject || eventData.eventTypeDisplay || eventData.eventType || 'Community Event Stream',
+    youtubeTitle:videoTitle,
     eventDate:eventData.eventDate || '',
+    eventType:eventData.eventType || '',
+    eventTypeDisplay:eventData.eventTypeDisplay || eventData.eventType || '',
+    eventSubject:eventData.eventSubject || '',
     hostName:eventData.hostName || '',
     organiserType:eventData.organiserType || '',
+    startTime:eventData.startTime || '',
+    endTime:eventData.endTime || '',
+    suburb:eventData.address?.suburb || '',
+    state:eventData.address?.state || '',
+    postcode:eventData.address?.postcode || '',
     ownerUid:eventData.createdByUserId || request.auth.uid,
     startedByUid:request.auth.uid,
     source:'external-youtube',
     privacyStatus,
+    appVisibility,
     status:'live',
     startedAt:now,
     endedAt:null,
     createdAt:admin.firestore.FieldValue.serverTimestamp(),
   }, { merge:true });
+  setStreamThumbnailForVideo({
+    videoId,
+    eventData,
+    fallbackTitle: videoTitle || eventData.eventSubject || eventData.eventTypeDisplay || eventData.eventType || 'Community Event Stream',
+  }).catch(error => {
+    console.warn(`[StreamThumbnails] Could not set external thumbnail for ${videoId}:`, error.message);
+  });
   console.log(`[ExternalStream] Event ${eventId} linked to YouTube video ${videoId} by ${request.auth.uid}`);
   return { ok:true, watchUrl, videoId };
 });
@@ -2981,6 +3450,7 @@ exports.endExternalYouTubeStream = onCall({ region: REGION }, async (request) =>
     isLive:false,
     liveUrl:null,
     liveWatchUrl:null,
+    liveAppVisibility:null,
     liveSource:null,
     liveVideoRecordId:null,
     liveEndedAt:now,
@@ -3162,6 +3632,7 @@ exports.nativeStreamEndEvent = onCall(
       isLive:       false,
       liveUrl:      null,
       liveWatchUrl: null,
+      liveAppVisibility: null,
       liveSource:   null,
       liveVideoRecordId: null,
       liveEndedAt:  new Date().toISOString(),

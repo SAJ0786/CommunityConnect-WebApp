@@ -500,7 +500,9 @@ export default function App() {
   if (loading) return (
     <div className="startup-splash" role="status" aria-label="Starting Community Events Australia">
       <img src="/icons/icon-1024.png" alt="" width="148" height="148" />
-      <h1>Community Events Australia</h1>
+      <h1 style={{ margin:'8px 0 0', color:'#071733', fontSize:'1.55rem', lineHeight:1.15, textAlign:'center' }}>
+        Community Events Australia
+      </h1>
       <div className="startup-splash-progress" aria-hidden="true"><span /></div>
     </div>
   );
@@ -572,17 +574,17 @@ export default function App() {
           onClick={() => setActiveStream(s => ({ ...s, show: true }))}
           style={{
             position: 'fixed', bottom: 80, right: 16, zIndex: 9998,
-            background: '#c0392b', color: 'white', border: 'none',
+            background: '#0f766e', color: 'white', border: 'none',
             borderRadius: 50, padding: '12px 18px',
             display: 'flex', alignItems: 'center', gap: 8,
             fontWeight: 900, fontSize: '0.8125rem', cursor: 'pointer',
-            boxShadow: '0 4px 20px rgba(192,57,43,0.5)',
+            boxShadow: '0 4px 20px rgba(15,118,110,0.5)',
             animation: 'returnPulse 2s infinite',
           }}>
           <span style={{ animation: 'liveBlink 1s infinite' }}>🔴</span>
           Return to Stream
           <style>{`
-            @keyframes returnPulse{0%,100%{box-shadow:0 4px 20px rgba(192,57,43,0.5)}50%{box-shadow:0 4px 32px rgba(192,57,43,0.9)}}
+            @keyframes returnPulse{0%,100%{box-shadow:0 4px 20px rgba(15,118,110,0.5)}50%{box-shadow:0 4px 32px rgba(15,118,110,0.9)}}
             @keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.3}}
           `}</style>
         </button>

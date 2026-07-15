@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>User Guide | Community Events Australia</title>
   <style>
-    :root{--teal:#0f766e;--teal-dark:#0b5d57;--bg:#f4f7f7;--card:#fff;--text:#1f2933;--muted:#6b7280;--border:#e5e7eb;--red:#c0392b}
+    :root{--teal:#0f766e;--teal-dark:#0b5d57;--bg:#f4f7f7;--card:#fff;--text:#1f2933;--muted:#6b7280;--border:#e5e7eb;--red:#0f766e}
     *{box-sizing:border-box}
     body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
     .hero{background:linear-gradient(135deg,var(--teal),var(--teal-dark));color:white;padding:56px 20px 80px;text-align:center}
@@ -35,8 +35,10 @@
     .shot-row .shot{margin:0;max-width:200px}
     @media(max-width:600px){.hero h1{font-size:28px}.card{padding:22px}}
   </style>
+  <link rel="stylesheet" href="/static-pages.css"/>
 </head>
 <body>
+  <a class="static-back-link" href="/">&larr; Back to Home</a>
 <header class="hero">
   <img src="/logo.png" alt="Community Events Australia"/>
   <h1>User Guide</h1>
@@ -170,13 +172,13 @@
     <img class="shot" src="/docs/screenshots/go-live-card.png" alt="Event card showing the Go Live button"/>
     <div class="step red">
       <h3>Going live</h3>
-      <p>Open one of your events and tap <strong>Go Live</strong>. A camera preview opens immediately — check your camera and microphone, and use <strong>Flip Camera</strong> to switch between front and back cameras. Nothing is broadcast yet at this stage.</p>
+      <p>Open one of your events and tap <strong>Go Live</strong>. Choose <strong>Public</strong> if the community should see a Watch on YouTube button, or <strong>Private</strong> if you want YouTube unlisted/link-only visibility. A camera preview then opens immediately &mdash; check your camera and microphone, and use <strong>Flip Camera</strong> to switch between front and back cameras. Nothing is broadcast yet at this stage.</p>
     </div>
     <img class="shot" src="/docs/screenshots/camera-check.png" alt="Camera Check screen with Flip and Mic On controls and Start Streaming button"/>
     <div class="step red">
       <h3>While you're live</h3>
       <p>When you're ready, tap <strong>Start Streaming</strong>. The app creates a YouTube broadcast and starts streaming your camera directly to the Community Events YouTube channel — usually live within 15-20 seconds.</p>
-      <p>The streaming screen shows "YOU ARE LIVE" with your live duration and bitrate. A red <strong>LIVE NOW</strong> badge and a <strong>Watch on YouTube</strong> button appear on the event card for everyone in the community.</p>
+      <p>The streaming screen shows "YOU ARE LIVE" with your live duration and bitrate. For public streams, a <strong>LIVE NOW</strong> badge and a <strong>Watch on YouTube</strong> button appear on the event card for the community. Private streams are intended for host-controlled sharing and are not shown as public stream links in the app.</p>
       <p>Your screen will stay awake automatically while streaming. Switching to another app or manually locking your phone will still pause the broadcast — keep the streaming screen open until you end the stream. If you switch apps, a <strong>Return to Stream</strong> button stays visible so you can jump straight back.</p>
     </div>
     <div class="shot-row">
@@ -185,7 +187,7 @@
     </div>
     <div class="step red">
       <h3>Ending the stream</h3>
-      <p>Tap <strong>End Stream</strong> and confirm. The broadcast stops immediately, and the LIVE badge and Watch on YouTube button disappear from the event card for everyone within a few seconds.</p>
+      <p>Tap <strong>End Stream</strong> and confirm. The broadcast stops immediately, and any LIVE badge or Watch on YouTube button disappears from the event card within a few seconds.</p>
     </div>
     <img class="shot" src="/docs/screenshots/stream-ended.png" alt="Stream Ended confirmation screen"/>
 
@@ -236,7 +238,7 @@
       <li>Events are automatically removed from the app after a set period following the event date.</li>
       <li>Calendar entries show basic info only — full details are always available in the app.</li>
       <li>Hidden events are excluded from search, the home screen, reminders and calendar sync — but can still be shared privately.</li>
-      <li>Live streams broadcast publicly to YouTube and are viewable by anyone with the link.</li>
+      <li>Public streams can appear on event cards and in the streamed-videos list. Private streams use YouTube unlisted/link-only visibility and should be shared only by the host or YouTube channel administrator.</li>
       <li>Deleting your account permanently deletes all your events.</li>
     </ul>
 

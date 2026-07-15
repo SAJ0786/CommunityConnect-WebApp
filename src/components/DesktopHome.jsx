@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import EventCard from './EventCard';
 import EventFilters from './EventFilters';
+import EventMapView from './EventMapView';
 import { compareEventsByDateTime, todayLocal } from '../services/dateUtils';
 import CitySelector from './CitySelector';
 
@@ -132,7 +133,8 @@ export default function DesktopHome({
   events, displayed, totalCount, hasMore, onLoadMore, filterableEvents, filtered, setFiltered, query, setQuery,
   expandedId, setExpandedId, user, profile, setPage,
   setEditingEvent, handleDelete, handleCopy, isGuest, savedIds, onSaveToggle,
-  onStreamStart, selectedCity, onCityChange,
+  onStreamStart, selectedCity, onCityChange, viewMode = 'list', setViewMode,
+  onSelectMapEvent,
 }) {
   const [layout, setLayout] = useState(() => {
     try { return localStorage.getItem('communityEventsDesktopLayout') || 'grid'; }
@@ -178,6 +180,16 @@ export default function DesktopHome({
     <div className={`desktop-home desktop-home-${layout}`}>
       <div className="desktop-home-toolbar">
         <CitySelector value={selectedCity} onChange={onCityChange} compact />
+        {!isGuest && (
+          <div className="home-view-toggle desktop-view-toggle" role="group" aria-label="Choose list or map view">
+            <button type="button" onClick={() => setViewMode?.('list')} className={viewMode === 'list' ? 'active' : ''}>
+              List
+            </button>
+            <button type="button" onClick={() => setViewMode?.('map')} className={viewMode === 'map' ? 'active' : ''}>
+              Map
+            </button>
+          </div>
+        )}
         <div className="desktop-search">
           <Search size={19} />
           <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search events..." />
@@ -201,7 +213,9 @@ export default function DesktopHome({
         <span>Events are user-submitted; verify details with the host.</span>
       </div>
 
-      {displayed.length === 0 ? (
+      {viewMode === 'map' && !isGuest ? (
+        <EventMapView events={events} onSelectEvent={onSelectMapEvent} />
+      ) : displayed.length === 0 ? (
         <div className="desktop-empty">
           <CalendarOff size={42} />
           <h3>No matching events</h3>
@@ -244,7 +258,7 @@ export default function DesktopHome({
           <TodayRail events={events} setExpandedId={setExpandedId} setPage={setPage} isGuest={isGuest} />
         </div>
       )}
-      {hasMore && (
+      {viewMode !== 'map' && hasMore && (
         <button className="desktop-load-more" onClick={onLoadMore}>Show more events</button>
       )}
     </div>

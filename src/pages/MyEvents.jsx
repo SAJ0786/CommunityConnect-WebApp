@@ -69,7 +69,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
           }}>
             <span style={{
               fontSize: '0.6875rem', fontWeight: 600,
-              color: e.hidden ? '#c0392b' : '#27ae60',
+              color: e.hidden ? '#0f766e' : '#27ae60',
             }}>
               {e.hidden ? '🙈 Hidden from home screen' : '👁 Visible on home screen'}
             </span>
@@ -78,7 +78,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
               style={{
                 fontSize: '0.6875rem', padding: '3px 10px', borderRadius: 6,
                 border: 'none', cursor: 'pointer', fontWeight: 600,
-                background: e.hidden ? '#c0392b' : '#f3f4f6',
+                background: e.hidden ? '#0f766e' : '#f3f4f6',
                 color: e.hidden ? 'white' : '#7f8c8d',
               }}>
               {e.hidden ? '👁 Make Visible' : '🙈 Hide Event'}

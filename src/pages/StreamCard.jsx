@@ -180,7 +180,7 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
         Thank you for streaming with Community Events Australia!
       </p>
       <button onClick={onClose}
-        style={{ background:'#c0392b', color:'white', border:'none',
+        style={{ background:'#0f766e', color:'white', border:'none',
           borderRadius:12, padding:'12px 28px', fontSize:'0.9375rem',
           fontWeight:900, cursor:'pointer', marginTop:8 }}>
         ← Back to Home
@@ -200,7 +200,7 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
         background:'#000', fontFamily:'var(--font,sans-serif)',
         paddingBottom:'env(safe-area-inset-bottom)',
       }}>
-        <div style={{ background:'#c0392b', padding:'10px 14px', flexShrink:0,
+        <div style={{ background:'#0f766e', padding:'10px 14px', flexShrink:0,
           display:'flex', alignItems:'center', justifyContent:'space-between',
           paddingTop:'max(10px, env(safe-area-inset-top))' }}>
           <div style={{ color:'white', fontWeight:900, fontSize:'0.875rem', display:'flex', alignItems:'center', gap:8 }}>
@@ -233,7 +233,7 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
         ? { left:'-99999px', top:0, width:'100vw', height:'100dvh', opacity:0, pointerEvents:'none' }
         : { inset:0, height:'100dvh' }), zIndex:9999, display:'flex', flexDirection:'column',
         background:'#090909', color:'white', fontFamily:'var(--font,sans-serif)' }}>
-        <div style={{ background:'#c0392b', padding:'max(10px, env(safe-area-inset-top)) 14px 10px',
+        <div style={{ background:'#0f766e', padding:'max(10px, env(safe-area-inset-top)) 14px 10px',
           display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
           <div style={{ fontWeight:900, fontSize:'0.875rem' }}><span style={{ animation:'liveBlink 1s infinite' }}>LIVE</span> - EXTERNAL DEVICE</div>
           <div style={{ display:'flex', gap:8 }}>
@@ -247,7 +247,7 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
         {confirm && <EndStreamConfirmation ending={ending} external onConfirm={handleEnd} onCancel={() => setConfirm(false)} />}
         <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
           padding:24, textAlign:'center', gap:16 }}>
-          <div style={{ width:72, height:72, borderRadius:'50%', background:'#c0392b', display:'grid',
+          <div style={{ width:72, height:72, borderRadius:'50%', background:'#0f766e', display:'grid',
             placeItems:'center', fontSize:'1.375rem', fontWeight:900 }}>LIVE</div>
           <h2 style={{ margin:0, fontSize:'1.3125rem' }}>{event.eventTypeDisplay || event.eventType || 'Event'} is live</h2>
           <p style={{ margin:0, color:'#bbb', maxWidth:430, fontSize:'0.875rem', lineHeight:1.55 }}>
@@ -277,7 +277,7 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
 
       {/* Header bar */}
       <div style={{
-        background:'#c0392b', padding:'10px 14px', flexShrink:0,
+        background:'#0f766e', padding:'10px 14px', flexShrink:0,
         display:'flex', alignItems:'center', justifyContent:'space-between',
         paddingTop:'max(10px, env(safe-area-inset-top))',
       }}>
@@ -406,7 +406,7 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
               🔄 Flip
             </button>
             <button onClick={handleToggleMic}
-              style={{ background: muted ? '#c0392b' : 'rgba(0,0,0,0.55)', color:'white',
+              style={{ background: muted ? '#0f766e' : 'rgba(0,0,0,0.55)', color:'white',
                 border:'1px solid rgba(255,255,255,0.3)',
                 borderRadius:10, padding:'8px 12px', fontSize:'0.75rem', fontWeight:800, cursor:'pointer' }}>
               {muted ? '🔇 Mic Off' : '🎙 Mic On'}

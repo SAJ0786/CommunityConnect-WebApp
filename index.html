@@ -50,13 +50,6 @@
   <link rel="manifest" href="/manifest.json?v=20260625" />
   <link rel="icon" href="/favicon.png" />
   <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', function () {
-        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function () {});
-      });
-    }
-  </script>
 </head>
 <body>
   <div id="root">

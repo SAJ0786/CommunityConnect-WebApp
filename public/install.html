@@ -3,314 +3,235 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Install Community Events App</title>
+  <title>Install Community Events Australia</title>
+  <link rel="stylesheet" href="/brand-wordmark.css"/>
   <style>
     :root {
       --teal: #0f766e;
       --teal-dark: #0b5d57;
-      --bg: #f4f7f7;
-      --card: #fff;
-      --text: #1f2933;
-      --muted: #6b7280;
-      --border: #e5e7eb;
+      --bg: #f4f8f7;
+      --card: #ffffff;
+      --text: #071733;
+      --muted: #667085;
+      --border: #d8e5e3;
+      --red: #c9362a;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background: var(--bg); color: var(--text);
+      margin: 0;
       min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      background: radial-gradient(circle at 50% 0, #e6f4f1 0, var(--bg) 42%, #ffffff 100%);
+      color: var(--text);
     }
-
-    /* ── Hero ── */
     .hero {
       background: linear-gradient(135deg, var(--teal), var(--teal-dark));
-      padding: 48px 24px 80px;
+      color: #ffffff;
       text-align: center;
-      color: white;
+      padding: 34px 18px 78px;
     }
-    .hero img {
-      width: 100px; height: 100px;
-      border-radius: 24px;
-      background: white;
+    .logo {
+      width: 96px;
+      height: 96px;
       object-fit: contain;
-      margin-bottom: 16px;
-      box-shadow: 0 8px 32px rgba(0,0,0,.2);
+      background: #ffffff;
+      border-radius: 22px;
+      padding: 8px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.18);
+      margin-bottom: 14px;
     }
-    .hero h1 { font-size: 32px; font-weight: 900; margin-bottom: 8px; }
-    .hero p  { font-size: 16px; opacity: .9; }
-
-    /* ── Container ── */
-    .container {
-      max-width: 520px;
-      margin: -48px auto 48px;
-      padding: 0 20px;
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 6vw, 3rem);
+      line-height: 1.05;
+      font-weight: 900;
+      letter-spacing: 0;
     }
-
-    /* ── Card ── */
+    .hero p {
+      margin: 10px auto 0;
+      max-width: 600px;
+      font-size: 1rem;
+      line-height: 1.55;
+      color: rgba(255,255,255,.92);
+    }
+    .wrap {
+      width: min(940px, calc(100% - 32px));
+      margin: -48px auto 46px;
+    }
     .card {
-      background: white;
-      border-radius: 24px;
-      padding: 28px;
-      box-shadow: 0 16px 48px rgba(15,118,110,.12);
+      background: var(--card);
       border: 1px solid var(--border);
-      margin-bottom: 16px;
+      border-radius: 20px;
+      box-shadow: 0 18px 45px rgba(15,118,110,.14);
+      padding: clamp(20px, 4vw, 34px);
+      margin-bottom: 18px;
     }
-    .card h2 {
-      font-size: 18px; font-weight: 900;
-      color: var(--teal); margin-bottom: 6px;
+    .section-title {
+      margin: 0 0 8px;
+      color: var(--teal);
+      font-size: 1.35rem;
+      font-weight: 900;
     }
-    .card p { font-size: 14px; color: var(--muted); line-height: 1.6; }
-
-    /* ── QR code ── */
-    .qr-wrap {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 14px;
-      padding: 24px 0 8px;
+    .lead {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 1rem;
     }
-    #qrcode canvas, #qrcode img {
-      border-radius: 16px;
-      box-shadow: 0 4px 16px rgba(0,0,0,.1);
-    }
-    .qr-label {
-      font-size: 13px; color: var(--muted); text-align: center;
-    }
-
-    /* ── App URL ── */
-    .url-box {
-      display: flex; gap: 8px; margin: 14px 0 4px;
-    }
-    .url-box input {
-      flex: 1; padding: 12px 14px;
-      border: 1px solid var(--border);
-      border-radius: 12px; font-size: 13px;
-      color: var(--text); background: #f9fafb;
-    }
-    .url-box button {
-      padding: 12px 18px;
-      background: var(--teal); color: white;
-      border: none; border-radius: 12px;
-      font-weight: 900; font-size: 13px;
-      cursor: pointer; white-space: nowrap;
-    }
-    .url-box button:active { opacity: .85; }
-
-    /* ── Open button ── */
-    .open-btn {
-      display: block; width: 100%;
-      padding: 16px; text-align: center;
-      background: var(--teal); color: white;
-      border: none; border-radius: 16px;
-      font-size: 16px; font-weight: 900;
-      text-decoration: none; cursor: pointer;
-      margin: 16px 0 0;
-      box-shadow: 0 4px 16px rgba(15,118,110,.3);
-    }
-
-    /* ── Steps ── */
-    .steps { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; }
-    .step  { display: flex; gap: 14px; align-items: flex-start; }
-    .step-num {
-      width: 30px; height: 30px; border-radius: 50%;
-      background: var(--teal); color: white;
-      display: flex; align-items: center; justify-content: center;
-      font-weight: 900; font-size: 13px; flex-shrink: 0;
-    }
-    .step-text { font-size: 14px; line-height: 1.6; padding-top: 4px; }
-    .step-text strong { color: var(--text); }
-
-    /* ── Platform tabs ── */
-    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-    .tab {
-      flex: 1; padding: 10px;
-      border: 1px solid var(--border);
-      border-radius: 12px; font-size: 13px; font-weight: 700;
-      background: white; color: var(--muted);
-      cursor: pointer; text-align: center;
-    }
-    .tab.active { background: var(--teal); color: white; border-color: var(--teal); }
-
-    /* ── Features ── */
-    .features {
+    .stores {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px; margin-top: 14px;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 22px;
     }
-    .feature {
-      background: #f0fdf4;
-      border-radius: 12px; padding: 12px;
-      font-size: 13px; color: var(--text);
+    .store {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 74px;
+      border: 2px solid #16a34a;
+      border-radius: 12px;
+      background: #ffffff;
+      padding: 10px;
+      text-decoration: none;
+      transition: transform .15s ease, box-shadow .15s ease;
     }
-    .feature .icon { font-size: 20px; margin-bottom: 4px; }
-    .feature .name { font-weight: 800; }
-
-    .copied { color: #059669; font-size: 12px; margin-top: 4px; display: none; }
-    .copied.show { display: block; }
-
-    @media(max-width: 480px) {
-      .hero h1 { font-size: 26px; }
-      .card { padding: 20px; }
+    .store:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 20px rgba(15,118,110,.13);
+    }
+    .store img {
+      display: block;
+      max-width: 100%;
+      max-height: 46px;
+      object-fit: contain;
+    }
+    .smart-link {
+      display: block;
+      width: 100%;
+      margin-top: 18px;
+      padding: 15px 18px;
+      border-radius: 14px;
+      background: var(--teal);
+      color: white;
+      text-align: center;
+      font-weight: 900;
+      text-decoration: none;
+      box-shadow: 0 10px 24px rgba(15,118,110,.22);
+    }
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .info {
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      background: #fbfefd;
+    }
+    .info strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-size: .96rem;
+    }
+    .info span {
+      color: var(--muted);
+      font-size: .9rem;
+      line-height: 1.45;
+    }
+    .web-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: #f8faf9;
+      margin-top: 18px;
+    }
+    .web-box a {
+      color: var(--red);
+      font-weight: 900;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: .86rem;
+      margin-top: 18px;
+    }
+    @media (max-width: 720px) {
+      .stores, .info-grid { grid-template-columns: 1fr; }
+      .store { min-height: 68px; }
+      .web-box { align-items: flex-start; flex-direction: column; }
     }
   </style>
+  <link rel="stylesheet" href="/static-pages.css"/>
 </head>
 <body>
-
-<div class="hero">
-  <img src="/logo.png" alt="Community Events"/>
-  <h1>Community Events</h1>
-  <p>Create · Share · Connect</p>
-</div>
-
-<div class="container">
-
-  <!-- QR + URL card -->
-  <div class="card">
-    <h2>📲 Install the App</h2>
-    <p>Scan the QR code with your phone camera, or tap the button to open directly.</p>
-
-    <div class="qr-wrap">
-      <div id="qrcode"></div>
-      <p class="qr-label">Scan with your phone camera to open</p>
+  <a class="static-back-link" href="/">&larr; Back to Home</a>
+  <header class="hero">
+    <img class="logo" src="/logo-transparent.png" alt="Community Events Australia logo"/>
+    <div class="ce-wordmark ce-wordmark--hero" aria-label="Community Events Australia">
+      <span class="ce-wordmark__line ce-wordmark__community" aria-hidden="true"><span>C</span><span>o</span><span>m</span><span>m</span><span>u</span><span>n</span><span>i</span><span>t</span><span>y</span></span>
+      <span class="ce-wordmark__line ce-wordmark__events" aria-hidden="true"><span>E</span><span>v</span><span>e</span><span>n</span><span>t</span><span>s</span></span>
+      <span class="ce-wordmark__line ce-wordmark__australia" aria-hidden="true"><span>A</span><span>u</span><span>s</span><span>t</span><span>r</span><span>a</span><span>l</span><span>i</span><span>a</span></span>
+      <span class="ce-wordmark__rule" aria-hidden="true"></span>
     </div>
+    <p>Install the official app to browse, share and manage community programs with reminders, calendar sync, directions and live streams.</p>
+  </header>
 
-    <div class="url-box">
-      <input type="text" id="appUrl" readonly/>
-      <button onclick="copyUrl()">Copy</button>
-    </div>
-    <p class="copied" id="copiedMsg">✓ Copied to clipboard!</p>
+  <main class="wrap">
+    <section class="card">
+      <h2 class="section-title">Install From Your App Store</h2>
+      <p class="lead">Choose the correct store for your device. The app is free.</p>
 
-    <a class="open-btn" id="openBtn" href="#" target="_blank">
-      Open App →
-    </a>
-  </div>
+      <div class="stores" aria-label="App store links">
+        <a class="store" href="https://apps.apple.com/au/app/community-events-australia/id6782770347" target="_blank" rel="noreferrer" aria-label="Download on the Apple App Store">
+          <img src="/store-apple-vector.svg" alt="Apple App Store"/>
+        </a>
+        <a class="store" href="https://play.google.com/store/apps/details?id=info.siza.communityevents.app" target="_blank" rel="noreferrer" aria-label="Get it on Google Play">
+          <img src="/store-google-play.svg" alt="Google Play"/>
+        </a>
+        <a class="store" href="https://apps.microsoft.com/detail/9NDGJZHL86KJ" target="_blank" rel="noreferrer" aria-label="Get it from the Microsoft Store">
+          <img src="/store-microsoft.svg" alt="Microsoft Store"/>
+        </a>
+      </div>
 
-  <!-- Install instructions -->
-  <div class="card">
-    <h2>⬇️ How to Install</h2>
-    <p>This app installs directly on your phone — no App Store needed.</p>
+      <a class="smart-link" href="/app">Open App or Download</a>
+    </section>
 
-    <div class="tabs" style="margin-top: 16px;">
-      <div class="tab active" onclick="showTab('ios', this)">🍎 iPhone</div>
-      <div class="tab"        onclick="showTab('android', this)">🤖 Android</div>
-    </div>
+    <section class="card">
+      <h2 class="section-title">What The App Includes</h2>
+      <p class="lead">The store app gives users the current Community Events Australia experience without relying on old browser home-screen install steps.</p>
 
-    <!-- iOS steps -->
-    <div id="ios-steps" class="steps">
-      <div class="step">
-        <div class="step-num">1</div>
-        <div class="step-text">Open the app link in <strong>Safari</strong> (not Chrome)</div>
+      <div class="info-grid">
+        <div class="info">
+          <strong>Events and Directions</strong>
+          <span>Browse community programs, view eligible addresses and open directions from event cards.</span>
+        </div>
+        <div class="info">
+          <strong>Calendar and Reminders</strong>
+          <span>Sync supported events to your calendar and receive reminder emails when enabled.</span>
+        </div>
+        <div class="info">
+          <strong>Live Streams</strong>
+          <span>Watch available public streams and manage authorised public or private event streams.</span>
+        </div>
       </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <div class="step-text">Tap the <strong>Share button</strong> at the bottom of Safari (the box with an arrow pointing up)</div>
-      </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <div class="step-text">Scroll down and tap <strong>"Add to Home Screen"</strong></div>
-      </div>
-      <div class="step">
-        <div class="step-num">4</div>
-        <div class="step-text">Tap <strong>Add</strong> — the app icon appears on your home screen</div>
-      </div>
-    </div>
 
-    <!-- Android steps -->
-    <div id="android-steps" class="steps" style="display:none">
-      <div class="step">
-        <div class="step-num">1</div>
-        <div class="step-text">Open the app link in <strong>Chrome</strong></div>
+      <div class="web-box">
+        <p class="lead">Using a shared computer or cannot install right now? You can still open the web app.</p>
+        <a href="/">Open Web App</a>
       </div>
-      <div class="step">
-        <div class="step-num">2</div>
-        <div class="step-text">Tap the <strong>three-dot menu</strong> (⋮) at the top right</div>
-      </div>
-      <div class="step">
-        <div class="step-num">3</div>
-        <div class="step-text">Tap <strong>"Add to Home Screen"</strong> or <strong>"Install App"</strong></div>
-      </div>
-      <div class="step">
-        <div class="step-num">4</div>
-        <div class="step-text">Tap <strong>Install</strong> — the app icon appears on your home screen</div>
-      </div>
-    </div>
-  </div>
+    </section>
 
-  <!-- Features -->
-  <div class="card">
-    <h2>✨ What you get</h2>
-    <div class="features">
-      <div class="feature">
-        <div class="icon">🏠</div>
-        <div class="name">Browse Events</div>
-        <div>See all upcoming community events</div>
-      </div>
-      <div class="feature">
-        <div class="icon">✦</div>
-        <div class="name">AI Search</div>
-        <div>Find events by asking naturally</div>
-      </div>
-      <div class="feature">
-        <div class="icon">📅</div>
-        <div class="name">Calendar Sync</div>
-        <div>Add events to your phone calendar</div>
-      </div>
-      <div class="feature">
-        <div class="icon">🔔</div>
-        <div class="name">Reminders</div>
-        <div>Daily email for tomorrow's events</div>
-      </div>
-      <div class="feature">
-        <div class="icon">➕</div>
-        <div class="name">Add Events</div>
-        <div>Share your own events easily</div>
-      </div>
-      <div class="feature">
-        <div class="icon">📍</div>
-        <div class="name">Nearby</div>
-        <div>Find events close to you</div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-<!-- QRCode.js library -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script>
-  // Use current domain if deployed, fallback to Firebase URL
-  const APP_URL = window.location.hostname === 'localhost'
-    ? 'https://ce.sajjadzaheer.com'
-    : window.location.origin;
-
-  // Set URL input and open button
-  document.getElementById('appUrl').value = APP_URL;
-  document.getElementById('openBtn').href = APP_URL;
-
-  // Generate QR code
-  new QRCode(document.getElementById('qrcode'), {
-    text:           APP_URL,
-    width:          200,
-    height:         200,
-    colorDark:      '#0f766e',
-    colorLight:     '#ffffff',
-    correctLevel:   QRCode.CorrectLevel.H
-  });
-
-  function copyUrl() {
-    navigator.clipboard.writeText(APP_URL).then(() => {
-      const msg = document.getElementById('copiedMsg');
-      msg.classList.add('show');
-      setTimeout(() => msg.classList.remove('show'), 2500);
-    });
-  }
-
-  function showTab(platform, el) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById('ios-steps').style.display     = platform === 'ios'     ? 'flex' : 'none';
-    document.getElementById('android-steps').style.display = platform === 'android' ? 'flex' : 'none';
-  }
-</script>
+    <p class="footer">Community Events Australia - Create, Share, Connect</p>
+  </main>
 </body>
 </html>

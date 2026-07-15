@@ -38,8 +38,8 @@ const dateChip = (d) => {
 };
 
 // ── SVG icons ────────────────────────────────────────────────────────────────
-const WaIcon = ({ size = 17 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="#25d366">
+const WaIcon = ({ size = 17, color = '#25d366' }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
     <path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.37 5.07L2 22l5.09-1.34A9.94 9.94 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.66 0-3.22-.46-4.55-1.26l-.32-.19-3.03.8.81-2.96-.21-.34A7.96 7.96 0 014 12c0-4.42 3.58-8 8-8s8 3.58 8 8-3.58 8-8 8zm4.45-5.95c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.39-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.69 2.58 4.1 3.62.57.25 1.02.39 1.37.5.57.18 1.09.16 1.5.1.46-.07 1.43-.58 1.63-1.15.2-.57.2-1.06.14-1.15-.06-.1-.22-.16-.46-.28z"/>
   </svg>
 );
@@ -50,7 +50,7 @@ const MapIcon = ({ size = 15, color = '#4285f4' }) => (
   </svg>
 );
 
-const TrashIcon = ({ size = 15, color = '#c0392b' }) => (
+const TrashIcon = ({ size = 15, color = '#0f766e' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="3 6 5 6 21 6"/>
@@ -60,7 +60,7 @@ const TrashIcon = ({ size = 15, color = '#c0392b' }) => (
   </svg>
 );
 
-const EditIcon = ({ size = 15, color = '#c0392b' }) => (
+const EditIcon = ({ size = 15, color = '#0f766e' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
     stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -192,11 +192,11 @@ export default function EventCard({
   return (
     <div
       className="card"
-      onClick={() => { if (!isExpanded) onExpand(event.id); }}
+      onClick={() => onExpand(isExpanded ? null : event.id)}
       style={{
         cursor: 'pointer', padding: '12px 14px',
-        border: isExpanded ? '1.5px solid var(--red,#c0392b)' : '1.5px solid transparent',
-        boxShadow: isExpanded ? '0 6px 24px rgba(192,57,43,0.15)' : 'var(--shadow-sm)',
+        border: isExpanded ? '1.5px solid var(--red,#0f766e)' : '1.5px solid transparent',
+        boxShadow: isExpanded ? '0 6px 24px rgba(15,118,110,0.15)' : 'var(--shadow-sm)',
         transition: 'all 0.25s',
         transform: isExpanded ? 'translateY(-1px)' : 'none',
         marginBottom: 8,
@@ -235,7 +235,7 @@ export default function EventCard({
               {event.isLive && (
                 <div style={{
                   position:'absolute', bottom:0, left:0, right:0,
-                  background:'var(--red,#c0392b)', color:'white', fontSize:'0.5rem',
+                  background:'var(--red,#0f766e)', color:'white', fontSize:'0.5rem',
                   fontWeight:900, textAlign:'center', padding:'2px 0',
                   animation:'pulse 2s infinite',
                 }}>🔴 LIVE</div>
@@ -278,7 +278,7 @@ export default function EventCard({
             )}
             {onSaveToggle && (
               <span onClick={ev => { ev.stopPropagation(); if (!isGuest) onSaveToggle(event.id, !isSaved); }}
-                style={{ fontSize:'1.125rem', color: isSaved ? 'var(--red,#c0392b)' : '#cbd5d3',
+                style={{ fontSize:'1.125rem', color: isSaved ? 'var(--red,#0f766e)' : '#cbd5d3',
                   cursor: isGuest ? 'default' : 'pointer', lineHeight:1, flexShrink:0 }}>
                 {isSaved ? '❤️' : '🤍'}
               </span>
@@ -395,12 +395,13 @@ export default function EventCard({
             onClick={e => e.stopPropagation()}>
             {/* Share */}
             <button onClick={handleShare} style={{
-              fontSize:'0.75rem', padding:'8px 14px', borderRadius:10, border:'none',
-              background:'#25d366', color:'white', fontWeight:800, fontFamily:'var(--font)',
-              display:'flex', alignItems:'center', gap:5, boxShadow:'0 2px 8px rgba(37,211,102,0.4)',
+              fontSize:'0.75rem', padding:'8px 14px', borderRadius:10,
+              background:'#ffffff', color:'#128c4a', fontWeight:800, fontFamily:'var(--font)',
+              border:'1.5px solid #25d366',
+              display:'flex', alignItems:'center', gap:5, boxShadow:'0 2px 8px rgba(37,211,102,0.18)',
               cursor:'pointer',
             }}>
-              <WaIcon size={14} color="white" /> Share
+              <WaIcon size={15} color="#25d366" /> Share
             </button>
             {/* Directions */}
             <button onClick={handleDirections} disabled={isGuest} style={{
@@ -417,30 +418,30 @@ export default function EventCard({
             {canEditEvent(profile, event, user?.uid) && (
               <button onClick={e => { e.stopPropagation(); onEdit(event); }} style={{
                 fontSize:'0.75rem', padding:'8px 14px', borderRadius:10,
-                background:'var(--red-l,#fdf2f1)', color:'var(--red)',
-                border:'1px solid var(--red-m,#fadbd8)', fontWeight:800, fontFamily:'var(--font)',
+                background:'var(--red-l,#e6f4f1)', color:'var(--red)',
+                border:'1px solid var(--red-m,#b7d8d4)', fontWeight:800, fontFamily:'var(--font)',
                 display:'flex', alignItems:'center', gap:5, boxShadow:'none', cursor:'pointer',
               }}>
-                <EditIcon size={13} color="var(--red,#c0392b)" /> Edit
+                <EditIcon size={13} color="var(--red,#0f766e)" /> Edit
               </button>
             )}
             {/* Delete */}
             {canDeleteEvent(profile, event, user?.uid) && (
               <button onClick={e => { e.stopPropagation(); onDelete(event.id); }} style={{
                 fontSize:'0.75rem', padding:'8px 12px', borderRadius:10,
-                background:'var(--red-l,#fdf2f1)', color:'var(--red)',
-                border:'1px solid var(--red-m,#fadbd8)', fontWeight:800, fontFamily:'var(--font)',
+                background:'var(--red-l,#e6f4f1)', color:'var(--red)',
+                border:'1px solid var(--red-m,#b7d8d4)', fontWeight:800, fontFamily:'var(--font)',
                 display:'flex', alignItems:'center', gap:4, boxShadow:'none', cursor:'pointer',
               }}>
-                <TrashIcon size={13} color="var(--red,#c0392b)" />
+                <TrashIcon size={13} color="var(--red,#0f766e)" />
               </button>
             )}
             {/* Copy */}
             {canCopy && onCopy && (
               <button onClick={e => { e.stopPropagation(); onCopy(event); }} style={{
                 fontSize:'0.75rem', padding:'8px 14px', borderRadius:10,
-                background:'var(--red-l,#fdf2f1)', color:'var(--red)',
-                border:'1px solid var(--red-m,#fadbd8)', fontWeight:800, fontFamily:'var(--font)',
+                background:'var(--red-l,#e6f4f1)', color:'var(--red)',
+                border:'1px solid var(--red-m,#b7d8d4)', fontWeight:800, fontFamily:'var(--font)',
                 display:'flex', alignItems:'center', gap:4, boxShadow:'none', cursor:'pointer',
               }}>
                 📋 Copy

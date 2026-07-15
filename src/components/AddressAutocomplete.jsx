@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { hasGoogleMapsKey, loadGoogleMapsScript as loadSharedGoogleMapsScript, waitForGooglePlaces } from '../services/googleMapsLoader';
 
 const PLACES_KEY = import.meta.env.VITE_GOOGLE_PLACES_KEY || '';
 
@@ -28,9 +29,9 @@ export default function AddressAutocomplete({ value = {}, onChange, required, in
   const [status, setStatus] = useState('');
 
   useEffect(() => {
-    if (!PLACES_KEY) return;
-    loadGoogleMapsScript();
-    waitForGoogle(() => setReady(true));
+    if (!hasGoogleMapsKey()) return;
+    loadSharedGoogleMapsScript();
+    waitForGooglePlaces(() => setReady(true));
   }, []);
 
   useEffect(() => {
@@ -72,7 +73,7 @@ export default function AddressAutocomplete({ value = {}, onChange, required, in
   }, [ready]);
 
   // No API key → manual fields
-  if (!PLACES_KEY) {
+  if (!hasGoogleMapsKey()) {
     return <ManualAddress value={value} onChange={onChange} required={required} />;
   }
 

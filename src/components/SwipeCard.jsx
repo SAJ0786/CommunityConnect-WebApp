@@ -42,17 +42,17 @@ function CardContent({ e, isGuest }) {
   return (
     <div style={{ height:'100%', display:'flex', flexDirection:'column' }}>
       {/* Red top strip */}
-      <div style={{ height:5, background:'var(--red,#c0392b)', flexShrink:0 }} />
+      <div style={{ height:5, background:'var(--red,#0f766e)', flexShrink:0 }} />
       <div style={{ padding:'16px 18px', flex:1, overflowY:'auto' }}>
         {/* Badges */}
         <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
-          <span style={{ background:'var(--red-l,#fdf2f1)', color:'var(--red,#c0392b)',
+          <span style={{ background:'var(--red-l,#e6f4f1)', color:'var(--red,#0f766e)',
             fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
             {e.eventTypeDisplay || e.eventType}
           </span>
           <span style={{
-            background: isPrivate ? '#eafaf1' : 'var(--red-l,#fdf2f1)',
-            color: isPrivate ? '#27ae60' : 'var(--red,#c0392b)',
+            background: isPrivate ? '#eafaf1' : 'var(--red-l,#e6f4f1)',
+            color: isPrivate ? '#27ae60' : 'var(--red,#0f766e)',
             fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
             {isPrivate ? '🔒 Private' : '🏛 Centre'}
           </span>
@@ -238,7 +238,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
           <button onClick={() => goTo('prev')} disabled={index === 0 || !!animDir}
             style={actBtn(
-              'var(--red,#c0392b)', '0 4px 14px rgba(192,57,43,0.35)',
+              'var(--red,#0f766e)', '0 4px 14px rgba(15,118,110,0.35)',
               index === 0
             )}>
             <ChevL color={index === 0 ? 'var(--muted)' : 'white'} />
@@ -260,8 +260,8 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
             <button onClick={() => onSaveToggle(cur.id, !isSaved)}
               style={actBtn(
-                isSaved ? '#f39c12' : 'var(--red,#c0392b)',
-                isSaved ? '0 4px 16px rgba(243,156,18,0.45)' : '0 4px 16px rgba(192,57,43,0.35)'
+                isSaved ? '#f39c12' : 'var(--red,#0f766e)',
+                isSaved ? '0 4px 16px rgba(243,156,18,0.45)' : '0 4px 16px rgba(15,118,110,0.35)'
               )}>
               <span style={{ fontSize:'1.375rem', lineHeight:1 }}>{isSaved ? '⭐' : '☆'}</span>
             </button>
@@ -282,7 +282,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
           <button onClick={() => goTo('next')} disabled={index >= total - 1 || !!animDir}
             style={actBtn(
-              'var(--red,#c0392b)', '0 4px 14px rgba(192,57,43,0.35)',
+              'var(--red,#0f766e)', '0 4px 14px rgba(15,118,110,0.35)',
               index >= total - 1
             )}>
             <ChevR color={index >= total - 1 ? 'var(--muted)' : 'white'} />
@@ -303,7 +303,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
             transform:'scale(0.94) translateY(14px)', zIndex:1, overflow:'hidden',
             boxShadow:'0 2px 8px rgba(26,26,46,0.05)',
           }}>
-            <div style={{ height:5, background:'var(--red,#c0392b)' }} />
+            <div style={{ height:5, background:'var(--red,#0f766e)' }} />
           </div>
         )}
 
@@ -339,14 +339,14 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
           {/* NEXT hint */}
           <div style={{
             position:'absolute', top:16, right:16, zIndex:10,
-            background:'var(--red,#c0392b)', color:'white', padding:'5px 13px',
+            background:'var(--red,#0f766e)', color:'white', padding:'5px 13px',
             borderRadius:9, fontSize:'0.8125rem', fontWeight:900, fontFamily:'var(--font)',
             border:'2.5px solid white', opacity: hintNext, pointerEvents:'none',
           }}>NEXT ›</div>
           {/* PREV hint */}
           <div style={{
             position:'absolute', top:16, left:16, zIndex:10,
-            background:'var(--red,#c0392b)', color:'white', padding:'5px 13px',
+            background:'var(--red,#0f766e)', color:'white', padding:'5px 13px',
             borderRadius:9, fontSize:'0.8125rem', fontWeight:900, fontFamily:'var(--font)',
             border:'2.5px solid white', opacity: hintPrev, pointerEvents:'none',
           }}>‹ PREV</div>
@@ -365,7 +365,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
             <button key={i} onClick={() => { if (!animating.current) setIndex(idx); }}
               style={{
                 width: idx===index ? 22 : 7, height:7, borderRadius:4, padding:0, border:'none',
-                background: idx===index ? 'var(--red,#c0392b)' : 'var(--border)',
+                background: idx===index ? 'var(--red,#0f766e)' : 'var(--border)',
                 cursor:'pointer', transition:'all 0.25s', boxShadow:'none',
               }}/>
           );

@@ -211,7 +211,7 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
               🔄 Flip
             </button>
             <button onClick={handleToggleMic}
-              style={{ background: muted ? '#c0392b' : 'rgba(0,0,0,0.55)', color:'white',
+              style={{ background: muted ? '#0f766e' : 'rgba(0,0,0,0.55)', color:'white',
                 border:'1px solid rgba(255,255,255,0.3)',
                 borderRadius:10, padding:'8px 12px', fontSize:'0.75rem', fontWeight:800, cursor:'pointer' }}>
               {muted ? '🔇 Mic Off' : '🎙 Mic On'}
@@ -243,7 +243,7 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
         <button onClick={handleConfirm} disabled={phase !== 'ready'}
           style={{
             width:'100%', padding:'14px', borderRadius:14, border:'none',
-            background: phase === 'ready' ? '#c0392b' : '#555',
+            background: phase === 'ready' ? '#0f766e' : '#555',
             color:'white', fontWeight:900, fontSize:'0.9375rem',
             cursor: phase === 'ready' ? 'pointer' : 'not-allowed',
             display:'flex', alignItems:'center', justifyContent:'center', gap:8,

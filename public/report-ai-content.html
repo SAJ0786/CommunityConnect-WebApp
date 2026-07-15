@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Report AI Content - Community Events Australia</title>
+  <style>
+    :root {
+      --teal: #0f766e;
+      --teal-dark: #0b5d57;
+      --ink: #071832;
+      --muted: #667085;
+      --line: #d1d5db;
+      --surface: #ffffff;
+      --bg: #f4fbfa;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #eefaf8, #ffffff);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.5;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 20px;
+      background: white;
+      border-bottom: 1px solid #e5e7eb;
+      box-shadow: 0 2px 12px rgba(15, 23, 42, 0.08);
+    }
+    header img { width: 46px; height: 46px; object-fit: contain; }
+    header strong { display: block; font-size: 18px; }
+    header span { display: block; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.08em; }
+    main {
+      width: min(680px, calc(100% - 28px));
+      margin: 28px auto;
+      background: var(--surface);
+      border: 1px solid #cfe5e2;
+      border-radius: 18px;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+      padding: 24px;
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 6vw, 38px); line-height: 1.1; }
+    p { color: var(--muted); }
+    .content-box {
+      background: var(--bg);
+      border: 1px solid #99f6e4;
+      border-radius: 12px;
+      padding: 14px;
+      margin: 18px 0;
+    }
+    .content-box strong { display: block; color: var(--teal-dark); margin-bottom: 6px; }
+    .content-box a { color: var(--teal); overflow-wrap: anywhere; }
+    fieldset {
+      border: 0;
+      padding: 0;
+      margin: 20px 0;
+    }
+    legend { font-weight: 800; margin-bottom: 10px; }
+    label.option {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin-bottom: 10px;
+      cursor: pointer;
+    }
+    input[type="radio"] { width: 18px; height: 18px; accent-color: var(--teal); }
+    input[type="email"], textarea {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      font: inherit;
+      color: var(--ink);
+      background: white;
+    }
+    textarea { min-height: 120px; resize: vertical; }
+    .actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    button {
+      border: 0;
+      border-radius: 10px;
+      padding: 13px 18px;
+      background: var(--teal);
+      color: white;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 10px 18px rgba(15, 118, 110, 0.2);
+    }
+    button:disabled { opacity: 0.65; cursor: progress; }
+    .home-link { color: var(--teal); font-weight: 700; text-decoration: none; }
+    .message {
+      display: none;
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 10px;
+      font-weight: 700;
+    }
+    .message.ok { display: block; background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .message.error { display: block; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="/logo-transparent.png" alt="Community Events Australia">
+    <div>
+      <strong>Community Events Australia</strong>
+      <span>CREATE - SHARE - CONNECT</span>
+    </div>
+  </header>
+
+  <main>
+    <a class="home-link" href="/">Back to Home</a>
+    <h1>Report AI Content</h1>
+    <p>Use this form to report incorrect, inappropriate, unsafe or concerning AI-assisted story content linked from Community Events Australia.</p>
+
+    <div class="content-box">
+      <strong id="storyTitle">Story content</strong>
+      <a id="storyUrl" href="#" target="_blank" rel="noopener"></a>
+    </div>
+
+    <form id="reportForm">
+      <fieldset>
+        <legend>Why are you reporting this?</legend>
+        <label class="option"><input type="radio" name="reason" value="Incorrect information"> Incorrect information</label>
+        <label class="option"><input type="radio" name="reason" value="Inappropriate or offensive content"> Inappropriate or offensive content</label>
+        <label class="option"><input type="radio" name="reason" value="Unsafe advice"> Unsafe advice</label>
+        <label class="option"><input type="radio" name="reason" value="Spam or misleading content"> Spam or misleading content</label>
+        <label class="option"><input type="radio" name="reason" value="Other"> Other</label>
+      </fieldset>
+
+      <label for="comments"><strong>Additional comments</strong></label>
+      <textarea id="comments" name="comments" placeholder="Tell us what should be reviewed."></textarea>
+
+      <label for="userEmail" style="display:block;margin-top:14px"><strong>Your email (optional)</strong></label>
+      <input id="userEmail" name="userEmail" type="email" placeholder="name@example.com">
+
+      <div class="actions">
+        <button id="submitButton" type="submit">Submit Report</button>
+        <a class="home-link" href="/">Cancel</a>
+      </div>
+      <div id="formMessage" class="message"></div>
+    </form>
+  </main>
+
+  <script>
+    const endpoint = "https://australia-southeast1-community-event-8b639.cloudfunctions.net/submitAiContentReport";
+    const params = new URLSearchParams(window.location.search);
+    const storyTitle = params.get("title") || "Deep Stories content";
+    const storyUrl = params.get("url") || "";
+    const source = params.get("source") || "deep-stories-email";
+    document.getElementById("storyTitle").textContent = storyTitle;
+    const storyLink = document.getElementById("storyUrl");
+    storyLink.textContent = storyUrl || "No link provided";
+    if (storyUrl) storyLink.href = storyUrl;
+
+    document.getElementById("reportForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = document.getElementById("submitButton");
+      const message = document.getElementById("formMessage");
+      const reason = new FormData(form).get("reason");
+      if (!reason) {
+        message.className = "message error";
+        message.textContent = "Please select a reason.";
+        return;
+      }
+      button.disabled = true;
+      message.className = "message";
+      message.textContent = "";
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            source,
+            contentTitle: storyTitle,
+            contentUrl: storyUrl,
+            reason,
+            comments: document.getElementById("comments").value,
+            userEmail: document.getElementById("userEmail").value,
+          }),
+        });
+        if (!response.ok) throw new Error("Report failed");
+        message.className = "message ok";
+        message.textContent = "Thank you. Your report has been submitted for review.";
+        form.reset();
+      } catch (err) {
+        message.className = "message error";
+        message.textContent = "Could not submit the report. Please try again.";
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

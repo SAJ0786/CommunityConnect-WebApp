@@ -31,13 +31,11 @@ function MinimalHeader() {
       padding: '14px 18px 12px',
       borderBottom: '1px solid var(--border)',
       boxShadow: 'var(--shadow-sm)',
-    }}>
+      }}>
       <img className="auth-header-logo" src="/logo.png" alt="Community Events Australia" />
       <div className="auth-header-title-wrap">
-        <div className="auth-header-title">
-          Community Events Australia
-        </div>
-        <div className="auth-header-rule" />
+        <h1 className="auth-header-title">Community Events Australia</h1>
+        <div className="auth-header-rule" aria-hidden="true" />
       </div>
       <div className="auth-header-spacer" aria-hidden="true" />
     </header>
@@ -117,10 +115,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
             filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.2))',
           }} />
           <div style={{ minWidth: 0 }}>
-            <div className="app-header-brand-title" style={{ fontSize: '1.0625rem', fontWeight: 900, color: 'var(--text)',
-              lineHeight: 1.1, letterSpacing: '-0.2px', whiteSpace: 'nowrap' }}>
-              Community<br/>Events Australia
-            </div>
+            <div className="app-header-brand-title">Community<br />Events Australia</div>
           </div>
         </div>
 
@@ -135,7 +130,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
             🔔
             {tomorrowEvents.length > 0 && (
               <span style={{ position: 'absolute', top: -4, right: -4,
-                background: 'var(--red,#c0392b)', color: 'white', fontSize: '0.5625rem', fontWeight: 800,
+                background: 'var(--red,#0f766e)', color: 'white', fontSize: '0.5625rem', fontWeight: 800,
                 minWidth: 16, height: 16, borderRadius: 8, display: 'flex',
                 alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
                 {tomorrowEvents.length}
@@ -193,8 +188,8 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
           {/* User info header */}
           <div style={{
             padding: '14px 18px',
-            background: 'var(--red-l,#fdf2f1)',
-            borderBottom: '1px solid var(--red-m,#fadbd8)',
+            background: 'var(--red-l,#e6f4f1)',
+            borderBottom: '1px solid var(--red-m,#b7d8d4)',
           }}>
             {isGuest ? (
               <>
@@ -208,8 +203,8 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
                 <div style={{ marginTop: 5 }}>
                   <span style={{
                     fontSize: '0.6875rem', fontWeight: 800, padding: '3px 9px', borderRadius: 99,
-                    background: 'var(--red-l,#fdf2f1)', color: 'var(--red)',
-                    border: '1px solid var(--red-m,#fadbd8)',
+                    background: 'var(--red-l,#e6f4f1)', color: 'var(--red)',
+                    border: '1px solid var(--red-m,#b7d8d4)',
                   }}>
                     {profile?.role === ROLES.SUPER_ADMIN ? '👑 Super Admin' :
                      profile?.role === ROLES.ADMIN        ? '🛠 Admin' : '👤 User'}
@@ -224,7 +219,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
             <button className="app-menu-item" key={item.key} onClick={() => navTo(item.key)} style={{
               display: 'block', width: '100%', textAlign: 'left',
               padding: '13px 18px', border: 'none',
-              background: page === item.key ? 'var(--red-l,#fdf2f1)' : 'transparent',
+              background: page === item.key ? 'var(--red-l,#e6f4f1)' : 'transparent',
               color: page === item.key ? 'var(--red)' : 'var(--text)',
               fontWeight: page === item.key ? 900 : 600,
               fontSize: '0.875rem', cursor: 'pointer',
@@ -238,7 +233,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
             <button onClick={() => { try { localStorage.removeItem('socialLoginStarted'); } catch {} signOut(auth); setOpen(false); }} style={{
               display: 'block', width: '100%', textAlign: 'left',
               padding: '13px 18px', border: 'none',
-              background: 'var(--red-l,#fdf2f1)', color: 'var(--red)',
+              background: 'var(--red-l,#e6f4f1)', color: 'var(--red)',
               fontWeight: 900, fontSize: '0.875rem', cursor: 'pointer', boxShadow: 'none',
             }}>🔑 Login / Create Account</button>
           )}

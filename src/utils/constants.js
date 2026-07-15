@@ -17,7 +17,7 @@ export const AUDIENCE_TYPES = [
 ];
 
 export const RECITER_TYPES = [
-  'Soz', 'Salam', 'Manqebat', 'Noha', 'Reciter', 'Peshkhani', 'Other'
+  'Soz', 'Salam', 'Manqebat', 'Noha', 'Marsiya', 'Hadees-e-Kisa', 'Reciter', 'Peshkhani', 'Other'
 ];
 
 export const ROLES = {

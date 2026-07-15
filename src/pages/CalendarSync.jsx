@@ -101,7 +101,7 @@ export default function CalendarSync({ user }) {
                 <span style={{ fontSize: '2rem', lineHeight: 1 }}>🤖</span>
               </div>
               <div>
-                <div style={{ fontWeight: 900, fontSize: '0.9375rem', color: 'var(--red,#c0392b)' }}>Android</div>
+                <div style={{ fontWeight: 900, fontSize: '0.9375rem', color: 'var(--red,#0f766e)' }}>Android</div>
                 <div style={{ fontSize: '0.6875rem', color: 'var(--muted)', marginTop: 2 }}>Google Calendar</div>
               </div>
             </a>

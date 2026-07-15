@@ -1,0 +1,78 @@
+.ce-wordmark {
+  --ce-wordmark-text: #071733;
+  --ce-wordmark-accent: #0f766e;
+  --ce-wordmark-width: 5.6em;
+  display: inline-grid;
+  grid-template-columns: minmax(0, auto) auto;
+  grid-template-rows: auto auto auto;
+  align-items: center;
+  column-gap: 0.44em;
+  color: var(--ce-wordmark-text);
+  line-height: 1;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.ce-wordmark__line {
+  grid-column: 1;
+  display: flex;
+  justify-content: space-between;
+  width: var(--ce-wordmark-width);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-size: 1em;
+  font-weight: 900;
+  align-items: center;
+}
+
+.ce-wordmark__community {
+  min-height: 0.56em;
+}
+
+.ce-wordmark__community > span {
+  font-size: 0.56em;
+}
+
+.ce-wordmark__events {
+  margin-top: 0.18em;
+  min-height: 0.9em;
+}
+
+.ce-wordmark__events > span {
+  font-size: 0.9em;
+}
+
+.ce-wordmark__australia {
+  margin-top: 0.28em;
+  color: var(--ce-wordmark-accent);
+  min-height: 0.52em;
+}
+
+.ce-wordmark__australia > span {
+  font-size: 0.52em;
+}
+
+.ce-wordmark__rule {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+  width: 2px;
+  height: 2.45em;
+  margin-left: 0.12em;
+  background: var(--ce-wordmark-accent);
+  border-radius: 2px;
+}
+
+.ce-wordmark--hero {
+  --ce-wordmark-text: #ffffff;
+  --ce-wordmark-accent: #ffffff;
+  font-size: clamp(2rem, 6vw, 3.1rem);
+}
+
+.ce-wordmark--card {
+  font-size: 2.25rem;
+}
+
+@media (max-width: 600px) {
+  .ce-wordmark--hero { font-size: 1.7rem; }
+  .ce-wordmark--card { font-size: 1.55rem; }
+}

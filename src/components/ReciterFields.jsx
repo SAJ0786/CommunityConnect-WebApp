@@ -2,7 +2,7 @@ import React from 'react';
 
 const RECITER_TYPES = [
   'Reciter', 'Zakir', 'Peshkhani',
-  'Soz', 'Salam', 'Manqebat', 'Noha', 'Marsiya',
+  'Soz', 'Salam', 'Manqebat', 'Noha', 'Marsiya', 'Hadees-e-Kisa',
   'Custom',
 ];
 
@@ -10,6 +10,13 @@ export default function ReciterFields({ reciters, setReciters }) {
   const update = (i, field, value) => {
     const next = [...reciters];
     next[i] = { ...next[i], [field]: value };
+    setReciters(next);
+  };
+  const move = (fromIndex, direction) => {
+    const toIndex = fromIndex + direction;
+    if (toIndex < 0 || toIndex >= reciters.length) return;
+    const next = [...reciters];
+    [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
     setReciters(next);
   };
 
@@ -24,6 +31,50 @@ export default function ReciterFields({ reciters, setReciters }) {
           padding: '12px 14px',
           marginBottom: 10,
         }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            marginBottom: 10,
+          }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 900, color: 'var(--muted)' }}>
+              Sequence {i + 1}
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                className="btn-light"
+                disabled={i === 0}
+                onClick={() => move(i, -1)}
+                title="Move reciter up"
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '5px 9px',
+                  opacity: i === 0 ? 0.45 : 1,
+                  cursor: i === 0 ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Up
+              </button>
+              <button
+                type="button"
+                className="btn-light"
+                disabled={i === reciters.length - 1}
+                onClick={() => move(i, 1)}
+                title="Move reciter down"
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '5px 9px',
+                  opacity: i === reciters.length - 1 ? 0.45 : 1,
+                  cursor: i === reciters.length - 1 ? 'not-allowed' : 'pointer',
+                }}
+              >
+                Down
+              </button>
+            </div>
+          </div>
+
           {/* Row 1: Type selector */}
           <div style={{ marginBottom: 8 }}>
             <label style={{ fontSize: '0.75rem', marginBottom: 4, display: 'block' }}>Type</label>

@@ -7,6 +7,17 @@ export async function registerSW() {
     let pendingWorker = reg.waiting || null;
     let refreshing = false;
     let hasControlledPage = Boolean(navigator.serviceWorker.controller);
+    const UPDATE_RELOAD_KEY = 'community-events-sw-update-reload-at';
+    const UPDATE_RELOAD_WINDOW_MS = 2 * 60 * 1000;
+
+    const updateReloadRecentlyStarted = () => {
+      const startedAt = Number(sessionStorage.getItem(UPDATE_RELOAD_KEY) || 0);
+      return startedAt && Date.now() - startedAt < UPDATE_RELOAD_WINDOW_MS;
+    };
+
+    const markUpdateReloadStarted = () => {
+      sessionStorage.setItem(UPDATE_RELOAD_KEY, String(Date.now()));
+    };
 
     const canActivate = () => {
       try {
@@ -18,7 +29,7 @@ export async function registerSW() {
     };
 
     const activateWhenSafe = () => {
-      if (!pendingWorker || !canActivate()) return;
+      if (!pendingWorker || !canActivate() || updateReloadRecentlyStarted()) return;
       pendingWorker.postMessage({ type: 'SKIP_WAITING' });
       pendingWorker = null;
     };
@@ -46,6 +57,7 @@ export async function registerSW() {
       }
       if (!refreshing) {
         refreshing = true;
+        markUpdateReloadStarted();
         // Request a fresh app shell. The cache-busting query prevents an old
         // HTML document from referencing asset files removed by this update.
         window.location.replace(`/?app-update=${Date.now()}`);

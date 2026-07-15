@@ -17,9 +17,8 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(STATIC_CACHE).then(cache => cache.addAll(PRECACHE).catch(() => {}))
   );
-  // Activate the newest worker immediately so returning PWAs do not step
-  // through older deployed versions one by one.
-  self.skipWaiting();
+  // The page decides when to activate this worker, so users see only one
+  // controlled update/reload cycle instead of repeated splash flashes.
 });
 
 // ── Activate: delete old caches ──────────────────────────────────────────────
@@ -41,6 +40,13 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   if (url.origin !== self.location.origin) return;
 
+  // Public/static HTML pages must open as their own pages, not as the app shell.
+  // This is important for email links such as AI content reporting.
+  if (url.pathname === '/report-ai-content.html') {
+    event.respondWith(fetch(event.request, { cache: 'no-store' }));
+    return;
+  }
+
   // Always prefer fresh HTML so it references assets from the current release.
   // The cached shell remains available as an offline fallback.
   if (event.request.headers.get('accept')?.includes('text/html') ||
@@ -52,7 +58,9 @@ self.addEventListener('fetch', event => {
           if (response.ok) {
             const cache = await caches.open(STATIC_CACHE);
             await cache.put(event.request, response.clone());
-            await cache.put('/index.html', response.clone());
+            if (url.pathname === '/' || url.pathname === '/index.html') {
+              await cache.put('/index.html', response.clone());
+            }
           }
           return response;
         } catch {

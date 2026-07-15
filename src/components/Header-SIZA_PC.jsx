@@ -39,7 +39,7 @@ function MinimalHeader() {
         <div style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text)', letterSpacing: '-0.3px', lineHeight: 1.1 }}>
           Community Events
         </div>
-        <div style={{ height: 2, background: 'var(--red,#c0392b)', borderRadius: 2, margin: '3px 0' }} />
+        <div style={{ height: 2, background: 'var(--red,#0f766e)', borderRadius: 2, margin: '3px 0' }} />
         <div style={{ fontSize: '0.625rem', fontWeight: 800, color: 'var(--muted)', letterSpacing: '0.5px', textTransform: 'uppercase' }}>
           Create &nbsp;–&nbsp; Share &nbsp;–&nbsp; Connect
         </div>
@@ -139,7 +139,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
             🔔
             {tomorrowEvents.length > 0 && (
               <span style={{ position: 'absolute', top: -4, right: -4,
-                background: 'var(--red,#c0392b)', color: 'white', fontSize: '0.5625rem', fontWeight: 800,
+                background: 'var(--red,#0f766e)', color: 'white', fontSize: '0.5625rem', fontWeight: 800,
                 minWidth: 16, height: 16, borderRadius: 8, display: 'flex',
                 alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>
                 {tomorrowEvents.length}
@@ -197,8 +197,8 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
           {/* User info header */}
           <div style={{
             padding: '14px 18px',
-            background: 'var(--red-l,#fdf2f1)',
-            borderBottom: '1px solid var(--red-m,#fadbd8)',
+            background: 'var(--red-l,#e6f4f1)',
+            borderBottom: '1px solid var(--red-m,#b7d8d4)',
           }}>
             {isGuest ? (
               <>
@@ -212,8 +212,8 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
                 <div style={{ marginTop: 5 }}>
                   <span style={{
                     fontSize: '0.6875rem', fontWeight: 800, padding: '3px 9px', borderRadius: 99,
-                    background: 'var(--red-l,#fdf2f1)', color: 'var(--red)',
-                    border: '1px solid var(--red-m,#fadbd8)',
+                    background: 'var(--red-l,#e6f4f1)', color: 'var(--red)',
+                    border: '1px solid var(--red-m,#b7d8d4)',
                   }}>
                     {profile?.role === ROLES.SUPER_ADMIN ? '👑 Super Admin' :
                      profile?.role === ROLES.ADMIN        ? '🛠 Admin' : '👤 User'}
@@ -228,7 +228,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
             <button key={item.key} onClick={() => navTo(item.key)} style={{
               display: 'block', width: '100%', textAlign: 'left',
               padding: '13px 18px', border: 'none',
-              background: page === item.key ? 'var(--red-l,#fdf2f1)' : 'transparent',
+              background: page === item.key ? 'var(--red-l,#e6f4f1)' : 'transparent',
               color: page === item.key ? 'var(--red)' : 'var(--text)',
               fontWeight: page === item.key ? 900 : 600,
               fontSize: '0.875rem', cursor: 'pointer',
@@ -242,7 +242,7 @@ export default function Header({ user, profile, page, setPage, isGuest, showOnly
             <button onClick={() => { try { localStorage.removeItem('socialLoginStarted'); } catch {} signOut(auth); setOpen(false); }} style={{
               display: 'block', width: '100%', textAlign: 'left',
               padding: '13px 18px', border: 'none',
-              background: 'var(--red-l,#fdf2f1)', color: 'var(--red)',
+              background: 'var(--red-l,#e6f4f1)', color: 'var(--red)',
               fontWeight: 900, fontSize: '0.875rem', cursor: 'pointer', boxShadow: 'none',
             }}>🔑 Login / Create Account</button>
           )}

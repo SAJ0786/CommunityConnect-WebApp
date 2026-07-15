@@ -448,7 +448,7 @@ exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
 
   const VALID_TYPES    = ["Majlis", "Milad", "Birthday", "Informal get together", "Custom"];
   const VALID_AUDIENCE = ["Gents only", "Ladies only", "Kids only", "Mixed Audience"];
-  const VALID_RECITERS = ["Soz", "Salam", "Manqebat", "Noha", "Reciter", "Peshkhani", "Other"];
+  const VALID_RECITERS = ["Soz", "Salam", "Manqebat", "Noha", "Marsiya", "Hadees-e-Kisa", "Reciter", "Peshkhani", "Other"];
   const REQUIRED       = ["hostName","eventDate","startTime","eventType","audienceType","street","suburb","state","postcode"];
 
   const created = []; const errors = [];

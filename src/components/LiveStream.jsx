@@ -7,6 +7,9 @@ import { updateDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
 import PreCheckCard from './PreCheckCard';
 
+const LIVE_DOT_ICON = String.fromCodePoint(0x1F534);
+const WARNING_ICON = String.fromCodePoint(0x26A0, 0xFE0F);
+
 // ── Popup helper ──────────────────────────────────────────────────────────────
 function Popup({ icon, title, message, confirmLabel, cancelLabel, onConfirm, onCancel, onClose, infoOnly }) {
   return (
@@ -29,7 +32,7 @@ function Popup({ icon, title, message, confirmLabel, cancelLabel, onConfirm, onC
           )}
           <button onClick={infoOnly ? onClose : onConfirm}
             style={{ flex:1, padding:'12px', borderRadius:12, border:'none',
-              background:'#c0392b', color:'white', fontWeight:900,
+              background:'#0f766e', color:'white', fontWeight:900,
               fontSize:'0.875rem', cursor:'pointer' }}>
             {confirmLabel}
           </button>
@@ -54,7 +57,7 @@ function StreamMethodDialog({ step, url, error, loading, visibility, onVisibilit
             <fieldset style={{ margin:'0 0 18px', padding:0, border:0 }}>
               <legend style={{ fontSize:'0.75rem', fontWeight:900, marginBottom:8 }}>Who can watch on YouTube?</legend>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                {[['public', 'Public'], ['unlisted', 'Link Only']].map(([value, label]) => (
+                {[['public', 'Public'], ['unlisted', 'Private']].map(([value, label]) => (
                   <label key={value} style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 12px',
                     border:`2px solid ${visibility === value ? '#0f766e' : 'var(--border)'}`,
                     borderRadius:10, cursor:'pointer', fontSize:'0.8125rem', fontWeight:800,
@@ -66,12 +69,12 @@ function StreamMethodDialog({ step, url, error, loading, visibility, onVisibilit
                 ))}
               </div>
               <p style={{ margin:'7px 0 0', color:'var(--muted)', fontSize:'0.6875rem', lineHeight:1.4 }}>
-                Link Only videos do not appear in YouTube search. Anyone who receives the link can watch.
+                Private streams do not appear in the app's public stream list or YouTube search. Anyone who receives the YouTube link can still watch.
               </p>
             </fieldset>
             <div style={{ display:'grid', gap:10 }}>
               <button onClick={onThisDevice} style={{ padding:'13px 14px', border:0, borderRadius:10,
-                background:'#c0392b', color:'white', fontWeight:900, cursor:'pointer' }}>
+                background:'#0f766e', color:'white', fontWeight:900, cursor:'pointer' }}>
                 Stream from this device
               </button>
               <button onClick={onAnotherDevice} style={{ padding:'13px 14px', border:'1px solid var(--border)',
@@ -101,7 +104,7 @@ function StreamMethodDialog({ step, url, error, loading, visibility, onVisibilit
                 border:'1px solid var(--border)', borderRadius:9, background:'transparent', color:'var(--text)',
                 fontWeight:800, cursor:'pointer' }}>Back</button>
               <button type="submit" disabled={loading || !url.trim()} style={{ flex:2, padding:11, border:0,
-                borderRadius:9, background:'#c0392b', color:'white', fontWeight:900,
+                borderRadius:9, background:'#0f766e', color:'white', fontWeight:900,
                 opacity:loading || !url.trim() ? 0.65 : 1, cursor:'pointer' }}>
                 {loading ? 'Testing URL...' : 'Mark Event Live'}
               </button>
@@ -157,7 +160,7 @@ export function YouTubeWatchButton({ event, compact }) {
         boxShadow:'0 2px 8px rgba(255,0,0,0.4)',
         animation:'ytPulse 2s infinite',
       }}>
-      <span style={{ animation:'liveBlink 1s infinite', fontSize:'0.625rem' }}>🔴</span>
+      <span style={{ animation:'liveBlink 1s infinite', fontSize:'0.625rem' }}>{LIVE_DOT_ICON}</span>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
         <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
       </svg>
@@ -203,7 +206,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
         event.eventTypeDisplay || event.eventType,
         event.hostName,
         event.eventSubject || ''
-      ].filter(Boolean).join(' — ');
+      ].filter(Boolean).join(' - ');
 
       // 1) Get YouTube broadcast + relay session from Cloud Function
       const startRes = resumingExisting
@@ -235,7 +238,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
       // take 20-30 seconds to report "live" on mobile networks; waiting here
       // left the camera running without a persistent stream frame.
       if (!resumingExisting) await goLive(event.id, sessionId);
-      if (watchUrl) {
+      if (watchUrl && streamVisibility !== 'unlisted') {
         await updateDoc(doc(db, 'events', event.id), { liveWatchUrl: watchUrl }).catch(() => {});
       }
 
@@ -287,7 +290,14 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
         privacyStatus: streamVisibility,
       });
       const watchUrl = result.data?.watchUrl;
-      const liveEvent = { ...event, isLive:true, liveUrl:null, liveWatchUrl:watchUrl, liveSource:'external-youtube' };
+      const liveEvent = {
+        ...event,
+        isLive:true,
+        liveUrl:null,
+        liveWatchUrl:streamVisibility === 'unlisted' ? null : watchUrl,
+        liveSource:'external-youtube',
+        liveAppVisibility:streamVisibility === 'unlisted' ? 'private' : 'public',
+      };
       setStreaming(true);
       setMethodStep(null);
       onLiveStarted?.(liveEvent, event.id, 'host', watchUrl, { mode:'external', watchUrl });
@@ -309,9 +319,9 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
     const isExternal = event.liveSource === 'external-youtube';
     return (
       <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-        <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'#c0392b',
+        <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'#0f766e',
           display:'flex', alignItems:'center', gap:5 }}>
-          <span style={{ animation:'liveBlink 1s infinite' }}>🔴</span> LIVE NOW
+          <span style={{ animation:'liveBlink 1s infinite' }}>{LIVE_DOT_ICON}</span> LIVE NOW
         </span>
         <button onClick={() => {
           if (isExternal) {
@@ -323,7 +333,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
           style={{ fontSize:'0.6875rem', padding:'5px 9px', borderRadius:8,
             background:'#fef3c7', color:'#92400e', border:'1px solid #f59e0b',
             fontWeight:900, cursor:'pointer' }}>
-          {isExternal ? 'Manage Live' : (loading ? 'Resuming…' : '↻ Resume Stream')}
+          {isExternal ? 'Manage Live' : (loading ? 'Resuming...' : 'Resume Stream')}
         </button>
         {!isExternal && showPreCheck && (
           <PreCheckCard event={event} onConfirm={startStream} onCancel={handlePreCheckCancel} />
@@ -338,12 +348,12 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
     return (
       <>
         <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-          <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'#c0392b',
+          <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'#0f766e',
             display:'flex', alignItems:'center', gap:5 }}>
-            <span style={{ animation:'liveBlink 1s infinite' }}>🔴</span> LIVE NOW
+            <span style={{ animation:'liveBlink 1s infinite' }}>{LIVE_DOT_ICON}</span> LIVE NOW
           </span>
           <span style={{ fontSize:'0.6875rem', color:'var(--muted)' }}>
-            Stream window is open ↗
+            Stream window is open
           </span>
         </div>
         <style>{`@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
@@ -355,12 +365,12 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
   return (
     <>
       <button onClick={() => setMethodStep('method')} disabled={loading}
-        style={{ background:'#c0392b', fontSize:'0.75rem', padding:'8px 14px',
+        style={{ background:'#dc2626', fontSize:'0.75rem', padding:'8px 14px',
           borderRadius:10, display:'flex', alignItems:'center', gap:6,
-          boxShadow:'0 2px 8px rgba(192,57,43,0.35)', cursor:'pointer',
+          boxShadow:'0 2px 8px rgba(220,38,38,0.35)', cursor:'pointer',
           fontWeight:900, color:'white', border:'none' }}>
-        <span>🔴</span>
-        {loading ? 'Starting…' : 'Go Live'}
+        <span>{LIVE_DOT_ICON}</span>
+        {loading ? 'Starting...' : 'Go Live'}
       </button>
 
       {methodStep && (
@@ -387,7 +397,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
       )}
 
       {popup === 'error' && (
-        <Popup icon="⚠️" title="Could Not Start"
+        <Popup icon={WARNING_ICON} title="Could Not Start"
           message={errMsg} confirmLabel="OK" infoOnly
           onClose={() => setPopup(null)} />
       )}
@@ -398,5 +408,6 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
 // ── Watch Live button (viewers — shows YouTube button when live) ─────────────
 export function WatchLiveButton({ event, isGuest, onWatchStarted, compact }) {
   if (!event.isLive || isGuest) return null;
+  if (event.liveAppVisibility === 'private' || !event.liveWatchUrl) return null;
   return <YouTubeWatchButton event={event} compact={compact} />;
 }

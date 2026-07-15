@@ -413,7 +413,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
               padding: '10px 12px', fontSize: '1.25rem',
               borderRadius: 12, border: '1px solid var(--border,#e5e7eb)',
               background: listening ? '#fee2e2' : '#fff0ee',
-              color: listening ? '#dc2626' : '#c0392b',
+              color: listening ? '#dc2626' : '#0f766e',
               cursor: 'pointer', flexShrink: 0,
               boxShadow: 'none',
               animation: listening ? 'pulse-mic 1s infinite' : 'none',

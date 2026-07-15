@@ -6,6 +6,7 @@ import CitySelector from '../components/CitySelector';
 import { DEFAULT_CITY, getEventMetroArea, normalizeCity } from '../utils/cities';
 
 const DesktopHome = lazy(() => import('../components/DesktopHome'));
+const EventMapView = lazy(() => import('../components/EventMapView'));
 
 export default function Home({ events, user, profile, setPage, setEditingEvent,
   handleDelete, handleCopy, isGuest = false, loadEvents,
@@ -20,6 +21,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
   const [query,      setQuery]      = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCity, setSelectedCity] = useState(() => normalizeCity(profile?.defaultCity || DEFAULT_CITY));
+  const [viewMode, setViewMode] = useState('list');
   const [wideLayout, setWideLayout] = useState(() => (
     typeof window !== 'undefined' && window.matchMedia?.('(min-width: 700px) and (min-height: 600px)').matches
   ));
@@ -35,6 +37,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
   useEffect(() => {
     setFiltered(null);
     setVisibleCount(12);
+    setViewMode('list');
   }, [selectedCity]);
 
   useEffect(() => {
@@ -124,6 +127,16 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
   const visibleDisplayed = displayed.slice(0, visibleCount);
   const hasMore = visibleDisplayed.length < displayed.length;
 
+  const selectMapEvent = event => {
+    setViewMode('list');
+    setExpandedId(event.id);
+    const index = displayed.findIndex(item => item.id === event.id);
+    if (index >= 0) setVisibleCount(count => Math.max(count, index + 1));
+    setTimeout(() => {
+      document.getElementById(`event-${event.id}`)?.scrollIntoView({ behavior:'smooth', block:'center' });
+    }, 120);
+  };
+
   if (eventsLoading && events.length === 0) {
     return (
       <div className="home-event-skeleton" role="status" aria-label="Loading events">
@@ -136,10 +149,23 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
   return (
     <>
       {!wideLayout && <div className="home-mobile-layout">
-      <div style={{ padding:'8px 16px 0' }}>
+      <div style={{ padding:'8px 16px 0', display:'grid',
+        gridTemplateColumns: isGuest ? '1fr' : 'minmax(0,1fr) minmax(0,1fr)', gap:8 }}>
         <CitySelector value={selectedCity} onChange={setSelectedCity} />
+        {!isGuest && (
+          <div className="home-view-toggle" role="group" aria-label="Choose list or map view">
+            <button type="button" onClick={() => setViewMode('list')} className={viewMode === 'list' ? 'active' : ''}>
+              List
+            </button>
+            <button type="button" onClick={() => setViewMode('map')} className={viewMode === 'map' ? 'active' : ''}>
+              Map
+            </button>
+          </div>
+        )}
       </div>
       {/* ── Search bar — single pill, filter icon inside (right) ── */}
+      {viewMode === 'list' && (
+      <>
       <div style={{ padding: '8px 16px 6px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8,
           background:'white', border:'1px solid var(--border,#e8edec)',
@@ -268,6 +294,13 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
         </span>
         <span style={{ fontSize:'1.25rem', color:'var(--teal,#0f766e)', fontWeight:800 }}>›</span>
       </div>
+      </>
+      )}
+      {viewMode === 'map' && !isGuest && (
+        <Suspense fallback={<div className="event-map-loading">Loading map...</div>}>
+          <EventMapView events={cityEvents} onSelectEvent={selectMapEvent} />
+        </Suspense>
+      )}
       </div>}
 
       {wideLayout && <div className="home-desktop-layout">
@@ -282,6 +315,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
           handleDelete={handleDelete} handleCopy={handleCopy} isGuest={isGuest}
           savedIds={savedIds} onSaveToggle={onSaveToggle} onStreamStart={onStreamStart}
           selectedCity={selectedCity} onCityChange={setSelectedCity}
+          viewMode={viewMode} setViewMode={setViewMode} onSelectMapEvent={selectMapEvent}
         />
         </Suspense>
       </div>}

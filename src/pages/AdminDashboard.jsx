@@ -13,10 +13,11 @@ import { getOrganisations, addOrganisation, deleteOrganisation, updateOrganisati
 import { invalidateOrgsCache } from '../services/imageService';
 import { CITY_OPTIONS, DEFAULT_CITY, cityCode, cityLabel, normalizeCity } from '../utils/cities';
 import { compareEventsByDateTime } from '../services/dateUtils';
+import { hasGoogleMapsKey, loadGoogleMapsScript, waitForGoogleMaps } from '../services/googleMapsLoader';
 
 const ROLE_LABELS = {
   [ROLES.USER]:        { label: 'User',        color: '#6b7280', bg: '#f3f4f6' },
-  [ROLES.ADMIN]:       { label: 'Admin',       color: '#c0392b', bg: '#fdf2f1' },
+  [ROLES.ADMIN]:       { label: 'Admin',       color: '#0f766e', bg: '#e6f4f1' },
   [ROLES.SUPER_ADMIN]: { label: 'Super Admin', color: '#7c3aed', bg: '#ede9fe' },
 };
 
@@ -45,10 +46,17 @@ const userMatchesSearch = (userRecord, query) => {
     .some(value => normalisePhone(value).includes(queryDigits));
 };
 
+const csvCell = value => {
+  const text = String(value ?? '');
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
 // ── YouTube OAuth Connect Card ────────────────────────────────────────────────
-function YouTubeConnectCard() {
+function YouTubeConnectCard({ isSuperAdmin = false }) {
   const [status,    setStatus]    = React.useState('checking'); // checking | connected | disconnected
   const [loading,   setLoading]   = React.useState(false);
+  const [thumbnailLoading, setThumbnailLoading] = React.useState(false);
+  const [thumbnailResult, setThumbnailResult] = React.useState('');
   const fns = getFunctions(getApp(), 'australia-southeast1');
 
   React.useEffect(() => {
@@ -75,6 +83,24 @@ function YouTubeConnectCard() {
   const checkConnection = async () => {
     const r = await httpsCallable(fns, 'youtubeConnectionStatus')();
     setStatus(r.data.connected ? 'connected' : 'disconnected');
+  };
+
+  const refreshThumbnails = async () => {
+    if (!window.confirm('Refresh thumbnails for up to 10 recent streamed videos? This will overwrite existing thumbnails with the latest template and event details.')) return;
+    setThumbnailLoading(true);
+    setThumbnailResult('');
+    try {
+      const result = await httpsCallable(fns, 'refreshStreamVideoThumbnails')({ limit: 10, force: true });
+      const data = result.data || {};
+      const failed = Array.isArray(data.errors) && data.errors.length
+        ? ` ${data.errors.length} failed.`
+        : '';
+      setThumbnailResult(`${data.message || 'Thumbnail update finished.'}${failed}`);
+    } catch (e) {
+      setThumbnailResult(`Thumbnail update failed: ${e.message}`);
+    } finally {
+      setThumbnailLoading(false);
+    }
   };
 
   return (
@@ -120,6 +146,26 @@ function YouTubeConnectCard() {
           </button>
         </div>
       )}
+      {isSuperAdmin && (
+        <div style={{ marginTop:14, paddingTop:14, borderTop:'1px solid var(--border)' }}>
+          <button
+            className="btn-light"
+            onClick={refreshThumbnails}
+            disabled={thumbnailLoading || status !== 'connected'}
+            style={{ fontSize:'0.8125rem', fontWeight:800 }}
+          >
+            {thumbnailLoading ? 'Updating thumbnails...' : 'Update Stream Thumbnails'}
+          </button>
+          <p className="small" style={{ margin:'8px 0 0', color:'var(--muted)' }}>
+            Applies the Community Events thumbnail design to recent videos streamed through the app.
+          </p>
+          {thumbnailResult && (
+            <div className={thumbnailResult.toLowerCase().includes('failed') ? 'error' : 'success'} style={{ marginTop:10 }}>
+              {thumbnailResult}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -139,6 +185,87 @@ function legacySeriesKey(event) {
   return [
     event.createdByUserId || '', event.seriesStartDate || '', event.seriesEndDate || ''
   ].join('|');
+}
+
+function hasGps(address = {}) {
+  const lat = address.latitude;
+  const lng = address.longitude;
+  if (lat === null || lat === undefined || lat === '' || lng === null || lng === undefined || lng === '') return false;
+  return Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
+}
+
+function addressForGeocode(address = {}) {
+  return [
+    address.fullAddress,
+    [address.street, address.suburb, address.state, address.postcode, 'Australia'].filter(Boolean).join(', '),
+  ].find(value => String(value || '').trim().length >= 8) || '';
+}
+
+function waitForMaps() {
+  return new Promise((resolve, reject) => {
+    if (!hasGoogleMapsKey()) {
+      reject(new Error('Google Maps key is missing.'));
+      return;
+    }
+    loadGoogleMapsScript();
+    waitForGoogleMaps(() => resolve());
+  });
+}
+
+async function geocodeAddress(address = {}) {
+  const query = addressForGeocode(address);
+  if (!query) return null;
+  await waitForMaps();
+  const geocoder = new window.google.maps.Geocoder();
+  const result = await new Promise((resolve, reject) => {
+    geocoder.geocode({
+      address: query,
+      componentRestrictions: { country: 'AU' },
+    }, (results, status) => {
+      if (status === 'OK') resolve({ results });
+      else reject(new Error(`Geocode failed: ${status}`));
+    });
+  });
+  const match = result?.results?.[0];
+  const location = match?.geometry?.location;
+  if (!location) return null;
+  return {
+    latitude: location.lat(),
+    longitude: location.lng(),
+    fullAddress: address.fullAddress || match.formatted_address || query,
+  };
+}
+
+async function geocodeImportRows(rows) {
+  const cache = new Map();
+  const output = [];
+  for (const row of rows) {
+    const address = {
+      street: row.street,
+      suburb: row.suburb,
+      state: row.state,
+      postcode: row.postcode,
+      fullAddress: [row.street, row.suburb, row.state, row.postcode, 'Australia'].filter(Boolean).join(', '),
+    };
+    const key = addressForGeocode(address).toLowerCase();
+    let gps = cache.get(key);
+    if (!gps && key) {
+      try {
+        gps = await geocodeAddress(address);
+        cache.set(key, gps);
+      } catch (err) {
+        console.warn('[bulkImport] geocode skipped:', err.message);
+        gps = null;
+      }
+    }
+    output.push({
+      ...row,
+      latitude: gps?.latitude ?? null,
+      longitude: gps?.longitude ?? null,
+      fullAddress: gps?.fullAddress || address.fullAddress,
+    });
+  }
+  return output;
 }
 
 export default function AdminDashboard({ events, user, profile, setPage, setEditingEvent, handleDelete, handleCopy }) {
@@ -198,6 +325,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   const [transferring,     setTransferring]     = useState(false);
   const [transferError,    setTransferError]    = useState('');
   const [backfillingSeries,setBackfillingSeries]= useState(false);
+  const [repairingGps,     setRepairingGps]     = useState(false);
   // ── Repair tool state ────────────────────────────────────────────────────
   const [repairEvents,   setRepairEvents]   = useState(null);   // null=not loaded
   const [repairLoading,  setRepairLoading]  = useState(false);
@@ -540,6 +668,51 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
       setBackfillingSeries(false);
     };
 
+    const repairMissingGps = async () => {
+      const candidates = (adminEvents || []).filter(event => addressForGeocode(event.address) && !hasGps(event.address));
+      if (candidates.length === 0) {
+        showMsg('All visible active events with addresses already have GPS coordinates.');
+        return;
+      }
+      if (!confirm(`Repair GPS for ${candidates.length} active event(s) with valid addresses?`)) return;
+      setRepairingGps(true);
+      try {
+        const { doc, writeBatch, serverTimestamp } = await import('firebase/firestore');
+        const { db } = await import('../firebase/firebase');
+        let updated = 0;
+        let failed = 0;
+        for (let offset = 0; offset < candidates.length; offset += 400) {
+          const batch = writeBatch(db);
+          const chunk = candidates.slice(offset, offset + 400);
+          for (const event of chunk) {
+            try {
+              const gps = await geocodeAddress(event.address);
+              if (!gps) { failed++; continue; }
+              batch.update(doc(db, 'events', event.id), {
+                address: {
+                  ...(event.address || {}),
+                  fullAddress: gps.fullAddress || event.address?.fullAddress || '',
+                  latitude: gps.latitude,
+                  longitude: gps.longitude,
+                },
+                updatedAt: serverTimestamp(),
+              });
+              updated++;
+            } catch (err) {
+              console.warn('[repairMissingGps] failed:', event.id, err.message);
+              failed++;
+            }
+          }
+          await batch.commit();
+        }
+        showMsg(`GPS repaired for ${updated} event(s).${failed ? ` ${failed} could not be geocoded.` : ''}`, failed ? 'error' : 'success');
+        await loadAdminEvents();
+      } catch (e) {
+        showMsg('GPS repair failed: ' + e.message, 'error');
+      }
+      setRepairingGps(false);
+    };
+
     // ── Organisations CRUD ──────────────────────────────────────────────────
     const loadOrgs = async () => {
       setOrgsLoading(true);
@@ -721,9 +894,9 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
       'Optional topic/subject','Gents only|Ladies only|Kids only|Family Event',
       'Required','Required','Required e.g. NSW','Required e.g. 2144','TRUE or FALSE',
       'Phone/email of actual host','Majlis, Milad or Custom only',
-      'Soz|Salam|Manqebat|Noha|Reciter|Peshkhani|Other','Majlis, Milad or Custom only',
-      'Soz|Salam|Manqebat|Noha|Reciter|Peshkhani|Other','Majlis, Milad or Custom only',
-      'Soz|Salam|Manqebat|Noha|Reciter|Peshkhani|Other','Majlis, Milad or Custom only'];
+      'Soz|Salam|Manqebat|Noha|Marsiya|Hadees-e-Kisa|Reciter|Peshkhani|Other','Majlis, Milad or Custom only',
+      'Soz|Salam|Manqebat|Noha|Marsiya|Hadees-e-Kisa|Reciter|Peshkhani|Other','Majlis, Milad or Custom only',
+      'Soz|Salam|Manqebat|Noha|Marsiya|Hadees-e-Kisa|Reciter|Peshkhani|Other','Majlis, Milad or Custom only'];
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet([headers, notes, sample]);
     ws['!cols'] = headers.map(h => ({ wch: Math.max(h.length + 4, 18) }));
@@ -755,7 +928,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         reciter2Type: String(r[17]||'').trim(), reciter2Name: String(r[18]||'').trim(),
         reciter3Type: String(r[19]||'').trim(), reciter3Name: String(r[20]||'').trim(),
       }));
-      const result = await httpsCallable(fns, 'bulkImportEvents')({ events: evs });
+      const geocodedEvents = await geocodeImportRows(evs);
+      const result = await httpsCallable(fns, 'bulkImportEvents')({ events: geocodedEvents });
       setImportResult(result.data);
       showMsg(result.data.message, result.data.errors.length > 0 ? 'error' : 'success');
     } catch (err) { showMsg('Import failed: ' + err.message, 'error'); }
@@ -799,6 +973,48 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     }
   };
 
+  const exportUsersCsv = () => {
+    if (!isSuperAdmin) return;
+    const rows = filteredUsers
+      .slice()
+      .sort((a, b) => String(a.fullName || a.email || '').localeCompare(String(b.fullName || b.email || '')))
+      .map(u => ({
+        name: u.fullName || u.displayName || '',
+        email: u.email || '',
+        phone: u.phone || u.phoneNumber || u.mobile || u.mobileNumber || '',
+        role: ROLE_LABELS[u.role]?.label || u.role || 'User',
+        city: cityLabel(normalizeCity(u.defaultCity || DEFAULT_CITY)),
+        reminderEmailEnabled: u.reminderEmailEnabled === false ? 'No' : 'Yes',
+        adminAlertsEnabled: u.adminAlertsEnabled === false ? 'No' : 'Yes',
+        calendarSynced: calSyncUids.has(u.id) ? 'Yes' : 'No',
+        uid: u.id || '',
+      }));
+    const headers = ['Name', 'Email', 'Phone', 'Role', 'City', 'Reminder Emails', 'Admin Alerts', 'Calendar Synced', 'UID'];
+    const csv = [
+      headers.map(csvCell).join(','),
+      ...rows.map(row => [
+        row.name,
+        row.email,
+        row.phone,
+        row.role,
+        row.city,
+        row.reminderEmailEnabled,
+        row.adminAlertsEnabled,
+        row.calendarSynced,
+        row.uid,
+      ].map(csvCell).join(',')),
+    ].join('\r\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `community-events-users-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const stats = [
     { label: 'Total Users',    value: users.length },
     { label: 'Super Admins',   value: users.filter(u => u.role === ROLES.SUPER_ADMIN).length },
@@ -821,7 +1037,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     <>
       {/* Header */}
       <div className="card" style={{
-        background: 'linear-gradient(135deg,#c0392b,#a93226)',
+        background: 'linear-gradient(135deg,#0f766e,#0b5d57)',
         color: 'white', border: 'none', marginBottom: 0, borderRadius: '20px 20px 0 0'
       }}>
         <h2 style={{ color: 'white', margin: '0 0 4px' }}>Admin Dashboard</h2>
@@ -835,7 +1051,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         gap: 1, background: 'var(--border)', border: '1px solid var(--border)', borderTop: 'none' }}>
         {stats.map(s => (
           <div key={s.label} style={{ background: 'white', padding: '14px 12px', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.375rem', fontWeight: 900, color: '#c0392b' }}>{s.value}</div>
+            <div style={{ fontSize: '1.375rem', fontWeight: 900, color: '#0f766e' }}>{s.value}</div>
             <div style={{ fontSize: '0.6875rem', color: 'var(--muted)', marginTop: 2 }}>{s.label}</div>
           </div>
         ))}
@@ -848,8 +1064,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
           <button key={t.key} onClick={() => setTab(t.key)} style={{
             flex: 1, padding: '12px 0', fontWeight: tab === t.key ? 900 : 600,
             fontSize: '0.8125rem', border: 'none',
-            borderBottom: tab === t.key ? '3px solid #c0392b' : '3px solid transparent',
-            background: 'white', color: tab === t.key ? '#c0392b' : 'var(--muted)',
+            borderBottom: tab === t.key ? '3px solid #0f766e' : '3px solid transparent',
+            background: 'white', color: tab === t.key ? '#0f766e' : 'var(--muted)',
             cursor: 'pointer', boxShadow: 'none',
           }}>{t.label}</button>
         ))}
@@ -877,6 +1093,14 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   fontWeight:800, cursor:'pointer', whiteSpace:'nowrap' }}>
                 📅 {calFilter ? 'Showing Synced Only' : `Calendar Synced (${calSyncUids.size})`}
               </button>
+              {isSuperAdmin && (
+                <button onClick={exportUsersCsv}
+                  style={{ fontSize:'0.75rem', padding:'8px 12px', borderRadius:10,
+                    border:'1px solid #0f766e', background:'#0f766e', color:'white',
+                    fontWeight:800, cursor:'pointer', whiteSpace:'nowrap' }}>
+                  Export CSV ({filteredUsers.length})
+                </button>
+              )}
               <select value={cityFilter} onChange={event => setCityFilter(event.target.value)}
                 aria-label="Filter users by city"
                 style={{ width:180, padding:'8px 12px', fontSize:'0.8125rem',
@@ -933,12 +1157,12 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               <div key={u.id} style={{ display:'flex', alignItems:'flex-start',
                 justifyContent:'space-between', padding:'12px 14px',
                 borderRadius:12, border:'1px solid var(--border)',
-                background: u.id === user?.uid ? '#fdf2f1' : 'white',
+                background: u.id === user?.uid ? '#e6f4f1' : 'white',
                 flexWrap:'wrap', gap:8 }}>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:800, fontSize:'0.875rem' }}>
                     {u.fullName || '—'}
-                    {u.id === user?.uid && <span style={{ fontSize:'0.6875rem', color:'#c0392b', marginLeft:6 }}>(you)</span>}
+                    {u.id === user?.uid && <span style={{ fontSize:'0.6875rem', color:'#0f766e', marginLeft:6 }}>(you)</span>}
                   </div>
                   <div style={{ fontSize:'0.75rem', color:'var(--muted)' }}>{u.email}</div>
                   {u.phone && <div style={{ fontSize:'0.75rem', color:'var(--muted)' }}>{u.phone}</div>}
@@ -987,7 +1211,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                         .then(() => { showMsg(`User deleted${doBan ? ' and banned' : ''}.`); setUsers(prev => prev.filter(x => x.id !== u.id)); })
                         .catch(e => showMsg('Delete failed: ' + e.message, 'error'));
                     }} style={{ fontSize:'0.75rem', padding:'5px 10px', borderRadius:8,
-                      background:'#fdf2f1', color:'#c0392b', border:'1px solid #fadbd8',
+                      background:'#e6f4f1', color:'#0f766e', border:'1px solid #b7d8d4',
                       fontWeight:700, cursor:'pointer' }}>
                       🗑 Delete{isSuperAdmin ? '/Ban' : ''}
                     </button>
@@ -1019,7 +1243,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             </>
           )}].map(step => (
             <div key={step.n} style={{ display:'flex', gap:12, alignItems:'flex-start', marginBottom:16 }}>
-              <div style={{ width:28, height:28, borderRadius:'50%', background:'#c0392b',
+              <div style={{ width:28, height:28, borderRadius:'50%', background:'#0f766e',
                 color:'white', display:'flex', alignItems:'center', justifyContent:'center',
                 fontWeight:900, fontSize:'0.8125rem', flexShrink:0 }}>{step.n}</div>
               <div style={{flex:1}}>
@@ -1058,7 +1282,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                 <h3 style={{ margin:0 }}>
                   {adminEvents.length} Event(s)
                   {adminEvents.filter(e => e.isLive).length > 0 && (
-                    <span style={{ fontSize:'0.75rem', color:'#c0392b', marginLeft:8 }}>
+                    <span style={{ fontSize:'0.75rem', color:'#0f766e', marginLeft:8 }}>
                       · {adminEvents.filter(e => e.isLive).length} 🔴 LIVE
                     </span>
                   )}
@@ -1074,6 +1298,11 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                     disabled={backfillingSeries}
                     style={{ fontSize:'0.75rem', margin:0 }}>
                     <i className="ti ti-link" /> {backfillingSeries ? 'Identifying Series…' : 'Identify Older Series'}
+                  </button>
+                  <button className="btn-light" onClick={repairMissingGps}
+                    disabled={repairingGps}
+                    style={{ fontSize:'0.75rem', margin:0 }}>
+                    <i className="ti ti-map-pin" /> {repairingGps ? 'Repairing GPS...' : 'Repair Missing GPS'}
                   </button>
                   <button className="btn-light" onClick={loadAdminEvents}
                     style={{ fontSize:'0.75rem', margin:0 }}><i className="ti ti-refresh" /> Refresh</button>
@@ -1146,7 +1375,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   {e.isLive && (
                     <div style={{ padding:'4px 20px 2px', display:'flex',
                       alignItems:'center', gap:8 }}>
-                      <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'#c0392b',
+                      <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'#0f766e',
                         animation:'liveBlink 1s infinite' }}>🔴 LIVE</span>
                       <button onClick={() => clearLiveStatus(e.id)}
                         style={{ fontSize:'0.6875rem', padding:'3px 12px', borderRadius:6,
@@ -1228,7 +1457,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           📅 Gregorian: <strong>{ev.eventDate}</strong>
                         </p>
                         <p style={{ margin: '0 0 2px', fontSize: '0.75rem',
-                          color: mismatch ? '#c0392b' : 'var(--muted)' }}>
+                          color: mismatch ? '#0f766e' : 'var(--muted)' }}>
                           🌙 Stored components: <strong>{storedHijriStr}</strong>
                           {mismatch && <span style={{ marginLeft: 6 }}>⚠️ mismatch</span>}
                         </p>
@@ -1239,7 +1468,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                       {!isFixing && (
                         <button onClick={() => startFix(ev)}
                           style={{ fontSize: '0.75rem', padding: '6px 14px', whiteSpace: 'nowrap',
-                            background: mismatch ? '#c0392b' : 'var(--teal)',
+                            background: mismatch ? '#0f766e' : 'var(--teal)',
                             color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer',
                             fontWeight: 700, flexShrink: 0 }}>
                           ✏️ Fix
@@ -1464,8 +1693,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           {editingOrgId === org.id ? 'Cancel' : 'Edit'}
                         </button>
                         <button onClick={() => handleDeleteOrg(org)}
-                          style={{ fontSize:'0.75rem', padding:'6px 12px', borderRadius:8, background:'#fdf2f1',
-                            color:'#c0392b', border:'1px solid #fadbd8', fontWeight:700, cursor:'pointer' }}>
+                          style={{ fontSize:'0.75rem', padding:'6px 12px', borderRadius:8, background:'#e6f4f1',
+                            color:'#0f766e', border:'1px solid #b7d8d4', fontWeight:700, cursor:'pointer' }}>
                           Delete
                         </button>
                       </div>
@@ -1660,7 +1889,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
           </div>
 
           {/* YouTube Connection */}
-          <YouTubeConnectCard />
+          <YouTubeConnectCard isSuperAdmin={isSuperAdmin} />
 
           {/* Community Update Message */}
           <div className="card">
