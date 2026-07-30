@@ -4,6 +4,9 @@ export const TAGLINE  = 'Create – Share – Connect';
 export const EVENT_TYPES = [
   'Majlis',
   'Milad',
+  'Prayers',
+  'Dua',
+  'Prayers & Amal',
   'Birthday',
   'Informal get together',
   'Custom'           // ← triggers custom type text box
@@ -30,4 +33,4 @@ export const STATUS = { ACTIVE: 'active' };
 
 // Event types that show Speaker + Reciters
 // Custom type also shows them (requirement #2)
-export const RELIGIOUS_EVENT_TYPES = ['Majlis', 'Milad', 'Custom'];
+export const RELIGIOUS_EVENT_TYPES = ['Majlis', 'Milad', 'Prayers', 'Dua', 'Prayers & Amal', 'Custom'];

@@ -12,6 +12,18 @@ service cloud.firestore {
     function role()        { return userDoc().data.role; }
     function isAdmin()     { return isRegistered() && (role() == 'admin' || role() == 'superAdmin'); }
     function isSuperAdmin(){ return isRegistered() && role() == 'superAdmin'; }
+    function defaultCity()  { return 'sydney'; }
+    function adminCity() {
+      return userDoc().data.adminCity != null
+        ? userDoc().data.adminCity
+        : (userDoc().data.defaultCity != null ? userDoc().data.defaultCity : defaultCity());
+    }
+    function eventCity(data) {
+      return data.metroArea != null ? data.metroArea : defaultCity();
+    }
+    function isCityAdminForEvent(data) {
+      return isRegistered() && role() == 'admin' && eventCity(data) == adminCity();
+    }
 
     // ── Users ──────────────────────────────────────────────────────────────────
     match /users/{userId} {
@@ -28,9 +40,15 @@ service cloud.firestore {
       allow read:           if isRegistered();
       allow create:         if isRegistered()
                                && request.resource.data.createdByUserId == request.auth.uid;
-      allow update, delete: if isRegistered()
+      allow update:         if isRegistered()
                                && (resource.data.createdByUserId == request.auth.uid
-                                   || isAdmin());
+                                   || isSuperAdmin()
+                                   || (isCityAdminForEvent(resource.data)
+                                       && eventCity(request.resource.data) == adminCity()));
+      allow delete:         if isRegistered()
+                               && (resource.data.createdByUserId == request.auth.uid
+                                   || isSuperAdmin()
+                                   || isCityAdminForEvent(resource.data));
     }
 
     // Historical events are moved here by the scheduled Admin SDK function.
@@ -43,7 +61,9 @@ service cloud.firestore {
     // ── Settings ───────────────────────────────────────────────────────────────
     match /settings/{docId} {
       allow read:  if signedIn();
-      allow write: if isAdmin();
+      allow write: if isSuperAdmin()
+                     || (isAdmin()
+                         && !(docId in ['hijriCalendar', 'hijriObservances']));
     }
 
     // ── Calendar subscriptions ─────────────────────────────────────────────────

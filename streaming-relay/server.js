@@ -25,8 +25,8 @@ try {
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const QUALITY_PROFILES = {
-  '1080p': { width:1920, height:1080, videoBitrate:'5500k', maxrate:'6500k', bufsize:'9000k' },
-  '720p':  { width:1280, height:720,  videoBitrate:'5000k', maxrate:'6000k', bufsize:'10000k' },
+  '1080p': { width:1920, height:1080, videoBitrate:'8000k', maxrate:'9000k', bufsize:'12000k' },
+  '720p':  { width:1280, height:720,  videoBitrate:'6000k', maxrate:'7000k', bufsize:'10000k' },
   '480p':  { width:854,  height:480,  videoBitrate:'2500k', maxrate:'3200k', bufsize:'5000k' },
 };
 

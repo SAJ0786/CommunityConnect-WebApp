@@ -6,8 +6,8 @@ import { hasGoogleMapsKey, loadGoogleMapsScript, waitForGoogleMaps } from '../se
 const TIME_FILTERS = [
   { key: 'today', label: 'Today' },
   { key: 'tomorrow', label: 'Tomorrow' },
-  { key: 'week', label: 'This Week' },
-  { key: 'month', label: 'This Month' },
+  { key: 'week', label: 'Next 7 Days' },
+  { key: 'month', label: 'Next 30 Days' },
   { key: 'all', label: 'All Upcoming' },
 ];
 
@@ -78,13 +78,8 @@ function filterEventsByTime(events, filter) {
   const now = new Date();
   const nowMinutes = now.getHours() * 60 + now.getMinutes();
   const tomorrow = localDateStr(1);
-  const weekEnd = localDateStr(6);
-  const monthEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const monthEnd = [
-    monthEndDate.getFullYear(),
-    String(monthEndDate.getMonth() + 1).padStart(2, '0'),
-    String(monthEndDate.getDate()).padStart(2, '0'),
-  ].join('-');
+  const weekEnd = localDateStr(7);
+  const monthEnd = localDateStr(30);
 
   return events.filter(event => {
     if (event.isLive) return true;
@@ -112,7 +107,7 @@ function createMarkerPopup(event, color, onSelectEvent) {
   wrapper.appendChild(title);
 
   const meta = document.createElement('span');
-  meta.textContent = `${eventDateLabel(event)} · ${event.startTime || 'Time TBA'} · ${event.address?.suburb || ''}`;
+  meta.textContent = `${eventDateLabel(event)} - ${event.startTime || 'Time TBA'} - ${event.address?.suburb || ''}`;
   wrapper.appendChild(meta);
 
   const audience = document.createElement('small');
@@ -265,7 +260,7 @@ export default function EventMapView({ events, onSelectEvent }) {
         <div className="event-map-preview">
           <div>
             <strong>{selectedEvent.eventTypeDisplay || selectedEvent.eventType || 'Event'} - {selectedEvent.hostName || 'Host'}</strong>
-            <span>{eventDateLabel(selectedEvent)} · {selectedEvent.startTime || 'Time TBA'} · {selectedEvent.address?.suburb || ''}</span>
+            <span>{eventDateLabel(selectedEvent)} - {selectedEvent.startTime || 'Time TBA'} - {selectedEvent.address?.suburb || ''}</span>
             <small style={{ color: AUDIENCE_COLORS[audienceKey(selectedEvent.audienceType || selectedEvent.audience)] }}>
               {audienceLabel(selectedEvent.audienceType || selectedEvent.audience)}
             </small>

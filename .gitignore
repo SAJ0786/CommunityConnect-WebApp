@@ -82,6 +82,12 @@ functions/.env.*
 
 # Android/TWA
 android/
+android-native-wrapper/.gradle/
+android-native-wrapper/build/
+android-native-wrapper/app/build/
+android-native-wrapper/app/build-stale-*/
+android-native-wrapper/local.properties
+android-native-wrapper/release-signing.properties
 *.apk
 *.aab
 *.keystore

@@ -1,0 +1,4 @@
+storeFile=../../1. Android Project/Version 1.0/android.keystore
+storePassword=REPLACE_WITH_KEYSTORE_PASSWORD
+keyAlias=REPLACE_WITH_KEY_ALIAS
+keyPassword=REPLACE_WITH_KEY_PASSWORD_OR_SAME_AS_STORE_PASSWORD

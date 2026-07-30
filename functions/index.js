@@ -14,6 +14,144 @@ const db = admin.firestore();
 
 const REGION = "australia-southeast1";
 
+function pushNotificationsEnabled(user = {}) {
+  if (user.pushNotificationsEnabled !== undefined) return user.pushNotificationsEnabled !== false;
+  return user.reminderEmailEnabled !== false;
+}
+
+function getUserFcmTokens(user = {}) {
+  const stored = user.fcmTokens;
+  if (!stored) return [];
+  if (Array.isArray(stored)) return stored.filter(Boolean);
+  if (typeof stored === "object") return Object.keys(stored).filter(Boolean);
+  return [];
+}
+
+function getUserFcmTokenEntries(user = {}) {
+  const stored = user.fcmTokens;
+  if (!stored) return [];
+  if (Array.isArray(stored)) {
+    return stored.filter(Boolean).map(token => ({
+      token,
+      platform: 'legacy',
+      source: 'legacy',
+    }));
+  }
+  if (typeof stored === "object") {
+    return Object.entries(stored)
+      .filter(([token]) => !!token)
+      .map(([token, meta]) => ({
+        token,
+        platform: meta?.platform || 'unknown',
+        source: meta?.source || 'unknown',
+      }));
+  }
+  return [];
+}
+
+function invalidFcmTokenCodes(code) {
+  return code === "messaging/invalid-registration-token" ||
+    code === "messaging/registration-token-not-registered";
+}
+
+const DEFAULT_CITY = "sydney";
+const CITY_OPTIONS = [
+  "sydney",
+  "melbourne",
+  "canberra",
+  "brisbane",
+  "adelaide",
+  "hobart",
+  "perth",
+  "rest-of-australia",
+];
+const VALID_CITIES = new Set(CITY_OPTIONS);
+
+function normalizeCity(value) {
+  return VALID_CITIES.has(value) ? value : DEFAULT_CITY;
+}
+
+function cityLabel(value) {
+  const labels = {
+    sydney: "Sydney",
+    melbourne: "Melbourne",
+    canberra: "Canberra",
+    brisbane: "Brisbane",
+    adelaide: "Adelaide",
+    hobart: "Hobart",
+    perth: "Perth",
+    "rest-of-australia": "Rest of Australia",
+  };
+  return labels[normalizeCity(value)] || labels[DEFAULT_CITY];
+}
+
+function inPostcodeRanges(postcode, ranges) {
+  const value = Number(String(postcode || "").replace(/\D/g, ""));
+  if (!Number.isFinite(value)) return false;
+  return ranges.some(([from, to]) => value >= from && value <= to);
+}
+
+function classifyMetroArea(address = {}) {
+  const state = String(address.state || "").trim().toUpperCase();
+  const fullAddress = String(address.fullAddress || "").trim().toLowerCase();
+  const postcode = address.postcode || String(address.fullAddress || "").match(/\b\d{4}\b/)?.[0] || "";
+
+  if (inPostcodeRanges(postcode, [[2000, 2234], [2555, 2574], [2740, 2786]])) return "sydney";
+  if (inPostcodeRanges(postcode, [[3000, 3207], [3335, 3341], [3427, 3430], [3750, 3810], [3910, 3978]])) return "melbourne";
+  if (inPostcodeRanges(postcode, [[2600, 2620], [2900, 2920]])) return "canberra";
+  if (inPostcodeRanges(postcode, [[4000, 4207], [4300, 4305], [4500, 4520]])) return "brisbane";
+  if (inPostcodeRanges(postcode, [[5000, 5199], [5950, 5950]])) return "adelaide";
+  if (inPostcodeRanges(postcode, [[7000, 7055]])) return "hobart";
+  if (inPostcodeRanges(postcode, [[6000, 6214]])) return "perth";
+
+  if (state === "ACT" || fullAddress.includes(" act ")) return "canberra";
+  if (state === "VIC" || fullAddress.includes("vic")) return "melbourne";
+  if (state === "QLD" || fullAddress.includes("qld")) return "brisbane";
+  if (state === "SA" || fullAddress.includes(" sa ")) return "adelaide";
+  if (state === "TAS" || fullAddress.includes("tas")) return "hobart";
+  if (state === "WA" || fullAddress.includes(" wa ")) return "perth";
+  if (state === "NSW" || fullAddress.includes("nsw")) return "sydney";
+
+  return "rest-of-australia";
+}
+
+function getEventMetroArea(event = {}) {
+  const classified = classifyMetroArea(event.address || event);
+  if (classified !== "rest-of-australia") return classified;
+  return VALID_CITIES.has(event.metroArea) ? event.metroArea : classified;
+}
+
+function getUserCity(user = {}) {
+  return normalizeCity(user.adminCity || user.defaultCity || DEFAULT_CITY);
+}
+
+function requestedCityScope(requested, caller = {}) {
+  if (caller.role === "superAdmin") {
+    return !requested || requested === "all" ? "all" : normalizeCity(requested);
+  }
+  return getUserCity(caller);
+}
+
+function eventInCityScope(event, scopeCity) {
+  return scopeCity === "all" || getEventMetroArea(event) === scopeCity;
+}
+
+function userInCityScope(user, scopeCity) {
+  return scopeCity === "all" || getUserCity(user) === scopeCity;
+}
+
+function adminCanAccessEvent(adminUser, event) {
+  return adminUser?.role === "superAdmin" || (
+    adminUser?.role === "admin" && getEventMetroArea(event) === getUserCity(adminUser)
+  );
+}
+
+function adminCanAccessUser(adminUser, targetUser) {
+  return adminUser?.role === "superAdmin" || (
+    adminUser?.role === "admin" && getUserCity(targetUser) === getUserCity(adminUser)
+  );
+}
+
 // â”€â”€ Secrets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const ANTHROPIC_API_KEY     = defineSecret("ANTHROPIC_API_KEY");
 const SMTP_HOST             = defineSecret("SMTP_HOST");
@@ -101,8 +239,14 @@ exports.updateUserContactProfile = onCall({ region: REGION }, async (request) =>
 
   const targetRef = db.collection('users').doc(targetUid);
   const target = await targetRef.get();
-  if (!target.exists || target.data()?.isActive === false || target.data()?.migratedToUid) {
+  if (!target.exists || !isActiveDeliverableUser(target.data())) {
     throw new HttpsError('not-found', 'User profile not found.');
+  }
+  if (targetUid !== requesterUid) {
+    const requester = await db.collection('users').doc(requesterUid).get();
+    if (!adminCanAccessUser(requester.data() || {}, target.data() || {})) {
+      throw new HttpsError('permission-denied', 'You can only update users in your city.');
+    }
   }
 
   const [lowerMatches, legacyMatches] = await Promise.all([
@@ -113,7 +257,7 @@ exports.updateUserContactProfile = onCall({ region: REGION }, async (request) =>
     [...lowerMatches.docs, ...legacyMatches.docs].map(doc => [doc.id, doc])
   );
   const duplicate = [...possibleDuplicates.values()].find(doc =>
-    doc.id !== targetUid && doc.data()?.isActive !== false && !doc.data()?.migratedToUid
+    doc.id !== targetUid && isActiveDeliverableUser(doc.data())
   );
   if (duplicate) {
     throw new HttpsError('already-exists', 'This email is already used by another account.');
@@ -138,7 +282,7 @@ exports.updateUserContactProfile = onCall({ region: REGION }, async (request) =>
     ));
     const phoneMatches = new Map(phoneQueries.flatMap(result => result.docs).map(doc => [doc.id, doc]));
     const phoneDuplicate = [...phoneMatches.values()].find(doc =>
-      doc.id !== targetUid && doc.data()?.isActive !== false && !doc.data()?.migratedToUid
+      doc.id !== targetUid && isActiveDeliverableUser(doc.data())
     );
     if (phoneDuplicate) {
       throw new HttpsError('already-exists', 'This phone number is already attached to another email account.');
@@ -175,6 +319,113 @@ function buildTransporter(secrets) {
   return nodemailer.createTransport({
     host, port, secure: port === 465, auth: { user, pass }
   });
+}
+
+const EMAIL_REPLY_TO = 'communityeventssydney@gmail.com';
+const EMAIL_FROM_DOMAIN = 'communityevents.siza.info';
+const EMAIL_SENDERS = {
+  reminders: `Community Events Australia <reminders@${EMAIL_FROM_DOMAIN}>`,
+  updates: `Community Events Australia <updates@${EMAIL_FROM_DOMAIN}>`,
+  admin: `Community Events Australia <adminupdates@${EMAIL_FROM_DOMAIN}>`,
+};
+
+function emailFrom(secrets, type = 'updates') {
+  const host = String(secrets.SMTP_HOST.value() || '').toLowerCase();
+  const fallback = secrets.EMAIL_FROM.value() || secrets.SMTP_USER.value();
+  if (!host || host.includes('gmail')) return fallback;
+  return EMAIL_SENDERS[type] || EMAIL_SENDERS.updates;
+}
+
+function emailEnvelope(secrets, type = 'updates') {
+  return {
+    from: emailFrom(secrets, type),
+    replyTo: EMAIL_REPLY_TO,
+  };
+}
+
+async function sendPrivateStreamLinkToHost({
+  secrets,
+  uid,
+  eventData = {},
+  watchUrl,
+  sessionRef = null,
+  streamVideoRef = null,
+  sentFlagField = 'privateLinkEmailSentAt',
+}) {
+  if (!uid || !watchUrl) return { sent: false, reason: 'missing-user-or-url' };
+
+  const [userSnap, existingSessionSnap, existingVideoSnap] = await Promise.all([
+    db.collection('users').doc(uid).get(),
+    sessionRef ? sessionRef.get() : Promise.resolve(null),
+    streamVideoRef ? streamVideoRef.get() : Promise.resolve(null),
+  ]);
+
+  if (existingSessionSnap?.data()?.[sentFlagField] || existingVideoSnap?.data()?.[sentFlagField]) {
+    return { sent: false, reason: 'already-sent' };
+  }
+
+  const user = userSnap.exists ? userSnap.data() : {};
+  const to = String(user.email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+    return { sent: false, reason: 'missing-email' };
+  }
+
+  const transporter = buildTransporter(secrets);
+  if (!transporter) throw new Error('Email is not configured. Please set SMTP_HOST, SMTP_USER and SMTP_PASS secrets.');
+
+  const eventTitle = [
+    eventData.eventTypeDisplay || eventData.eventType || '',
+    eventData.hostName || '',
+    eventData.eventSubject || '',
+  ].filter(Boolean).join(' - ') || 'Community Event Stream';
+  const dateTime = [eventData.eventDate || '', eventData.startTime || ''].filter(Boolean).join(' ');
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  await transporter.sendMail({
+    ...emailEnvelope(secrets, 'updates'),
+    to,
+    subject: 'Your private live stream link',
+    text: [
+      'Your private Community Events live stream is now live.',
+      '',
+      `Event: ${eventTitle}`,
+      dateTime ? `Date/Time: ${dateTime}` : '',
+      `Watch link: ${watchUrl}`,
+      '',
+      'Share this YouTube link only with people you want to view the private stream.',
+      '',
+      'Community Events Australia',
+    ].filter(Boolean).join('\n'),
+    html: `
+      <div style="font-family:Arial,sans-serif;line-height:1.55;color:#111827">
+        <h2 style="margin:0 0 12px;color:#0f766e">Your private live stream is now live</h2>
+        <p>Your private Community Events live stream is ready.</p>
+        <p><strong>Event:</strong> ${escapeHtml(eventTitle)}</p>
+        ${dateTime ? `<p><strong>Date/Time:</strong> ${escapeHtml(dateTime)}</p>` : ''}
+        <p>
+          <a href="${escapeHtml(watchUrl)}" style="display:inline-block;background:#dc2626;color:white;
+            text-decoration:none;font-weight:bold;padding:12px 18px;border-radius:8px">
+            Open YouTube Stream
+          </a>
+        </p>
+        <p style="color:#6b7280;font-size:13px">
+          Share this YouTube link only with people you want to view the private stream.
+        </p>
+        <p style="color:#6b7280;font-size:13px">Community Events Australia</p>
+      </div>
+    `,
+  });
+
+  const update = {
+    [sentFlagField]: now,
+    privateLinkEmailRecipient: to,
+  };
+  await Promise.all([
+    sessionRef ? sessionRef.set(update, { merge: true }) : Promise.resolve(),
+    streamVideoRef ? streamVideoRef.set(update, { merge: true }) : Promise.resolve(),
+  ]);
+
+  return { sent: true, to };
 }
 
 const PROGRAMS_UPDATE_IMAGE_URL = "https://communityevents.siza.info/images/programs-update-header.jpg";
@@ -361,18 +612,18 @@ async function selectDeepStoryForEmail() {
 function buildDeepStoryEmailSection(story) {
   if (!story) return "";
   const reportUrl = `${DEEP_STORIES_REPORT_URL}?source=deep-stories-email&title=${encodeURIComponent(story.title)}&url=${encodeURIComponent(story.url)}`;
-  return `<div style="margin-top:24px;border-top:1px solid #d1d5db;padding-top:20px">
-    <h3 style="margin:0 0 10px;color:#0f766e;font-size:19px">Book Read of the Day</h3>
-    <div style="border:1px solid #99f6e4;background:#f0fdfa;border-radius:14px;padding:16px">
-      <p style="margin:0 0 6px;color:#134e4a;font-size:18px;font-weight:700">${escapeHtml(story.title)}</p>
-      <p style="margin:0 0 14px;color:#374151;font-size:14px;line-height:1.6">${escapeHtml(story.summary)}</p>
-      <p style="margin:0 0 14px">
-        <a href="${escapeHtml(story.url)}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:10px 16px">Read this story</a>
+  return `<div style="margin-top:22px;border-top:1px solid #d1d5db;padding-top:16px">
+    <h3 style="margin:0 0 8px;color:#0f766e;font-size:16px;line-height:1.3">Book Read of the Day</h3>
+    <div style="border:1px solid #99f6e4;background:#f0fdfa;border-radius:12px;padding:13px 14px">
+      <p style="margin:0 0 5px;color:#134e4a;font-size:16px;font-weight:700;line-height:1.35">${escapeHtml(story.title)}</p>
+      <p style="margin:0 0 11px;color:#374151;font-size:13px;line-height:1.5">${escapeHtml(story.summary)}</p>
+      <p style="margin:0 0 12px">
+        <a href="${escapeHtml(story.url)}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 14px;font-size:13px">Read this story</a>
       </p>
-      <p style="margin:0;color:#6b7280;font-size:12px;line-height:1.5">
+      <div style="border-top:1px solid #ccfbf1;margin-top:10px;padding-top:9px;color:#6b7280;font-size:11px;line-height:1.45">
         Deep Stories is an AI-assisted under trial stories platform. If you notice incorrect, inappropriate or concerning content,
-        <a href="${escapeHtml(reportUrl)}" style="color:#0f766e;font-weight:700">report an issue</a>.
-      </p>
+        <a href="${escapeHtml(reportUrl)}" style="color:#0f766e;font-weight:700">Report a Problem</a>.
+      </div>
     </div>
   </div>`;
 }
@@ -473,30 +724,26 @@ function excelDateToYYYYMMDD(val) {
 // â”€â”€ JDN-based Hijri calendar (same algorithm as SIZA Calendar Religiously) â”€â”€
 function gregorianToJdn(y,m,d){const a=Math.floor((14-m)/12),yr=y+4800-a,mn=m+12*a-3;return d+Math.floor((153*mn+2)/5)+365*yr+Math.floor(yr/4)-Math.floor(yr/100)+Math.floor(yr/400)-32045;}
 function jdnToGregorian(jdn){const a=jdn+32044,b=Math.floor((4*a+3)/146097),c=a-Math.floor((146097*b)/4),d=Math.floor((4*c+3)/1461),e=c-Math.floor((1461*d)/4),m=Math.floor((5*e+2)/153);return{day:e-Math.floor((153*m+2)/5)+1,month:m+3-12*Math.floor(m/10),year:100*b+d-4800+Math.floor(m/10)};}
-// â”€â”€ Override-anchored 30-day cascade (matches client hijriService.js) â”€â”€
-const MONTH_DAYS_SERVER = 30;
+// Hijri month starts use saved moon-sighting overrides with a 29/30-day fallback.
 function islamicToJdnAstro(y,m,d){return d+Math.ceil(29.5*(m-1))+(y-1)*354+Math.floor((3+11*y)/30)+1948439;}
 function jdnToIslamicAstro(jdn){const y=Math.floor((30*(jdn-1948439)+10646)/10631),m=Math.min(12,Math.ceil((jdn-29-islamicToJdnAstro(y,1,1))/29.5)+1);return{year:y,month:m,day:jdn-islamicToJdnAstro(y,m,1)+1};}
 function monIdx(y,m){return y*12+(m-1);}
-function fromMonIdx(idx){return{year:Math.floor(idx/12),month:(idx%12)+1};}
+function fromMonIdx(idx){return{year:Math.floor(idx/12),month:((idx%12)+12)%12+1};}
+function addHijriMonthsServer(y,m,delta){return fromMonIdx(monIdx(y,m)+delta);}
 function cmpHijri(a,b){return a.year!==b.year?a.year-b.year:a.month!==b.month?a.month-b.month:(a.day||1)-(b.day||1);}
-function sortOv(arr){return[...(arr||[])].filter(o=>o&&o.hYear&&o.hMonth&&o.gDate).sort((a,b)=>cmpHijri({year:a.hYear,month:a.hMonth},{year:b.hYear,month:b.hMonth}));}
+function sortOv(arr){const sorted=[...(arr||[])].map(o=>({hYear:Number(o?.hYear),hMonth:Number(o?.hMonth),gDate:String(o?.gDate||'')})).filter(o=>o.hYear&&o.hMonth&&o.gDate).sort((a,b)=>cmpHijri({year:a.hYear,month:a.hMonth},{year:b.hYear,month:b.hMonth}));const cleaned=[];for(const o of sorted){const[y,m,d]=o.gDate.split("-").map(Number);if(!y||!m||!d)continue;const j=gregorianToJdn(y,m,d);const p=cleaned[cleaned.length-1];if(p){const[py,pm,pd]=p.gDate.split("-").map(Number);const diff=monIdx(o.hYear,o.hMonth)-monIdx(p.hYear,p.hMonth);const min=Math.max(1,diff)*29;const max=Math.max(1,diff)*30;const dayDiff=j-gregorianToJdn(py,pm,pd);if(diff<=0||dayDiff<min||dayDiff>max)continue;}cleaned.push(o);}return cleaned;}
+function deltaForMonthServer(hY,hM,ov){let delta=0;for(const o of sortOv(ov)){const cmp=cmpHijri({year:hY,month:hM},{year:o.hYear,month:o.hMonth});if(cmp>=0){const[y,m,d]=o.gDate.split("-").map(Number);delta=gregorianToJdn(y,m,d)-islamicToJdnAstro(o.hYear,o.hMonth,1);}}return delta;}
+function adjustedIslamicToJdnServer(hY,hM,hD,ov){return islamicToJdnAstro(hY,hM,hD)+deltaForMonthServer(hY,hM,ov||[]);}
 function monthStartJdnServer(hY,hM,ov){
-  const sorted=sortOv(ov);const targetIdx=monIdx(hY,hM);
-  if(sorted.length===0)return islamicToJdnAstro(hY,hM,1);
-  let anchor=null;
-  for(const o of sorted){if(monIdx(o.hYear,o.hMonth)<=targetIdx)anchor=o;else break;}
-  if(anchor){const[ay,am,ad]=anchor.gDate.split("-").map(Number);const aj=gregorianToJdn(ay,am,ad);const fwd=targetIdx-monIdx(anchor.hYear,anchor.hMonth);return aj+fwd*MONTH_DAYS_SERVER;}
-  else{const e=sorted[0];const[ey,em,ed]=e.gDate.split("-").map(Number);const ej=gregorianToJdn(ey,em,ed);const back=monIdx(e.hYear,e.hMonth)-targetIdx;return ej-back*MONTH_DAYS_SERVER;}
+  return adjustedIslamicToJdnServer(Number(hY),Number(hM),1,ov||[]);
 }
 function hijriToGreg(hY,hM,hD,ov){return jdnToGregorian(monthStartJdnServer(hY,hM,ov||[])+(hD-1));}
 function gregToHijri(gY,gM,gD,ov){
-  const so=sortOv(ov);const t=gregorianToJdn(gY,gM,gD);
-  if(so.length===0)return jdnToIslamicAstro(t);
-  const ap=jdnToIslamicAstro(t);const apIdx=monIdx(ap.year,ap.month);
-  for(let off=-4;off<=4;off++){const{year,month}=fromMonIdx(apIdx+off);const s=monthStartJdnServer(year,month,so);const nx=fromMonIdx(monIdx(year,month)+1);const ns=monthStartJdnServer(nx.year,nx.month,so);if(t>=s&&t<ns)return{year,month,day:t-s+1};}
-  return ap;
+  const so=sortOv(ov);const t=gregorianToJdn(gY,gM,gD);const approx=jdnToIslamicAstro(t);
+  for(let i=-14;i<=14;i++){const cand=addHijriMonthsServer(approx.year,approx.month,i);const start=monthStartJdnServer(cand.year,cand.month,so);const next=addHijriMonthsServer(cand.year,cand.month,1);const nextStart=monthStartJdnServer(next.year,next.month,so);if(t>=start&&t<nextStart)return{year:cand.year,month:cand.month,day:t-start+1};}
+  return approx;
 }
+function hijriMonthLengthServer(hY,hM,ov){const next=addHijriMonthsServer(Number(hY),Number(hM),1);return monthStartJdnServer(next.year,next.month,ov||[])-monthStartJdnServer(Number(hY),Number(hM),ov||[]);}
 
 const HIJRI_MONTH_NAMES_SERVER = ["Muharram","Safar","Rabi al-Awwal","Rabi al-Thani","Jumada al-Awwal","Jumada al-Thani","Rajab","Sha'ban","Ramadan","Shawwal","Dhu al-Qi'dah","Dhu al-Hijjah"];
 
@@ -621,6 +868,250 @@ exports.getCalendarStats = onCall({ region: REGION }, async (request) => {
     })
     .map(d => d.id);
   return { count: uids.length, uids, everCount: snap.size };
+});
+
+exports.getUserDashboardStats = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const userDoc = await db.collection("users").doc(request.auth.uid).get();
+  const role = userDoc.data()?.role;
+  if (role !== "admin" && role !== "superAdmin") {
+    throw new HttpsError("permission-denied", "Admin access required.");
+  }
+
+  const snap = await db.collection("users").get();
+  const stats = {
+    totalProfiles: snap.size,
+    activeUsers: 0,
+    activeNotMigrated: 0,
+    inactiveProfiles: 0,
+    migratedProfiles: 0,
+    activeSuperAdmins: 0,
+    hiddenSuperAdmins: 0,
+    activeAdmins: 0,
+    activeRegularUsers: 0,
+  };
+
+  const docs = snap.docs.map(docSnap => ({ id: docSnap.id, data: docSnap.data() || {} }));
+  const activePhoneEmails = new Set();
+  docs.forEach(({ data }) => {
+    if (data.isActive === false) return;
+    const emailKey = String(data.emailLower || data.email || "").trim().toLowerCase();
+    const hasPhone = hasAnyPhoneProfile(data);
+    if (emailKey && hasPhone) activePhoneEmails.add(emailKey);
+  });
+
+  stats.duplicateEmailProfiles = 0;
+
+  docs.forEach(({ data }) => {
+    const hasPhone = hasAnyPhoneProfile(data);
+    const isStaleMigratedPhoneProfile = data.isActive !== false && !!data.migratedToUid && hasPhone;
+    const isMigrated = !!data.migratedToUid && !isStaleMigratedPhoneProfile;
+    const isInactive = data.isActive === false;
+    const isHidden = isInactive || isMigrated;
+    const userRole = data.role || "user";
+
+    if (isMigrated) stats.migratedProfiles += 1;
+    else if (isInactive) stats.inactiveProfiles += 1;
+
+    if (isHidden) {
+      if (userRole === "superAdmin") stats.hiddenSuperAdmins += 1;
+      return;
+    }
+
+    stats.activeUsers += 1;
+    const emailKey = String(data.emailLower || data.email || "").trim().toLowerCase();
+    if (!hasPhone && emailKey && activePhoneEmails.has(emailKey)) {
+      stats.duplicateEmailProfiles += 1;
+    } else if (!hasPhone) {
+      stats.activeNotMigrated += 1;
+    }
+    if (userRole === "superAdmin") stats.activeSuperAdmins += 1;
+    else if (userRole === "admin") stats.activeAdmins += 1;
+    else stats.activeRegularUsers += 1;
+  });
+
+  return stats;
+});
+
+exports.cleanupMigratedUserProfiles = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const userDoc = await db.collection("users").doc(request.auth.uid).get();
+  if (userDoc.data()?.role !== "superAdmin") {
+    throw new HttpsError("permission-denied", "Super Admin access required.");
+  }
+
+  const snap = await db.collection("users").where("migratedToUid", ">", "").get();
+  let deletedProfiles = 0;
+  let skippedProfiles = 0;
+  let repairedActiveProfiles = 0;
+  let activeEventsTransferred = 0;
+  let archivedEventsTransferred = 0;
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  for (const oldDoc of snap.docs) {
+    const oldData = oldDoc.data() || {};
+    if (oldData.isActive !== false && hasAnyPhoneProfile(oldData)) {
+      await oldDoc.ref.update({
+        migratedToUid: admin.firestore.FieldValue.delete(),
+        inactiveReason: admin.firestore.FieldValue.delete(),
+        updatedAt: now,
+      });
+      repairedActiveProfiles++;
+      continue;
+    }
+
+    const targetUid = String(oldData.migratedToUid || "").trim();
+    if (!targetUid || targetUid === oldDoc.id) {
+      skippedProfiles++;
+      continue;
+    }
+
+    const targetSnap = await db.collection("users").doc(targetUid).get();
+    if (!targetSnap.exists) {
+      skippedProfiles++;
+      continue;
+    }
+
+    const targetData = targetSnap.data() || {};
+    activeEventsTransferred += await transferUserOwnedDocuments("events", oldDoc.id, targetUid, targetData, now);
+    archivedEventsTransferred += await transferUserOwnedDocuments("archivedEvents", oldDoc.id, targetUid, targetData, now);
+
+    const oldCalRef = db.collection("calendarSubscriptions").doc(oldDoc.id);
+    const oldCal = await oldCalRef.get();
+    if (oldCal.exists) {
+      await db.collection("calendarSubscriptions").doc(targetUid).set({
+        ...oldCal.data(),
+        uid: targetUid,
+        migratedFromUid: oldDoc.id,
+        updatedAt: now,
+      }, { merge: true });
+      await oldCalRef.delete().catch(() => {});
+    }
+
+    await oldDoc.ref.delete();
+    deletedProfiles++;
+  }
+
+  return {
+    deletedProfiles,
+    skippedProfiles,
+    repairedActiveProfiles,
+    activeEventsTransferred,
+    archivedEventsTransferred,
+  };
+});
+
+function roleRank(role) {
+  if (role === "superAdmin") return 3;
+  if (role === "admin") return 2;
+  return 1;
+}
+
+function highestRole(a, b) {
+  return roleRank(a) >= roleRank(b) ? (a || "user") : (b || "user");
+}
+
+function hasAnyPhoneProfile(data = {}) {
+  return !!String(data.phone || data.phoneNumber || data.mobile || data.mobileNumber || "").trim();
+}
+
+function isOldMigratedUserProfile(data = {}) {
+  return !!data.migratedToUid && !(data.isActive !== false && hasAnyPhoneProfile(data));
+}
+
+function isActiveDeliverableUser(data = {}) {
+  return data.isActive !== false && !isOldMigratedUserProfile(data);
+}
+
+function firstPhoneValue(data = {}) {
+  return String(data.phone || data.phoneNumber || data.mobile || data.mobileNumber || "").trim();
+}
+
+exports.mergeDuplicateEmailProfiles = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+  const userDoc = await db.collection("users").doc(request.auth.uid).get();
+  if (userDoc.data()?.role !== "superAdmin") {
+    throw new HttpsError("permission-denied", "Super Admin access required.");
+  }
+
+  const usersSnap = await db.collection("users").get();
+  const groups = new Map();
+  usersSnap.docs.forEach(docSnap => {
+    const data = docSnap.data() || {};
+    if (!isActiveDeliverableUser(data)) return;
+    const email = String(data.emailLower || data.email || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    if (!groups.has(email)) groups.set(email, []);
+    groups.get(email).push({ id: docSnap.id, ref: docSnap.ref, data });
+  });
+
+  let mergedProfiles = 0;
+  let skippedGroups = 0;
+  let activeEventsTransferred = 0;
+  let archivedEventsTransferred = 0;
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
+  for (const [, group] of groups.entries()) {
+    if (group.length < 2) continue;
+    const phoneProfiles = group.filter(item => hasAnyPhoneProfile(item.data));
+    const emailOnlyProfiles = group.filter(item => !hasAnyPhoneProfile(item.data));
+
+    if (phoneProfiles.length !== 1 || emailOnlyProfiles.length === 0) {
+      skippedGroups++;
+      continue;
+    }
+
+    const target = phoneProfiles[0];
+    const targetPhone = firstPhoneValue(target.data);
+    const targetPhoneNormalized = normalizeAuPhoneForMigration(targetPhone).canonical ||
+      target.data.phoneNormalized || "";
+
+    for (const source of emailOnlyProfiles) {
+      const email = String(target.data.emailLower || target.data.email || source.data.email || "").trim().toLowerCase();
+      const mergedProfile = {
+        ...source.data,
+        ...target.data,
+        email,
+        emailLower: email,
+        phone: targetPhone,
+        phoneNormalized: targetPhoneNormalized,
+        phoneVerified: true,
+        fullName: target.data.fullName || source.data.fullName || target.data.displayName || source.data.displayName || target.data.email || source.data.email || "",
+        role: highestRole(source.data.role, target.data.role),
+        isActive: true,
+        migratedToUid: admin.firestore.FieldValue.delete(),
+        inactiveReason: admin.firestore.FieldValue.delete(),
+        mergedDuplicateUids: admin.firestore.FieldValue.arrayUnion(source.id),
+        updatedAt: now,
+      };
+
+      await target.ref.set(mergedProfile, { merge: true });
+      activeEventsTransferred += await transferUserOwnedDocuments("events", source.id, target.id, mergedProfile, now);
+      archivedEventsTransferred += await transferUserOwnedDocuments("archivedEvents", source.id, target.id, mergedProfile, now);
+
+      const oldCalRef = db.collection("calendarSubscriptions").doc(source.id);
+      const oldCal = await oldCalRef.get();
+      if (oldCal.exists) {
+        await db.collection("calendarSubscriptions").doc(target.id).set({
+          ...oldCal.data(),
+          uid: target.id,
+          migratedFromUid: source.id,
+          updatedAt: now,
+        }, { merge: true });
+        await oldCalRef.delete().catch(() => {});
+      }
+
+      await source.ref.delete();
+      mergedProfiles++;
+    }
+  }
+
+  return {
+    mergedProfiles,
+    skippedGroups,
+    activeEventsTransferred,
+    archivedEventsTransferred,
+  };
 });
 
 // â”€â”€â”€ AI EVENT SEARCH â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -815,7 +1306,7 @@ ${JSON.stringify(events)}`;
   }
 );
 
-// â”€â”€â”€ DAILY EMAIL REMINDERS â€” 8 AM Sydney â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// Daily email reminders - 7 PM Sydney, for tomorrow's events.
 exports.dailyEmailReminders = onSchedule(
   { schedule: "0 19 * * *", timeZone: "Australia/Sydney", region: REGION,
     secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM] },
@@ -833,37 +1324,42 @@ exports.dailyEmailReminders = onSchedule(
     // `hidden` field at all, which would exclude every legacy/visible event.
     const visibleDocs = eventsSnapRaw.docs.filter(d => d.data().hidden !== true);
     if (visibleDocs.length === 0) return null;
-    // Lightweight shim so the rest of the function can keep using eventsSnap
-    const eventsSnap = { docs: visibleDocs, size: visibleDocs.length, empty: visibleDocs.length === 0 };
-
-    const eventSections = buildGroupedEmailEventTables(eventsSnap.docs.map(d => d.data()));
-    const deepStorySection = buildDeepStoryEmailSection(await selectDeepStoryForEmail());
-
-    const html = `<div style="font-family:sans-serif;max-width:700px">
-      ${buildProgramsUpdateEmailHeader()}
-      <div style="padding:18px;background:#ffffff">${eventSections}${deepStorySection}</div>
-      <p style="color:#6b7280;font-size:12px;padding:16px">
-        To opt out: Profile -> Toggle Email Reminder off.
-      </p></div>`;
-
-    // Get all users with reminders enabled (don't filter by isActive â€” field may not exist)
-    const usersSnap = await db.collection("users")
-      .where("reminderEmailEnabled", "==", true)
-      .get();
+    const eventsByCity = new Map();
+    for (const docSnap of visibleDocs) {
+      const eventData = docSnap.data();
+      const city = getEventMetroArea(eventData);
+      if (!eventsByCity.has(city)) eventsByCity.set(city, []);
+      eventsByCity.get(city).push(eventData);
+    }
+    const deepStory = await selectDeepStoryForEmail();
+    const htmlByCity = new Map();
+    for (const [city, cityEvents] of eventsByCity.entries()) {
+      const eventSections = buildGroupedEmailEventTables(cityEvents);
+      const deepStorySection = buildDeepStoryEmailSection(deepStory);
+      htmlByCity.set(city, `<div style="font-family:sans-serif;max-width:700px">
+        ${buildProgramsUpdateEmailHeader()}
+        <div style="padding:18px;background:#ffffff">${eventSections}${deepStorySection}</div>
+        <p style="color:#6b7280;font-size:12px;padding:16px">
+          To opt out: Profile -> Toggle Email Reminder off.
+        </p></div>`);
+    }
 
     let sent = 0;
-    let pushed = 0;
     const allUsers = await db.collection('users').get();
 
     for (const doc of allUsers.docs) {
       const u = doc.data();
-      if (u.isActive === false || u.migratedToUid) continue;
+      if (!isActiveDeliverableUser(u)) continue;
+
+      const userCity = getUserCity(u);
+      const html = htmlByCity.get(userCity);
+      if (!html) continue;
 
       // Send email if user has email
       if (u.email && u.reminderEmailEnabled !== false) {
         try {
           await transporter.sendMail({
-            from: EMAIL_FROM.value() || SMTP_USER.value(),
+            ...emailEnvelope({ SMTP_HOST, SMTP_USER, EMAIL_FROM }, 'reminders'),
             to: u.email,
             subject: `${EMAIL_ICON_CALENDAR} Community Events - Tomorrow's Events (${date})`,
             html: html + unsubscribeFooter(doc.id)
@@ -871,20 +1367,51 @@ exports.dailyEmailReminders = onSchedule(
           sent++;
         } catch(e) { console.warn('Email failed:', u.email, e.message); }
       }
+    }
+    console.log(`Sent ${sent} reminder emails for tomorrow ${date}`);
+    return null;
+  }
+);
 
-      // Send push notification if user has FCM tokens
-      if (u.fcmTokens && Object.keys(u.fcmTokens).length > 0) {
-        const tokens = Object.keys(u.fcmTokens);
-        const eventCount = eventsSnap.size;
-        const firstEvent = eventsSnap.docs[0]?.data();
+// Daily push reminders - 8 AM Sydney, for same-day events.
+exports.dailyPushReminders = onSchedule(
+  { schedule: "0 8 * * *", timeZone: "Australia/Sydney", region: REGION },
+  async () => {
+    const date = todaySydney(0);
+    const eventsSnapRaw = await db.collection("events")
+      .where("status", "==", "active")
+      .where("eventDate", "==", date)
+      .get();
+
+    const visibleDocs = eventsSnapRaw.docs
+      .filter(d => d.data().hidden !== true)
+      .sort((a, b) => String(a.data().startTime || '').localeCompare(String(b.data().startTime || '')));
+    if (visibleDocs.length === 0) {
+      console.log(`No same-day events for push reminder on ${date}`);
+      return null;
+    }
+
+    let pushed = 0;
+    const allUsers = await db.collection('users').get();
+
+    for (const doc of allUsers.docs) {
+      const u = doc.data();
+      if (!isActiveDeliverableUser(u)) continue;
+      const userCity = getUserCity(u);
+      const cityDocs = visibleDocs.filter(eventDoc => getEventMetroArea(eventDoc.data()) === userCity);
+      if (cityDocs.length === 0) continue;
+      const eventCount = cityDocs.length;
+      const firstEvent = cityDocs[0]?.data();
+      const tokens = pushNotificationsEnabled(u) ? getUserFcmTokens(u) : [];
+      if (tokens.length > 0) {
         const pushMsg = {
           notification: {
-            title: `${EMAIL_ICON_MOON} ${eventCount} Community Event${eventCount !== 1 ? 's' : ''} Tomorrow`,
+            title: `${EMAIL_ICON_MOON} ${eventCount} Community Event${eventCount !== 1 ? 's' : ''} Today`,
             body: firstEvent
               ? `${firstEvent.startTime} - ${firstEvent.hostName} - ${firstEvent.address?.suburb || ''}`
-              : `Events on ${date}`,
+              : `Events today`,
           },
-          data: { date, url: 'https://communityevents.siza.info/app' },
+          data: { date, url: APP_DOWNLOAD_URL },
           tokens,
         };
         try {
@@ -893,8 +1420,7 @@ exports.dailyEmailReminders = onSchedule(
           // Remove invalid tokens
           const invalid = [];
           fcmRes.responses.forEach((r, i) => {
-            if (!r.success && (r.error?.code === 'messaging/invalid-registration-token' ||
-                               r.error?.code === 'messaging/registration-token-not-registered')) {
+            if (!r.success && invalidFcmTokenCodes(r.error?.code)) {
               invalid.push(tokens[i]);
             }
           });
@@ -906,7 +1432,7 @@ exports.dailyEmailReminders = onSchedule(
         } catch(e) { console.warn('Push failed for user:', u.email || doc.id, e.message); }
       }
     }
-    console.log(`Sent ${sent} reminder emails, ${pushed} push notifications for ${date}`);
+    console.log(`Sent ${pushed} same-day push notifications for ${date}`);
     return null;
   }
 );
@@ -948,37 +1474,59 @@ exports.dailyEventCleanup = onSchedule(
   }
 );
 
-// â”€â”€â”€ MONTHLY HIJRI REMINDER â€” 1st of month â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// â”€â”€â”€ HIJRI MONTH-END REMINDER â€” day before Hijri month end â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.monthlyHijriReminder = onSchedule(
-  { schedule: "0 8 1 * *", timeZone: "Australia/Sydney", region: REGION,
+  { schedule: "0 8 * * *", timeZone: "Australia/Sydney", region: REGION,
     secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM] },
   async () => {
     const transporter = buildTransporter({ SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS });
     if (!transporter) return null;
     const today = new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" });
+    const hijriRef = db.collection("settings").doc("hijriCalendar");
+    const hijriSnap = await hijriRef.get();
+    const hijriSettings = hijriSnap.exists ? hijriSnap.data() : {};
+    const overrides = hijriSettings.overrides || [];
+    const [ty, tm, td] = today.split("-").map(Number);
+    const hijriToday = gregToHijri(ty, tm, td, overrides);
+    const monthLength = hijriMonthLengthServer(hijriToday.year, hijriToday.month, overrides);
+    if (hijriToday.day !== monthLength - 1) {
+      console.log(`Skipping Hijri reminder for ${today}; Hijri day ${hijriToday.day}/${monthLength}`);
+      return null;
+    }
+    const reminderKey = `${hijriToday.year}-${String(hijriToday.month).padStart(2, "0")}`;
+    if (hijriSettings.lastMonthEndReminderKey === reminderKey) {
+      console.log(`Hijri reminder already sent for ${reminderKey}`);
+      return null;
+    }
+    const nextMonth = addHijriMonthsServer(hijriToday.year, hijriToday.month, 1);
     const snap = await db.collection("users")
       .where("role", "==", "superAdmin")
       .where("isActive", "==", true)
       .get();
+    let sent = 0;
     for (const doc of snap.docs) {
       const u = doc.data();
       if (!u.email) continue;
       await transporter.sendMail({
-        from: EMAIL_FROM.value() || SMTP_USER.value(),
+        ...emailEnvelope({ SMTP_HOST, SMTP_USER, EMAIL_FROM }, 'admin'),
         to: u.email,
-        subject: `${EMAIL_ICON_MOON} Community Events - Monthly Hijri Calendar Adjustment Reminder`,
+        subject: `${EMAIL_ICON_MOON} Community Events - Hijri Month-End Calendar Reminder`,
         html: `<div style="font-family:sans-serif;max-width:600px">
           <div style="background:linear-gradient(135deg,#0f766e,#0b5d57);padding:24px;border-radius:16px 16px 0 0">
-            <h2 style="color:white;margin:0">Hijri Calendar Adjustment Required</h2>
+            <h2 style="color:white;margin:0">Hijri Calendar Check Required</h2>
           </div>
           <div style="padding:24px;border:1px solid #e5e7eb">
             <p>Hi ${u.fullName || "Super Admin"},</p>
-            <p>This is your monthly reminder to verify the <strong>Hijri calendar adjustment</strong> in Community Events.</p>
-            <p>Today is <strong>${today}</strong>. Please go to Admin Dashboard â†’ Settings and enter the Gregorian date that corresponds to the 1st of the current Hijri month.</p>
+            <p>This is your reminder to prepare the next <strong>Hijri calendar adjustment</strong> in Community Events.</p>
+            <p>Today is <strong>${today}</strong>, calculated as <strong>${hijriToday.day} ${HIJRI_MONTH_NAMES_SERVER[hijriToday.month - 1]} ${hijriToday.year} AH</strong>.</p>
+            <p>The current Hijri month is expected to end on day <strong>${monthLength}</strong>. Please confirm the moon sighting and then go to Admin Dashboard - Settings to enter the Gregorian date for <strong>1 ${HIJRI_MONTH_NAMES_SERVER[nextMonth.month - 1]} ${nextMonth.year} AH</strong>.</p>
           </div>
         </div>`
       });
+      sent++;
     }
+    await hijriRef.set({ lastMonthEndReminderKey: reminderKey, lastMonthEndReminderSentAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+    console.log(`Sent ${sent} Hijri month-end reminder emails for ${reminderKey}`);
     return null;
   }
 );
@@ -1082,6 +1630,146 @@ async function findUserByEmailForMigration(email, currentUid) {
   return null;
 }
 
+function normalizeAuPhoneForMigration(value) {
+  const raw = String(value || "").trim();
+  const digits = raw.replace(/\D/g, "");
+  let canonical = "";
+  if (raw.startsWith("+614") && digits.length === 11) {
+    canonical = `+${digits}`;
+  } else if (digits.startsWith("614") && digits.length === 11) {
+    canonical = `+${digits}`;
+  } else if (digits.startsWith("04") && digits.length === 10) {
+    canonical = `+61${digits.slice(1)}`;
+  }
+  const local = canonical ? `0${canonical.slice(3)}` : "";
+  return { canonical, local, digits };
+}
+
+function profileHasPhone(data, canonicalPhone) {
+  if (!canonicalPhone) return false;
+  const fields = ["phone", "phoneNormalized", "phoneNumber", "mobile", "mobileNumber"];
+  return fields.some(field => normalizeAuPhoneForMigration(data?.[field]).canonical === canonicalPhone);
+}
+
+async function findUserByPhoneForMigration(phoneNumber, currentUid) {
+  const { canonical, local, digits } = normalizeAuPhoneForMigration(phoneNumber);
+  if (!canonical) return null;
+
+  const values = [...new Set([canonical, local, digits].filter(Boolean))];
+  const fields = ["phone", "phoneNormalized", "phoneNumber", "mobile", "mobileNumber"];
+  const candidates = new Map();
+
+  for (const field of fields) {
+    for (const value of values) {
+      const snap = await db.collection("users").where(field, "==", value).limit(5).get();
+      snap.docs.forEach(docSnap => candidates.set(docSnap.id, docSnap));
+    }
+  }
+
+  const ordered = [...candidates.values()];
+  for (const docSnap of ordered) {
+    if (docSnap.id === currentUid) continue;
+    const data = docSnap.data() || {};
+    if (!isActiveDeliverableUser(data)) continue;
+    if (profileHasPhone(data, canonical)) return { id: docSnap.id, data };
+  }
+
+  // Older records may have inconsistent phone formatting. The user base is
+  // small enough that a final scan is acceptable and avoids locking people out.
+  const allUsers = await db.collection("users").get();
+  for (const docSnap of allUsers.docs) {
+    if (docSnap.id === currentUid || candidates.has(docSnap.id)) continue;
+    const data = docSnap.data() || {};
+    if (!isActiveDeliverableUser(data)) continue;
+    if (profileHasPhone(data, canonical)) return { id: docSnap.id, data };
+  }
+
+  return null;
+}
+
+async function transferUserOwnedDocuments(collectionName, oldUid, phoneUid, migratedProfile, now) {
+  const snap = await db.collection(collectionName).where("createdByUserId", "==", oldUid).get();
+  let batch = db.batch();
+  let count = 0;
+  for (const ownedDoc of snap.docs) {
+    batch.update(ownedDoc.ref, {
+      createdByUserId: phoneUid,
+      createdByUserEmail: migratedProfile.email || "",
+      createdByName: migratedProfile.fullName || migratedProfile.email || "",
+      migratedFromUid: oldUid,
+      updatedAt: now,
+    });
+    count++;
+    if (count % 450 === 0) {
+      await batch.commit();
+      batch = db.batch();
+    }
+  }
+  if (count % 450 !== 0) await batch.commit();
+  return count;
+}
+
+async function migrateExistingProfileToPhoneUid(match, phoneUid, phoneNumber, emailFallback = "") {
+  const oldUid = match.id;
+  const oldData = match.data || {};
+  const now = admin.firestore.FieldValue.serverTimestamp();
+  const email = String(oldData.email || emailFallback || "").trim().toLowerCase();
+  const migratedProfile = {
+    ...oldData,
+    email,
+    emailLower: email,
+    phone: phoneNumber || oldData.phone || "",
+    phoneNormalized: normalizeAuPhoneForMigration(phoneNumber || oldData.phone).canonical || oldData.phoneNormalized || "",
+    phoneVerified: true,
+    migratedFromUid: oldUid,
+    migratedAt: now,
+    isActive: true,
+    migratedToUid: admin.firestore.FieldValue.delete(),
+    inactiveReason: admin.firestore.FieldValue.delete(),
+    updatedAt: now,
+  };
+
+  const phoneRef = db.collection("users").doc(phoneUid);
+  const oldRef = db.collection("users").doc(oldUid);
+  await phoneRef.set(migratedProfile, { merge: true });
+  const activeEventsTransferred = await transferUserOwnedDocuments("events", oldUid, phoneUid, migratedProfile, now);
+  const archivedEventsTransferred = await transferUserOwnedDocuments("archivedEvents", oldUid, phoneUid, migratedProfile, now);
+
+  const oldCalRef = db.collection("calendarSubscriptions").doc(oldUid);
+  const oldCal = await oldCalRef.get();
+  if (oldCal.exists) {
+    await db.collection("calendarSubscriptions").doc(phoneUid).set({
+      ...oldCal.data(),
+      uid: phoneUid,
+      migratedFromUid: oldUid,
+      updatedAt: now,
+    }, { merge: true });
+    await oldCalRef.delete().catch(error => {
+      console.warn(`Could not delete old calendar subscription ${oldUid}`, error);
+    });
+  }
+
+  await oldRef.delete().catch(error => {
+    console.warn(`Could not delete migrated profile ${oldUid}`, error);
+  });
+
+  return {
+    migrated: true,
+    fromUid: oldUid,
+    toUid: phoneUid,
+    eventsTransferred: activeEventsTransferred + archivedEventsTransferred,
+    activeEventsTransferred,
+    archivedEventsTransferred,
+    profile: {
+      fullName: migratedProfile.fullName || "",
+      email: migratedProfile.email || "",
+      role: migratedProfile.role || "user",
+      phone: migratedProfile.phone || "",
+      isActive: true,
+    },
+  };
+}
+
 exports.lookupPhoneAccountByEmail = onCall({ region: REGION }, async (request) => {
   const { HttpsError } = require("firebase-functions/v2/https");
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
@@ -1100,6 +1788,21 @@ exports.lookupPhoneAccountByEmail = onCall({ region: REGION }, async (request) =
   };
 });
 
+exports.migratePhoneAccountByPhone = onCall({ region: REGION }, async (request) => {
+  const { HttpsError } = require("firebase-functions/v2/https");
+  if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
+
+  const phoneUid = request.auth.uid;
+  const phoneNumber = request.auth.token.phone_number || "";
+  const currentSnap = await db.collection("users").doc(phoneUid).get();
+  const currentData = currentSnap.exists ? currentSnap.data() || {} : {};
+  const match = await findUserByPhoneForMigration(phoneNumber, phoneUid) ||
+    await findUserByEmailForMigration(currentData.email || currentData.emailLower, phoneUid);
+  if (!match) return { migrated: false };
+
+  return migrateExistingProfileToPhoneUid(match, phoneUid, phoneNumber);
+});
+
 exports.migratePhoneAccountByEmail = onCall({ region: REGION }, async (request) => {
   const { HttpsError } = require("firebase-functions/v2/https");
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
@@ -1109,81 +1812,15 @@ exports.migratePhoneAccountByEmail = onCall({ region: REGION }, async (request) 
   const match = await findUserByEmailForMigration(request.data?.email, phoneUid);
   if (!match) throw new HttpsError("not-found", "No existing account found for this email.");
 
-  const oldUid = match.id;
-  const oldData = match.data || {};
-  const now = admin.firestore.FieldValue.serverTimestamp();
-  const migratedProfile = {
-    ...oldData,
-    email: oldData.email || String(request.data?.email || "").trim().toLowerCase(),
-    emailLower: String(oldData.email || request.data?.email || "").trim().toLowerCase(),
-    phone: phoneNumber || oldData.phone || "",
-    phoneVerified: true,
-    migratedFromUid: oldUid,
-    migratedAt: now,
-    isActive: true,
-    updatedAt: now,
-  };
-
-  const phoneRef = db.collection("users").doc(phoneUid);
-  const oldRef = db.collection("users").doc(oldUid);
-  await phoneRef.set(migratedProfile, { merge: true });
-  await oldRef.set({
-    migratedToUid: phoneUid,
-    migratedAt: now,
-    isActive: false,
-    updatedAt: now,
-  }, { merge: true });
-
-  const eventsSnap = await db.collection("events").where("createdByUserId", "==", oldUid).get();
-  let batch = db.batch();
-  let count = 0;
-  for (const eventDoc of eventsSnap.docs) {
-    batch.update(eventDoc.ref, {
-      createdByUserId: phoneUid,
-      createdByUserEmail: migratedProfile.email || "",
-      createdByName: migratedProfile.fullName || migratedProfile.email || "",
-      migratedFromUid: oldUid,
-      updatedAt: now,
-    });
-    count++;
-    if (count % 450 === 0) {
-      await batch.commit();
-      batch = db.batch();
-    }
-  }
-  if (count % 450 !== 0) await batch.commit();
-
-  const oldCalRef = db.collection("calendarSubscriptions").doc(oldUid);
-  const oldCal = await oldCalRef.get();
-  if (oldCal.exists) {
-    await db.collection("calendarSubscriptions").doc(phoneUid).set({
-      ...oldCal.data(),
-      uid: phoneUid,
-      migratedFromUid: oldUid,
-      updatedAt: now,
-    }, { merge: true });
-  }
-
-  return {
-    migrated: true,
-    fromUid: oldUid,
-    toUid: phoneUid,
-    eventsTransferred: count,
-    profile: {
-      fullName: migratedProfile.fullName || "",
-      email: migratedProfile.email || "",
-      role: migratedProfile.role || "user",
-      phone: migratedProfile.phone || "",
-      isActive: true,
-    },
-  };
+  return migrateExistingProfileToPhoneUid(match, phoneUid, phoneNumber, request.data?.email);
 });
 
 // â”€â”€â”€ BULK IMPORT EVENTS (Callable) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new Error("Unauthenticated");
   const userDoc = await db.collection("users").doc(request.auth.uid).get();
-  const role = userDoc.data()?.role;
+  const callerData = userDoc.data() || {};
+  const role = callerData.role;
   if (role !== "admin" && role !== "superAdmin") throw new Error("Admins only");
 
   const { events: rawEvents } = request.data;
@@ -1265,6 +1902,19 @@ exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
     const latitude    = Number.isFinite(Number(row.latitude)) ? Number(row.latitude) : null;
     const longitude   = Number.isFinite(Number(row.longitude)) ? Number(row.longitude) : null;
     const fullAddress = row.fullAddress?.toString().trim() || `${street}, ${suburb} ${state} ${postcode}`.trim();
+    const addressData = {
+      street, suburb, state, postcode,
+      fullAddress,
+      latitude, longitude
+    };
+    const metroArea = classifyMetroArea(addressData);
+    if (role !== "superAdmin" && metroArea !== getUserCity(callerData)) {
+      errors.push({
+        row: i + 1,
+        errors: [`This event is in ${cityLabel(metroArea)}. Admin imports are limited to ${cityLabel(getUserCity(callerData))}.`],
+      });
+      continue;
+    }
 
     await db.collection("events").add({
       hostName:    row.hostName.toString().trim(),
@@ -1283,11 +1933,8 @@ exports.bulkImportEvents = onCall({ region: REGION }, async (request) => {
       isOnBehalfOf: true,   // Excel imports always on behalf of
       organiserType,
       hostContactOptional: row.hostContact?.toString().trim() || "",
-      address: {
-        street, suburb, state, postcode,
-        fullAddress,
-        latitude, longitude
-      },
+      address: addressData,
+      metroArea,
       speakerName: isReligious ? (row.speakerName?.toString().trim() || "") : "",
       reciters:    isReligious ? reciters : [],
       status: "active",
@@ -1317,7 +1964,8 @@ exports.sendRemindersNow = onCall(
   async (request) => {
     if (!request.auth) throw new Error("Unauthenticated");
     const userDoc = await db.collection("users").doc(request.auth.uid).get();
-    const role = userDoc.data()?.role;
+    const callerData = userDoc.data() || {};
+    const role = callerData.role;
     if (role !== "admin" && role !== "superAdmin") {
       throw new Error("Admin access required");
     }
@@ -1327,11 +1975,12 @@ exports.sendRemindersNow = onCall(
       throw new Error("Email is not configured. Please set SMTP_HOST, SMTP_USER and SMTP_PASS secrets.");
     }
 
-    const { mode, date, from, to, month, customMode = false, customMessage = '', customTemplate = '' } = request.data || {};
+    const { mode, date, from, to, month, customMode = false, customMessage = '', customTemplate = '', city } = request.data || {};
+    const cityScope = requestedCityScope(city, callerData);
     const todaySyd = new Date().toLocaleDateString("en-CA", { timeZone: "Australia/Sydney" });
 
     // Build Firestore query based on mode
-    let eventsQuery = db.collection("events").where("status", "==", "active").where("hidden", "!=", true);
+    let eventsQuery = db.collection("events").where("status", "==", "active");
     let label = "";
 
     if (mode === "range" && from && to) {
@@ -1353,9 +2002,18 @@ exports.sendRemindersNow = onCall(
 
     // Community updates and fixed announcement templates contain no event
     // table, so they must not depend on event query indexes.
-    const eventsSnap = customMode
+    const eventsSnapRaw = customMode
       ? { empty: true, docs: [], size: 0 }
       : await eventsQuery.get();
+    const scopedEventDocs = customMode
+      ? []
+      : eventsSnapRaw.docs.filter(docSnap => {
+          const eventData = docSnap.data();
+          return eventData.hidden !== true && eventInCityScope(eventData, cityScope);
+        });
+    const eventsSnap = customMode
+      ? eventsSnapRaw
+      : { empty: scopedEventDocs.length === 0, docs: scopedEventDocs, size: scopedEventDocs.length };
 
     // For custom messages, we don't need events â€” send to all users regardless
     if (eventsSnap.empty && !customMode) {
@@ -1366,12 +2024,13 @@ exports.sendRemindersNow = onCall(
       ? ""
       : buildGroupedEmailEventTables(eventsSnap.docs.map(d => d.data()));
 
-    const sentBy = userDoc.data()?.fullName || userDoc.data()?.email || "Admin";
+    const sentBy = callerData.fullName || callerData.email || "Admin";
+    const scopeLabel = cityScope === "all" ? "all cities" : cityLabel(cityScope);
 
     const html = `<div style="font-family:sans-serif;max-width:700px">
       <div style="background:linear-gradient(135deg,#0f766e,#0b5d57);padding:24px;border-radius:16px 16px 0 0">
         <h2 style="color:white;margin:0">Community Events</h2>
-        <p style="color:#e0f2fe;margin:4px 0 0">Events for ${label}</p>
+        <p style="color:#e0f2fe;margin:4px 0 0">Events for ${label} - ${scopeLabel}</p>
       </div>
       <div style="padding:18px;background:#ffffff">${eventSections}</div>
       <p style="color:#6b7280;font-size:12px;padding:16px">
@@ -1388,11 +2047,15 @@ exports.sendRemindersNow = onCall(
     const errors = [];
     for (const doc of usersSnap.docs) {
       const u = doc.data();
-      if (u.isActive === false || u.migratedToUid) continue;
+      if (!isActiveDeliverableUser(u)) continue;
+      if (!userInCityScope(u, cityScope)) continue;
       if (!u.email) continue;
       try {
         await transporter.sendMail({
-          from: EMAIL_FROM.value() || SMTP_USER.value(),
+          ...emailEnvelope(
+            { SMTP_HOST, SMTP_USER, EMAIL_FROM },
+            customMode ? 'updates' : 'reminders'
+          ),
           to: u.email,
           subject: customMode
             ? (customTemplate === 'storeAnnouncement'
@@ -1425,8 +2088,8 @@ exports.sendRemindersNow = onCall(
       failed: errors.length,
       events: eventsSnap.size,
       message: customMode
-        ? `Sent to ${sent} user(s)${errors.length ? ` Â· ${errors.length} failed` : ''}.`
-        : `Sent to ${sent} user(s) Â· ${eventsSnap.size} event(s) included${errors.length ? ` Â· ${errors.length} failed` : ''}.`
+        ? `Sent to ${sent} user(s) in ${scopeLabel}${errors.length ? ` Â· ${errors.length} failed` : ''}.`
+        : `Sent to ${sent} user(s) in ${scopeLabel} Â· ${eventsSnap.size} event(s) included${errors.length ? ` Â· ${errors.length} failed` : ''}.`
     };
   }
 );
@@ -1441,9 +2104,9 @@ exports.recalculateHijriEvents = onCall(
     if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
     const userDoc = await db.collection("users").doc(request.auth.uid).get();
     const role = userDoc.data()?.role;
-    if (role !== "admin" && role !== "superAdmin") throw new HttpsError("permission-denied", "Admin access required.");
+    if (role !== "superAdmin") throw new HttpsError("permission-denied", "Super Admin access required.");
 
-    const { adjustmentDays } = request.data;
+    const adjustmentDays = Number(request.data?.adjustmentDays ?? 0);
 
     // Always read overrides directly from Firestore â€” most up to date
     const settingsSnap = await db.collection("settings").doc("hijriCalendar").get();
@@ -1472,11 +2135,9 @@ exports.recalculateHijriEvents = onCall(
         const newGreg = hijriToGregorianServer(hijriDay, hijriMonth, hijriYear, newOverrides || []);
         if (!newGreg) continue;
 
-        // Build hijriDate display from original components (exact â€” never changes)
-        const HIJRI_MN = ["Muharram","Safar","Rabi al-Awwal","Rabi al-Thani",
-          "Jumada al-Awwal","Jumada al-Thani","Rajab","Sha'ban",
-          "Ramadan","Shawwal","Dhu al-Qi'dah","Dhu al-Hijjah"];
-        const hijriDate = `${hijriDay} ${HIJRI_MN[hijriMonth - 1]} ${hijriYear} AH`;
+        // Build the visible Hijri label from the recalculated Gregorian date
+        // and the current overrides, so the UI reflects the same adjustment.
+        const hijriDate = computeHijriDate(newGreg, newOverrides || []);
 
         batch.update(doc.ref, {
           eventDate: newGreg,
@@ -1535,11 +2196,11 @@ exports.adminDeleteUser = onCall(
 
     if (!request.auth) throw new HttpsError("unauthenticated", "You must be logged in.");
 
-    // Admins and super admins can delete users
+    // Account deletion/ban is deliberately limited to Super Admins.
     const callerDoc = await db.collection("users").doc(request.auth.uid).get();
     const callerRole = callerDoc.data()?.role;
-    if (callerRole !== "admin" && callerRole !== "superAdmin") {
-      throw new HttpsError("permission-denied", "Admin access required to delete users.");
+    if (callerRole !== "superAdmin") {
+      throw new HttpsError("permission-denied", "Super Admin access required to delete users.");
     }
 
     const { targetUid, ban = false } = request.data;
@@ -1554,6 +2215,9 @@ exports.adminDeleteUser = onCall(
       throw new HttpsError("not-found", "User not found in database.");
     }
     const targetData = targetDoc.data() || {};
+    if (!adminCanAccessUser(callerDoc.data() || {}, targetData)) {
+      throw new HttpsError("permission-denied", "You can only manage users in your city.");
+    }
     if (targetData.role === "superAdmin") {
       const saSnap = await db.collection("users")
         .where("role", "==", "superAdmin")
@@ -1611,20 +2275,37 @@ exports.transferEventOwnership = onCall({ region: REGION }, async (request) => {
   const { HttpsError } = require("firebase-functions/v2/https");
   if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
   const callerDoc = await db.collection("users").doc(request.auth.uid).get();
-  const role = callerDoc.data()?.role || "user";
+  const callerData = callerDoc.data() || {};
+  const role = callerData.role || "user";
   if (!["admin","superAdmin"].includes(role))
     throw new HttpsError("permission-denied", "Admin access required.");
-  const { fromUid, toUid } = request.data;
-  if (!fromUid || !toUid) throw new HttpsError("invalid-argument", "fromUid and toUid required.");
+  const { fromUid, toUid, eventIds } = request.data;
+  if (!toUid) throw new HttpsError("invalid-argument", "toUid required.");
   const toDoc = await db.collection("users").doc(toUid).get();
   if (!toDoc.exists) throw new HttpsError("not-found", "Target user not found.");
   const toData = toDoc.data();
-  const snap = await db.collection("events").where("createdByUserId","==",fromUid).get();
+  if (!adminCanAccessUser(callerData, toData || {})) {
+    throw new HttpsError("permission-denied", "You can only transfer events to a user in your city.");
+  }
+  let eventDocs = [];
+  if (Array.isArray(eventIds) && eventIds.length > 0) {
+    if (eventIds.length > 500) throw new HttpsError("invalid-argument", "Select 500 events or fewer.");
+    eventDocs = await Promise.all(eventIds.map(id => db.collection("events").doc(String(id)).get()));
+  } else {
+    if (!fromUid) throw new HttpsError("invalid-argument", "fromUid or eventIds required.");
+    const snap = await db.collection("events").where("createdByUserId","==",fromUid).get();
+    eventDocs = snap.docs;
+  }
   let batch = db.batch(); let count = 0;
-  for (const doc of snap.docs) {
+  for (const doc of eventDocs) {
+    if (!doc.exists) continue;
+    if (!adminCanAccessEvent(callerData, doc.data() || {})) {
+      throw new HttpsError("permission-denied", "One or more selected events are outside your city.");
+    }
     batch.update(doc.ref, {
       createdByUserId: toUid,
       createdByName:   toData.fullName || toData.email || "",
+      createdByUserEmail: toData.email || "",
       updatedAt:       admin.firestore.FieldValue.serverTimestamp(),
     });
     count++;
@@ -1639,11 +2320,12 @@ exports.adminUnbanUser = onCall(
     const { HttpsError } = require("firebase-functions/v2/https");
     if (!request.auth) throw new HttpsError("unauthenticated", "Login required.");
 
-    // Verify caller is admin
+    // Verify caller is Super Admin. Unban can restore roles and old profile
+    // data, so it must not be available to city admins.
     const callerDoc = await db.collection("users").doc(request.auth.uid).get();
     const role = callerDoc.data()?.role;
-    if (role !== "admin" && role !== "superAdmin")
-      throw new HttpsError("permission-denied", "Admin access required.");
+    if (role !== "superAdmin")
+      throw new HttpsError("permission-denied", "Super Admin access required.");
 
     const { bannedDocId, uid, email, fullName } = request.data;
     if (!bannedDocId) throw new HttpsError("invalid-argument", "Missing bannedDocId.");
@@ -1683,7 +2365,7 @@ exports.adminUnbanUser = onCall(
 
 // â”€â”€â”€ EMAIL HELPERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const APP_URL = 'https://communityevents.siza.info';
-const APP_OPEN_URL = 'https://communityevents.siza.info/app';
+const APP_DOWNLOAD_URL = 'https://download.communityevents.siza.info';
 
 exports.submitAiContentReport = onRequest(
   { region: REGION, cors: true },
@@ -1767,7 +2449,7 @@ exports.onAiReportCreated = onDocumentCreated(
     const consoleUrl = `https://console.firebase.google.com/project/community-event-8b639/firestore/databases/-default-/data/~2Fai_reports~2F${encodeURIComponent(reportId)}`;
 
     await transporter.sendMail({
-      from: EMAIL_FROM.value() || SMTP_USER.value(),
+      ...emailEnvelope({ SMTP_HOST, SMTP_USER, EMAIL_FROM }, 'admin'),
       to: 'communityeventssydney@gmail.com',
       subject: `[AI Response Report] ${String(report.reason || 'Review required').slice(0, 120)}`,
       html: `
@@ -1853,7 +2535,7 @@ function unsubscribeFooter(uid = '') {
         You are receiving this email because you registered with Community Events Australia.<br/>
         <a href="${unsubUrl}" style="color:#6b7280;text-decoration:underline">Unsubscribe from reminder emails</a>
         &nbsp;Â·&nbsp;
-        <a href="${APP_OPEN_URL}" style="color:#6b7280;text-decoration:underline">Open App</a>
+        <a href="${APP_DOWNLOAD_URL}" style="color:#6b7280;text-decoration:underline">Open / Download App</a>
         &nbsp;Â·&nbsp;
         <a href="mailto:communityeventssydney@gmail.com" style="color:#6b7280;text-decoration:underline">Contact Us</a>
       </p>
@@ -1861,7 +2543,7 @@ function unsubscribeFooter(uid = '') {
 }
 
 // â”€â”€â”€ SUPER ADMIN NOTIFICATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-async function notifySuperAdmin(subject, bodyHtml, secrets) {
+async function notifySuperAdmin(subject, bodyHtml, secrets, scopeCity = "all") {
   try {
     // Fetch ALL superAdmin AND admin emails dynamically
     const superAdminsSnap = await db.collection('users')
@@ -1869,7 +2551,8 @@ async function notifySuperAdmin(subject, bodyHtml, secrets) {
 
     const adminProfiles = superAdminsSnap.docs
       .map(docSnap => docSnap.data() || {})
-      .filter(profile => profile.isActive !== false && !profile.migratedToUid);
+      .filter(profile => isActiveDeliverableUser(profile))
+      .filter(profile => profile.role === "superAdmin" || userInCityScope(profile, scopeCity));
 
     // Aggregate by email so an explicit unsubscribe wins even if historical
     // duplicate profiles still exist for the same administrator address.
@@ -1888,7 +2571,7 @@ async function notifySuperAdmin(subject, bodyHtml, secrets) {
 
     const transporter = buildTransporter(secrets);
     await transporter.sendMail({
-      from: secrets.EMAIL_FROM.value() || secrets.SMTP_USER.value(),
+      ...emailEnvelope(secrets, 'admin'),
       to:   emails.join(', '),
       subject,
       html: bodyHtml,
@@ -1924,7 +2607,8 @@ exports.onEventCreated = onDocumentCreated(
           <p><strong>Added by:</strong> ${data.createdByName || data.createdByUserId}</p>
         </div>
       </div>`,
-      { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM }
+      { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM },
+      getEventMetroArea(data)
     );
   }
 );
@@ -1956,7 +2640,8 @@ exports.onEventDeleted = onDocumentDeleted(
           <p><strong>Originally added by:</strong> ${data.createdByName || data.createdByUserId}</p>
         </div>
       </div>`,
-      { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM }
+      { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM },
+      getEventMetroArea(data)
     );
   }
 );
@@ -1992,7 +2677,8 @@ exports.onUserCreated = onDocumentCreated(
           <p><strong>Registered:</strong> ${new Date().toLocaleString('en-AU', {timeZone:'Australia/Sydney'})}</p>
         </div>
       </div>`,
-      { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM }
+      { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM },
+      getUserCity(data)
     );
   }
 );
@@ -2145,15 +2831,27 @@ exports.notifyEventLive = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new Error('Unauthenticated');
   const { eventId, eventTitle, hostName } = request.data || {};
   if (!eventId || !eventTitle) throw new Error('Missing eventId or eventTitle');
+  const [callerSnap, eventSnap] = await Promise.all([
+    db.collection('users').doc(request.auth.uid).get(),
+    db.collection('events').doc(eventId).get(),
+  ]);
+  if (!eventSnap.exists) throw new HttpsError('not-found', 'Event not found.');
+  const callerData = callerSnap.data() || {};
+  const eventData = eventSnap.data() || {};
+  if (eventData.createdByUserId !== request.auth.uid && !adminCanAccessEvent(callerData, eventData)) {
+    throw new HttpsError('permission-denied', 'You can only notify users for events in your city.');
+  }
+  const eventCity = getEventMetroArea(eventData);
 
-  // Get all user FCM tokens
+  // Get all active user FCM tokens. Older web tokens are stored as a map,
+  // while some legacy rows may still have an array.
   const usersSnap = await db.collection('users').get();
   const tokens = [];
   usersSnap.forEach(doc => {
     const u = doc.data();
-    if (u.fcmTokens && Array.isArray(u.fcmTokens)) {
-      tokens.push(...u.fcmTokens.filter(Boolean));
-    }
+    if (!isActiveDeliverableUser(u) || !pushNotificationsEnabled(u)) return;
+    if (!userInCityScope(u, eventCity)) return;
+    tokens.push(...getUserFcmTokens(u));
   });
 
   if (tokens.length === 0) return { sent: 0 };
@@ -2186,6 +2884,63 @@ exports.notifyEventLive = onCall({ region: REGION }, async (request) => {
   }
 
   return { sent };
+});
+
+exports.sendTestPushNotification = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+  const userRef = db.collection('users').doc(request.auth.uid);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) throw new HttpsError('not-found', 'User profile not found.');
+
+  const user = userSnap.data();
+  if (!pushNotificationsEnabled(user)) {
+    throw new HttpsError('failed-precondition', 'Push notifications are disabled for this account.');
+  }
+
+  const entries = getUserFcmTokenEntries(user);
+  const tokens = entries.map(entry => entry.token);
+  const tokenSummary = entries.reduce((acc, entry) => {
+    const key = `${entry.platform || 'unknown'}:${entry.source || 'unknown'}`;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  if (tokens.length === 0) return { sent: 0, tokenCount: 0, tokenSummary, failures: [] };
+
+  const res = await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: {
+      title: 'Community Events notifications are working',
+      body: 'You will receive enabled event alerts on this device.',
+    },
+    data: { type: 'test', url: APP_DOWNLOAD_URL },
+    android: { priority: 'high' },
+    apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+  });
+
+  const updates = {};
+  const failures = [];
+  res.responses.forEach((r, i) => {
+    if (!r.success) {
+      const entry = entries[i] || {};
+      failures.push({
+        platform: entry.platform || 'unknown',
+        source: entry.source || 'unknown',
+        code: r.error?.code || 'unknown',
+      });
+      if (invalidFcmTokenCodes(r.error?.code)) {
+        updates[`fcmTokens.${tokens[i]}`] = admin.firestore.FieldValue.delete();
+      }
+    }
+  });
+  if (Object.keys(updates).length > 0) await userRef.update(updates);
+
+  return {
+    sent: res.successCount,
+    tokenCount: tokens.length,
+    tokenSummary,
+    failures,
+    invalidRemoved: Object.keys(updates).length,
+  };
 });
 
 // â”€â”€â”€ GUEST EVENT EDIT â€” OTP SEND â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -2238,7 +2993,7 @@ exports.sendEditOtp = onCall(
       // Send via email
       const transporter = buildTransporter({ SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS });
       await transporter.sendMail({
-        from: EMAIL_FROM.value() || SMTP_USER.value(),
+        ...emailEnvelope({ SMTP_HOST, SMTP_USER, EMAIL_FROM }, 'updates'),
         to:   contact.trim(),
         subject: `${EMAIL_ICON_KEY} Community Events - Your edit verification code`,
         html: `
@@ -2676,7 +3431,7 @@ function eventDataFromStreamRecord(data = {}) {
 // Step 3 â€” Create a new YouTube broadcast and return stream URL
 async function createYouTubeBroadcast(accessToken, title, privacyStatus = 'public') {
   const now       = new Date();
-  const startTime = new Date(now.getTime() + 30000).toISOString(); // 30 seconds from now
+  const startTime = new Date(now.getTime() + 5000).toISOString(); // near-immediate start for native RTMPS
 
   // Create broadcast
   const broadcastRes = await fetch(
@@ -2878,6 +3633,133 @@ async function syncStreamVideoAvailability({ force = false } = {}) {
   await batch.commit();
 }
 
+async function catalogPublicYouTubeChannelVideos({ force = false } = {}) {
+  const catalogVersion = 3;
+  const healthRef = db.collection('system').doc('stream_video_youtube_catalog_health');
+  const healthSnap = await healthRef.get();
+  const lastCheckedAt = new Date(healthSnap.data()?.checkedAt || 0).getTime();
+  if (
+    !force &&
+    healthSnap.data()?.catalogVersion === catalogVersion &&
+    Date.now() - lastCheckedAt < 30 * 60 * 1000
+  ) return { imported: 0, skipped: true };
+
+  const accessToken = await getYouTubeAccessToken();
+  const headers = { 'Authorization': `Bearer ${accessToken}` };
+  const channelRes = await fetch(
+    'https://www.googleapis.com/youtube/v3/channels?part=id,contentDetails&mine=true',
+    { headers }
+  );
+  const channelPayload = await channelRes.json();
+  if (!channelRes.ok || channelPayload.error) {
+    throw new Error(channelPayload.error?.message || `YouTube channel lookup failed (${channelRes.status})`);
+  }
+  const channelId = channelPayload.items?.[0]?.id || '';
+  const uploadsPlaylistId = channelPayload.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
+  if (!uploadsPlaylistId) {
+    await healthRef.set({ checkedAt: new Date().toISOString(), imported: 0, catalogVersion, reason: 'missing-uploads-playlist' }, { merge: true });
+    return { imported: 0 };
+  }
+
+  const videoIds = new Set();
+  let pageToken = '';
+  while (videoIds.size < 100) {
+    const url = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+    url.searchParams.set('part', 'contentDetails');
+    url.searchParams.set('playlistId', uploadsPlaylistId);
+    url.searchParams.set('maxResults', '50');
+    if (pageToken) url.searchParams.set('pageToken', pageToken);
+    const playlistRes = await fetch(url.toString(), { headers });
+    const playlistPayload = await playlistRes.json();
+    if (!playlistRes.ok || playlistPayload.error) {
+      throw new Error(playlistPayload.error?.message || `YouTube uploads lookup failed (${playlistRes.status})`);
+    }
+    for (const item of playlistPayload.items || []) {
+      if (item.contentDetails?.videoId) videoIds.add(item.contentDetails.videoId);
+      if (videoIds.size >= 100) break;
+    }
+    pageToken = playlistPayload.nextPageToken || '';
+    if (!pageToken) break;
+  }
+
+  if (channelId) {
+    pageToken = '';
+    while (videoIds.size < 100) {
+      const url = new URL('https://www.googleapis.com/youtube/v3/search');
+      url.searchParams.set('part', 'id');
+      url.searchParams.set('channelId', channelId);
+      url.searchParams.set('type', 'video');
+      url.searchParams.set('order', 'date');
+      url.searchParams.set('maxResults', '50');
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const searchRes = await fetch(url.toString(), { headers });
+      const searchPayload = await searchRes.json();
+      if (!searchRes.ok || searchPayload.error) {
+        console.warn('[StreamVideos] YouTube channel search skipped:', searchPayload.error?.message || `YouTube channel search failed (${searchRes.status})`);
+        break;
+      }
+      for (const item of searchPayload.items || []) {
+        if (item.id?.videoId) videoIds.add(item.id.videoId);
+        if (videoIds.size >= 100) break;
+      }
+      pageToken = searchPayload.nextPageToken || '';
+      if (!pageToken) break;
+    }
+  }
+
+  const videoIdList = [...videoIds];
+  if (!videoIdList.length) {
+    await healthRef.set({ checkedAt: new Date().toISOString(), imported: 0, catalogVersion }, { merge: true });
+    return { imported: 0 };
+  }
+
+  let imported = 0;
+  const checkedAt = new Date().toISOString();
+  for (let offset = 0; offset < videoIdList.length; offset += 50) {
+    const ids = videoIdList.slice(offset, offset + 50);
+    const videoRes = await fetch(
+      `https://www.googleapis.com/youtube/v3/videos?part=id,snippet,status,liveStreamingDetails&id=${encodeURIComponent(ids.join(','))}`,
+      { headers }
+    );
+    const videoPayload = await videoRes.json();
+    if (!videoRes.ok || videoPayload.error) {
+      throw new Error(videoPayload.error?.message || `YouTube videos lookup failed (${videoRes.status})`);
+    }
+
+    const batch = db.batch();
+    for (const item of videoPayload.items || []) {
+      if (item.status?.privacyStatus !== 'public') continue;
+      const existingByVideoId = await db.collection('streamVideos').where('videoId', '==', item.id).limit(1).get();
+      const ref = existingByVideoId.empty
+        ? db.collection('streamVideos').doc(item.id)
+        : existingByVideoId.docs[0].ref;
+      const existing = existingByVideoId.empty ? await ref.get() : existingByVideoId.docs[0];
+      const snippet = item.snippet || {};
+      const startedAt = item.liveStreamingDetails?.actualStartTime || snippet.publishedAt || checkedAt;
+      batch.set(ref, {
+        videoId: item.id,
+        watchUrl: `https://www.youtube.com/watch?v=${item.id}`,
+        youtubeTitle: snippet.title || 'Community Event Stream',
+        eventTitle: snippet.title || 'Community Event Stream',
+        source: existing.exists ? (existing.data()?.source || 'youtube-channel') : 'youtube-channel',
+        privacyStatus: 'public',
+        appVisibility: 'public',
+        status: existing.exists ? (existing.data()?.status || 'completed') : 'completed',
+        startedAt: existing.exists ? (existing.data()?.startedAt || startedAt) : startedAt,
+        youtubeAvailable: true,
+        youtubeCheckedAt: checkedAt,
+        cataloguedFromYouTubeAt: checkedAt,
+      }, { merge: true });
+      if (!existing.exists) imported++;
+    }
+    await batch.commit();
+  }
+
+  await healthRef.set({ checkedAt, imported, catalogVersion }, { merge: true });
+  console.log(`[StreamVideos] YouTube catalogue checked ${videoIdList.length} videos; imported ${imported}.`);
+  return { imported };
+}
+
 // Returns stream metadata to everyone, but only registered users receive the
 // YouTube URL. This is enforced server-side so guests cannot recover unlisted
 // links by inspecting Firestore or the network response.
@@ -2934,17 +3816,25 @@ exports.listStreamVideos = onCall(
     }
   }
 
+  await catalogPublicYouTubeChannelVideos().catch(error => {
+    console.warn('[StreamVideos] YouTube channel catalogue skipped:', error.message);
+  });
+
   await syncStreamVideoAvailability({ force: true }).catch(error => {
     // A temporary YouTube/API error must not make the archive disappear.
     console.warn('[StreamVideos] Availability sync skipped:', error.message);
   });
 
-  const snap = await db.collection('streamVideos').orderBy('startedAt', 'desc').limit(100).get();
-  const videos = snap.docs
-  .filter(docSnap => docSnap.data().youtubeAvailable !== false)
-  .filter(docSnap => docSnap.data().appVisibility !== 'private')
-  .map(docSnap => {
+  const snap = await db.collection('streamVideos').orderBy('startedAt', 'desc').limit(500).get();
+  const videos = [];
+  const seenVideoIds = new Set();
+  for (const docSnap of snap.docs) {
     const data = docSnap.data();
+    if (data.youtubeAvailable === false) continue;
+    if (data.appVisibility === 'private') continue;
+    const videoKey = data.videoId || docSnap.id;
+    if (videoKey && seenVideoIds.has(videoKey)) continue;
+    if (videoKey) seenVideoIds.add(videoKey);
     const item = {
       id: docSnap.id,
       eventId: data.eventId || null,
@@ -2953,6 +3843,9 @@ exports.listStreamVideos = onCall(
       hostName: data.hostName || '',
       organiserType: data.organiserType || '',
       source: data.source || 'native',
+      streamCategory: ['external-youtube', 'youtube-channel'].includes(data.source)
+        ? 'other-device'
+        : 'same-device',
       privacyStatus: data.privacyStatus === 'unlisted' ? 'unlisted' : 'public',
       appVisibility: data.appVisibility === 'private' ? 'private' : 'public',
       status: data.status || 'completed',
@@ -2963,8 +3856,8 @@ exports.listStreamVideos = onCall(
       item.videoId = data.videoId || '';
       item.watchUrl = data.watchUrl || null;
     }
-    return item;
-  });
+    videos.push(item);
+  }
 
   return { videos, canWatch: isRegistered };
   }
@@ -3099,7 +3992,7 @@ exports.nativeStreamStart = onCall(
   { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
-    const { useOAuth, manualRtmpKey, eventTitle, eventId, qualityProfile, audioMode, testMode, protocolVersion } = request.data || {};
+    const { useOAuth, manualRtmpKey, eventTitle, eventId, qualityProfile, audioMode, testMode, protocolVersion, directNative } = request.data || {};
     const privacyStatus = request.data?.privacyStatus === 'unlisted' ? 'unlisted' : 'public';
     const appVisibility = privacyStatus === 'unlisted' ? 'private' : 'public';
     let eventData = null;
@@ -3113,7 +4006,8 @@ exports.nativeStreamStart = onCall(
       : protocolVersion === 2;
     if (requiresAdminCheck) {
       const userSnap = await db.collection('users').doc(request.auth.uid).get();
-      if (!['admin', 'superAdmin'].includes(userSnap.data()?.role)) {
+      const callerData = userSnap.data() || {};
+      if (!adminCanAccessEvent(callerData, eventData || {})) {
         throw new HttpsError('permission-denied', 'Not authorised to stream this event.');
       }
     }
@@ -3240,7 +4134,14 @@ exports.nativeStreamStart = onCall(
 
     const wsUrl = `${RELAY_URL}/stream?session=${sessionId}`;
     console.log(`[NativeStream] Session ${sessionId} created for uid ${request.auth.uid}`);
-    return { wsUrl, watchUrl, sessionId, streamToken, rtmpTarget: rtmpUrl.replace(/\/[^/]+$/, '/REDACTED') };
+    return {
+      wsUrl,
+      watchUrl,
+      sessionId,
+      streamToken,
+      ...(directNative ? { rtmpUrl } : {}),
+      rtmpTarget: rtmpUrl.replace(/\/[^/]+$/, '/REDACTED'),
+    };
   }
 );
 
@@ -3249,7 +4150,7 @@ exports.nativeStreamResume = onCall(
   { region: REGION },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
-    const { eventId, sessionId } = request.data || {};
+    const { eventId, sessionId, directNative } = request.data || {};
     if (!eventId || !sessionId) throw new HttpsError('invalid-argument', 'eventId and sessionId required.');
 
     const [eventSnap, sessionSnap] = await Promise.all([
@@ -3264,7 +4165,8 @@ exports.nativeStreamResume = onCall(
     }
     if (eventData.createdByUserId !== request.auth.uid) {
       const userSnap = await db.collection('users').doc(request.auth.uid).get();
-      if (!['admin', 'superAdmin'].includes(userSnap.data()?.role)) {
+      const callerData = userSnap.data() || {};
+      if (!adminCanAccessEvent(callerData, eventData || {})) {
         throw new HttpsError('permission-denied', 'Not authorised to resume this event.');
       }
     }
@@ -3297,9 +4199,56 @@ exports.nativeStreamResume = onCall(
       watchUrl: session.watchUrl,
       sessionId,
       streamToken,
+      ...(directNative ? { rtmpUrl: session.rtmpUrl } : {}),
       qualityProfile: session.qualityProfile || '720p',
       audioMode: session.audioMode || 'natural',
     };
+  }
+);
+
+exports.sendPrivateStreamLinkEmail = onCall(
+  { region: REGION, secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM] },
+  async (request) => {
+    if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
+    const sessionId = String(request.data?.sessionId || '').trim();
+    if (!sessionId) throw new HttpsError('invalid-argument', 'sessionId required.');
+
+    const sessionRef = db.collection('nativeStreamSessions').doc(sessionId);
+    const sessionSnap = await sessionRef.get();
+    if (!sessionSnap.exists) throw new HttpsError('not-found', 'Stream session not found.');
+    const session = sessionSnap.data();
+
+    let eventData = {};
+    if (session.eventId) {
+      const eventSnap = await db.collection('events').doc(session.eventId).get();
+      if (eventSnap.exists) eventData = eventSnap.data();
+    }
+
+    if (session.uid !== request.auth.uid) {
+      const userSnap = await db.collection('users').doc(request.auth.uid).get();
+      const callerData = userSnap.data() || {};
+      if (!adminCanAccessEvent(callerData, eventData || {})) {
+        throw new HttpsError('permission-denied', 'Not authorised to email this private stream link.');
+      }
+    }
+
+    if (session.appVisibility !== 'private' && session.privacyStatus !== 'unlisted') {
+      return { sent: false, reason: 'not-private' };
+    }
+    if (!session.watchUrl) return { sent: false, reason: 'missing-url' };
+
+    const streamVideoRef = session.broadcastId
+      ? db.collection('streamVideos').doc(session.broadcastId)
+      : null;
+
+    return sendPrivateStreamLinkToHost({
+      secrets: { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM },
+      uid: session.uid,
+      eventData,
+      watchUrl: session.watchUrl,
+      sessionRef,
+      streamVideoRef,
+    });
   }
 );
 
@@ -3325,7 +4274,9 @@ exports.nativeStreamStop = onCall(
 );
 
 // Connect a YouTube Live broadcast created on another device to an event.
-exports.startExternalYouTubeStream = onCall({ region: REGION }, async (request) => {
+exports.startExternalYouTubeStream = onCall(
+  { region: REGION, secrets: [SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM, YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
+  async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
   const eventId = String(request.data?.eventId || '').trim();
   const rawUrl = String(request.data?.youtubeUrl || '').trim();
@@ -3340,7 +4291,8 @@ exports.startExternalYouTubeStream = onCall({ region: REGION }, async (request) 
   const isOwner = eventData.createdByUserId === request.auth.uid;
   if (!isOwner) {
     const userSnap = await db.collection('users').doc(request.auth.uid).get();
-    if (!['admin', 'superAdmin'].includes(userSnap.data()?.role)) {
+    const callerData = userSnap.data() || {};
+    if (!adminCanAccessEvent(callerData, eventData || {})) {
       throw new HttpsError('permission-denied', 'Not authorised to stream this event.');
     }
   }
@@ -3413,6 +4365,19 @@ exports.startExternalYouTubeStream = onCall({ region: REGION }, async (request) 
     endedAt:null,
     createdAt:admin.firestore.FieldValue.serverTimestamp(),
   }, { merge:true });
+  if (appVisibility === 'private') {
+    try {
+      await sendPrivateStreamLinkToHost({
+        secrets: { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM },
+        uid: request.auth.uid,
+        eventData,
+        watchUrl,
+        streamVideoRef: db.collection('streamVideos').doc(videoRecordId),
+      });
+    } catch (error) {
+      console.warn(`[ExternalStream] Could not email private stream link for ${videoRecordId}:`, error.message);
+    }
+  }
   setStreamThumbnailForVideo({
     videoId,
     eventData,
@@ -3436,7 +4401,8 @@ exports.endExternalYouTubeStream = onCall({ region: REGION }, async (request) =>
   const isOwner = eventData.createdByUserId === request.auth.uid;
   if (!isOwner) {
     const userSnap = await db.collection('users').doc(request.auth.uid).get();
-    if (!['admin', 'superAdmin'].includes(userSnap.data()?.role)) {
+    const callerData = userSnap.data() || {};
+    if (!adminCanAccessEvent(callerData, eventData || {})) {
       throw new HttpsError('permission-denied', 'Not authorised to end this live event.');
     }
   }
@@ -3570,8 +4536,8 @@ exports.nativeStreamEndEvent = onCall(
     const isOwner = eventData.createdByUserId === request.auth.uid;
     if (!isOwner) {
       const userDoc = await db.collection('users').doc(request.auth.uid).get();
-      const role = userDoc.data()?.role;
-      if (role !== 'admin' && role !== 'superAdmin') {
+      const callerData = userDoc.data() || {};
+      if (!adminCanAccessEvent(callerData, eventData || {})) {
         throw new HttpsError('permission-denied', 'Not your event.');
       }
     }
@@ -3589,14 +4555,13 @@ exports.nativeStreamEndEvent = onCall(
       }
     }
 
-    // 2. Transition YouTube broadcast to 'complete' â€” this cleanly ends the
-    //    YouTube stream for all viewers, replacing the endless buffering state
-    //    that occurs when the RTMP connection is simply dropped without a proper
-    //    broadcast end signal. Fire-and-forget with error logging.
+    // 2. End or delete the YouTube broadcast. If Android created the broadcast
+    //    but never delivered media, YouTube leaves it waiting; those are deleted.
+    //    Real live broadcasts are transitioned to complete for viewers.
+    let youtubeCleanup = { deleted: false, completed: false };
     if (broadcastId) {
       try {
         const accessToken = await getYouTubeAccessToken();
-        // First check current lifecycle status â€” can only transition from 'live'
         const statusRes = await fetch(
           `https://www.googleapis.com/youtube/v3/liveBroadcasts?part=status&id=${broadcastId}`,
           { headers: { 'Authorization': `Bearer ${accessToken}` } }
@@ -3605,7 +4570,7 @@ exports.nativeStreamEndEvent = onCall(
         const lifeCycle = statusData.items?.[0]?.status?.lifeCycleStatus;
         console.log(`[NativeStream] Broadcast ${broadcastId} lifecycle: ${lifeCycle}`);
 
-        if (lifeCycle === 'live' || lifeCycle === 'liveStarting') {
+        if (lifeCycle === 'live' || lifeCycle === 'liveStarting' || lifeCycle === 'testing') {
           const transRes = await fetch(
             `https://www.googleapis.com/youtube/v3/liveBroadcasts/transition?broadcastStatus=complete&id=${broadcastId}&part=status`,
             { method: 'POST', headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Length': '0' } }
@@ -3613,18 +4578,46 @@ exports.nativeStreamEndEvent = onCall(
           const transData = await transRes.json();
           if (transData.error) {
             console.error(`[NativeStream] Broadcast transition failed: ${JSON.stringify(transData.error)}`);
+            const deleteRes = await fetch(
+              `https://www.googleapis.com/youtube/v3/liveBroadcasts?id=${broadcastId}`,
+              { method: 'DELETE', headers: { 'Authorization': `Bearer ${accessToken}` } }
+            );
+            youtubeCleanup.deleted = deleteRes.ok;
+            console.log(`[NativeStream] Broadcast ${broadcastId} deleted after failed transition: ${deleteRes.ok}`);
           } else {
+            youtubeCleanup.completed = true;
             console.log(`[NativeStream] Broadcast ${broadcastId} transitioned to complete`);
           }
+        } else if (lifeCycle === 'complete') {
+          youtubeCleanup.completed = true;
+          console.log(`[NativeStream] Broadcast ${broadcastId} already complete`);
+        } else if (!lifeCycle || lifeCycle === 'created' || lifeCycle === 'ready' || lifeCycle === 'testStarting') {
+          const deleteRes = await fetch(
+            `https://www.googleapis.com/youtube/v3/liveBroadcasts?id=${broadcastId}`,
+            { method: 'DELETE', headers: { 'Authorization': `Bearer ${accessToken}` } }
+          );
+          youtubeCleanup.deleted = deleteRes.ok;
+          console.log(`[NativeStream] Waiting broadcast ${broadcastId} deleted: ${deleteRes.ok}`);
         } else {
-          console.log(`[NativeStream] Broadcast ${broadcastId} already in state ${lifeCycle} â€” no transition needed`);
+          console.log(`[NativeStream] Broadcast ${broadcastId} already in state ${lifeCycle} - no transition needed`);
         }
       } catch (e) {
-        // Don't fail the whole end-event call if YouTube transition fails â€”
+        // Don't fail the whole end-event call if YouTube cleanup fails -
         // the Firestore update below is the critical piece for the app UI
-        console.error('[NativeStream] YouTube transition error (non-fatal):', e.message);
+        console.error('[NativeStream] YouTube cleanup error (non-fatal):', e.message);
       }
-      await markStreamVideoCompleted(broadcastId);
+      if (youtubeCleanup.deleted) {
+        await db.collection('streamVideos').doc(broadcastId).set({
+          status: 'deleted',
+          youtubeAvailable: false,
+          endedAt: new Date().toISOString(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true }).catch(error => {
+          console.warn(`[StreamVideos] Could not mark deleted ${broadcastId}:`, error.message);
+        });
+      } else {
+        await markStreamVideoCompleted(broadcastId);
+      }
     }
 
     // 3. Force-clear isLive on the event â€” source of truth for the app UI
@@ -3643,3 +4636,5 @@ exports.nativeStreamEndEvent = onCall(
     return { ok: true };
   }
 );
+
+

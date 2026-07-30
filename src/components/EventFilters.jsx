@@ -109,8 +109,8 @@ export default function EventFilters({ events, onChange, upcomingOnlyOnEmpty = f
               <option value="">All upcoming</option>
               <option value="yesterday">Yesterday</option>
               <option value="today">Today</option>
-              <option value="week">This week</option>
-              <option value="month">This month</option>
+              <option value="week">Next 7 days</option>
+              <option value="month">Next 30 days</option>
             </select>
           </label>
           <label>
@@ -257,8 +257,8 @@ export default function EventFilters({ events, onChange, upcomingOnlyOnEmpty = f
               <option value="">All upcoming</option>
               <option value="yesterday">Yesterday</option>
               <option value="today">Today</option>
-              <option value="week">This week</option>
-              <option value="month">This month</option>
+              <option value="week">Next 7 days</option>
+              <option value="month">Next 30 days</option>
             </select>
           </div>
 

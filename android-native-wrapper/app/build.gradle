@@ -1,0 +1,58 @@
+plugins {
+    id 'com.android.application'
+}
+
+def hasGoogleServicesConfig = file('google-services.json').exists()
+if (hasGoogleServicesConfig) {
+    apply plugin: 'com.google.gms.google-services'
+} else {
+    logger.warn('google-services.json is missing; Android native push token registration will be disabled until it is added.')
+}
+
+buildDir = file("$rootDir/build/app-v27")
+
+android {
+    namespace 'info.siza.communityevents.app'
+    compileSdk 36
+
+    def signingProps = new Properties()
+    def signingPropsFile = rootProject.file('release-signing.properties')
+    if (signingPropsFile.exists()) {
+        signingPropsFile.withInputStream { signingProps.load(it) }
+    }
+
+    defaultConfig {
+        applicationId 'info.siza.communityevents.app'
+        minSdk 26
+        targetSdk 35
+        versionCode 27
+        versionName '27.0-native-push'
+    }
+
+    signingConfigs {
+        release {
+            if (signingProps['storeFile']) {
+                storeFile rootProject.file(signingProps['storeFile'])
+                storePassword signingProps['storePassword']
+                keyAlias signingProps['keyAlias']
+                keyPassword signingProps['keyPassword'] ?: signingProps['storePassword']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (signingProps['storeFile']) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.7.0'
+    implementation 'com.github.pedroSG94.RootEncoder:library:2.7.5'
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-messaging'
+}

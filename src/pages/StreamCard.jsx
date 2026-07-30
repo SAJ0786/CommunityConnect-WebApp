@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { endLive } from '../services/eventService';
 import { httpsCallable } from 'firebase/functions';
 import { functions, db } from '../firebase/firebase';
@@ -57,10 +57,14 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
   const [muted,    setMuted]    = useState(false);
   const [stats,    setStats]    = useState(null);
   const [orientationWarning, setOrientationWarning] = useState('');
+  const [controlsVisible, setControlsVisible] = useState(true);
 
   const videoRef    = useRef(null);
   const streamerRef = useRef(nativeStream?.streamer || null);
+  const controlsHideTimerRef = useRef(null);
+  const endingRef = useRef(false);
   const isHost = role === 'host';
+  const isNativeBridgeHost = isHost && !!streamerRef.current?.isNativeBridge;
   const micLevel = Math.max(0, Math.min(1, Number(stats?.micLevel || 0)));
   const micPercent = Math.round(micLevel * 100);
   const micOk = !!stats?.micActive && !muted;
@@ -71,6 +75,57 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
       : micOk
         ? 'Mic active'
         : 'No mic input';
+
+  const shouldAutoHideControls = isHost && !isExternal && phase === 'live' && !confirm && !ending && !hidden;
+  const controlsAreVisible = !shouldAutoHideControls || controlsVisible;
+
+  const clearControlsHideTimer = useCallback(() => {
+    if (controlsHideTimerRef.current) {
+      clearTimeout(controlsHideTimerRef.current);
+      controlsHideTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleControlsHide = useCallback(() => {
+    clearControlsHideTimer();
+    if (shouldAutoHideControls) {
+      controlsHideTimerRef.current = setTimeout(() => setControlsVisible(false), 3800);
+    }
+  }, [clearControlsHideTimer, shouldAutoHideControls]);
+
+  const showControlsTemporarily = useCallback(() => {
+    if (!shouldAutoHideControls) return;
+    setControlsVisible(true);
+    scheduleControlsHide();
+  }, [scheduleControlsHide, shouldAutoHideControls]);
+
+  useEffect(() => {
+    clearControlsHideTimer();
+    if (shouldAutoHideControls) {
+      setControlsVisible(true);
+      controlsHideTimerRef.current = setTimeout(() => setControlsVisible(false), 4600);
+    } else {
+      setControlsVisible(true);
+    }
+    return clearControlsHideTimer;
+  }, [clearControlsHideTimer, shouldAutoHideControls]);
+
+  const overlayControlsStyle = {
+    opacity: controlsAreVisible ? 1 : 0,
+    pointerEvents: controlsAreVisible ? 'auto' : 'none',
+    transition: 'opacity 220ms ease, transform 220ms ease',
+  };
+
+  const topControlsCollapseStyle = shouldAutoHideControls
+    ? {
+        opacity: controlsAreVisible ? 1 : 0,
+        pointerEvents: controlsAreVisible ? 'auto' : 'none',
+        maxHeight: controlsAreVisible ? 96 : 0,
+        overflow: 'hidden',
+        transition: 'opacity 220ms ease, max-height 220ms ease, padding 220ms ease',
+        ...(controlsAreVisible ? {} : { paddingTop: 0, paddingBottom: 0 }),
+      }
+    : {};
 
   // ── Attach camera stream to <video> preview + wire callbacks ─────────────
   useEffect(() => {
@@ -88,6 +143,7 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
     const prevStatus = streamer.onStatus;
     const prevError  = streamer.onError;
     const prevStats  = streamer.onStats;
+    const prevNativeEndConfirmed = streamer.onNativeEndConfirmed;
 
     streamer.onStatus = (msg) => {
       prevStatus?.(msg);
@@ -106,19 +162,32 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
       setPhase('error');
     };
     streamer.onStats = (s) => { prevStats?.(s); setStats(s); };
+    streamer.onNativeEndConfirmed = () => {
+      prevNativeEndConfirmed?.();
+      handleEnd();
+    };
+
+    if (window.__communityEventsNativeEndRequested && Date.now() - window.__communityEventsNativeEndRequested < 10000) {
+      handleEnd();
+    }
 
     return () => {
       streamer.onStatus = prevStatus;
       streamer.onError  = prevError;
       streamer.onStats  = prevStats;
+      streamer.onNativeEndConfirmed = prevNativeEndConfirmed;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost]);
 
   // ── Stop everything when host ends ────────────────────────────────────────
   // (stream stop logic now inlined in handleEnd for reliability)
 
   const handleEnd = async () => {
+    if (endingRef.current) return;
+    endingRef.current = true;
     setEnding(true);
+    setConfirm(false);
 
     // 1. Stop camera/recorder/websocket locally — instant, no network needed
     try { streamerRef.current?.stop(); } catch (e) { console.warn('Streamer stop failed:', e.message); }
@@ -146,10 +215,26 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
       }
     }
 
+    window.__communityEventsNativeEndRequested = 0;
     setEnding(false);
+    if (streamerRef.current?.isNativeBridge) {
+      if (onEnded) await onEnded(event.id);
+      onClose?.();
+      return;
+    }
     setEnded(true);
     if (onEnded) await onEnded(event.id); // refresh event list → cards show "Go Live"
   };
+
+  useEffect(() => {
+    if (!isHost) return undefined;
+    const onNativeStreamEvent = (nativeEvent) => {
+      if (nativeEvent?.detail?.type === 'endConfirmed') handleEnd();
+    };
+    window.addEventListener('communityevents:nativeStreamEvent', onNativeStreamEvent);
+    return () => window.removeEventListener('communityevents:nativeStreamEvent', onNativeStreamEvent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, event.id, nativeStream?.sessionId]);
 
   // ── Camera controls ────────────────────────────────────────────────────────
   const handleSwitchCamera = async () => {
@@ -263,6 +348,108 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
     );
   }
 
+  if (isNativeBridgeHost) {
+    return (
+      <div style={{
+        position:'fixed',
+        ...(hidden
+          ? { left:'-99999px', top:0, width:'100vw', height:'100dvh', opacity:0, pointerEvents:'none', visibility:'visible' }
+          : { inset:0, height:'100dvh' }),
+        zIndex:9999,
+        display:'flex',
+        flexDirection:'column',
+        background:'linear-gradient(180deg,#062f2f,#020617)',
+        color:'white',
+        fontFamily:'var(--font,sans-serif)',
+        paddingBottom:'env(safe-area-inset-bottom)',
+      }}>
+        <div style={{
+          background:'#0f766e',
+          padding:'max(10px, env(safe-area-inset-top)) 14px 10px',
+          display:'flex',
+          alignItems:'center',
+          justifyContent:'space-between',
+          gap:10,
+          flexShrink:0,
+        }}>
+          <div style={{ fontWeight:900, fontSize:'0.875rem', display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ animation:'liveBlink 1s infinite' }}>●</span>
+            {phase === 'live' ? 'NATIVE STREAM LIVE' : phase === 'reconnecting' ? 'RECONNECTING' : phase === 'error' ? 'STREAM NEEDS ATTENTION' : 'CONNECTING'}
+          </div>
+          <div style={{ display:'flex', gap:8 }}>
+            {onMinimise && (
+              <button onClick={onMinimise} style={{ background:'rgba(255,255,255,.22)', color:'white',
+                border:0, borderRadius:8, padding:'7px 12px', fontWeight:800, cursor:'pointer' }}>
+                App
+              </button>
+            )}
+            <button onClick={handleEnd} disabled={ending} style={{ background:'white', color:'#991b1b',
+              border:'2px solid white', borderRadius:9, padding:'8px 14px', fontSize:'0.875rem',
+              fontWeight:900, cursor:ending ? 'wait' : 'pointer', boxShadow:'0 2px 10px rgba(0,0,0,.25)' }}>
+              {ending ? 'Ending...' : 'End Stream'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{
+          flex:1,
+          display:'flex',
+          flexDirection:'column',
+          alignItems:'center',
+          justifyContent:'center',
+          textAlign:'center',
+          padding:24,
+          gap:16,
+        }}>
+          <div style={{ fontSize:'2.5rem' }}>📡</div>
+          <h2 style={{ margin:0, fontSize:'1.25rem' }}>
+            {phase === 'error' ? 'Native stream needs attention' : 'Native Android stream is active'}
+          </h2>
+          <p style={{ margin:0, color:'#cbd5e1', maxWidth:390, lineHeight:1.55, fontSize:'0.875rem' }}>
+            The camera preview is handled by Android. If the camera screen is not visible, use these app controls to end or recover the stream without leaving the event stuck live.
+          </p>
+
+          {phase === 'error' && (
+            <>
+              <div style={{ color:'#fecaca', fontWeight:800, fontSize:'0.8125rem', maxWidth:390 }}>
+                {errMsg || 'The native stream stopped unexpectedly.'}
+              </div>
+              <button onClick={() => { setErrMsg(''); setPhase('reconnecting'); streamerRef.current?.retryReconnect?.(); }}
+                style={{ background:'#f59e0b', color:'#111827', border:'none', borderRadius:10,
+                  padding:'11px 20px', fontSize:'0.875rem', fontWeight:900, cursor:'pointer' }}>
+                Retry Same YouTube Stream
+              </button>
+            </>
+          )}
+
+          <div style={{
+            width:'min(100%, 390px)',
+            background:'rgba(0,0,0,0.28)',
+            border:'1px solid rgba(255,255,255,0.18)',
+            borderRadius:14,
+            padding:12,
+            display:'grid',
+            gap:8,
+            textAlign:'left',
+            fontSize:'0.8125rem',
+            color:'#d1fae5',
+          }}>
+            <div><strong>Status:</strong> {phase === 'live' ? 'Live' : phase}</div>
+            <div><strong>Event:</strong> {event.eventTypeDisplay || event.eventType || 'Event'} {event.hostName ? `- ${event.hostName}` : ''}</div>
+            <div><strong>Session:</strong> {nativeStream?.sessionId || 'Preparing'}</div>
+          </div>
+
+          <button onClick={handleEnd} disabled={ending} style={{ width:'min(100%, 390px)', minHeight:50,
+            background:'#b91c1c', color:'white', border:0, borderRadius:12, fontSize:'1rem',
+            fontWeight:900, cursor:ending ? 'wait' : 'pointer', boxShadow:'0 5px 18px rgba(185,28,28,.35)' }}>
+            {ending ? 'Ending Stream...' : 'End Stream'}
+          </button>
+        </div>
+        <style>{`@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:.35}}`}</style>
+      </div>
+    );
+  }
+
   // ── Host view — camera preview + controls ─────────────────────────────────────
   return (
     <div style={{
@@ -273,13 +460,19 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
       zIndex:9999, display:'flex', flexDirection:'column',
       paddingBottom:'env(safe-area-inset-bottom)',
       background:'#000', fontFamily:'var(--font,sans-serif)',
-    }}>
+    }}
+      onPointerDown={showControlsTemporarily}
+      onMouseMove={showControlsTemporarily}
+      onKeyDown={showControlsTemporarily}
+      tabIndex={0}
+    >
 
       {/* Header bar */}
-      <div style={{
+      {!isNativeBridgeHost && <div style={{
         background:'#0f766e', padding:'10px 14px', flexShrink:0,
         display:'flex', alignItems:'center', justifyContent:'space-between',
         paddingTop:'max(10px, env(safe-area-inset-top))',
+        ...topControlsCollapseStyle,
       }}>
         <div style={{ color:'white', fontWeight:900, fontSize:'0.875rem', display:'flex', alignItems:'center', gap:8 }}>
           <span style={{ animation:'liveBlink 1s infinite' }}>🔴</span>
@@ -303,18 +496,19 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
             ■ End Stream
           </button>
         </div>
-      </div>
+      </div>}
 
       {confirm && <EndStreamConfirmation ending={ending} onConfirm={handleEnd} onCancel={() => setConfirm(false)} />}
 
       {/* Host note — keep screen open */}
-      <div style={{
+      {!isNativeBridgeHost && <div style={{
         background:'#fff7ed', color:'#9a3412', fontSize:'0.71875rem', fontWeight:700,
         padding:'7px 14px', textAlign:'center', lineHeight:1.4,
         borderBottom:'1px solid #fed7aa',
+        ...topControlsCollapseStyle,
       }}>
         🔒 Screen will stay awake automatically while live. Switching apps or locking your phone manually will still pause the broadcast.
-      </div>
+      </div>}
 
       {/* Camera preview */}
       <div style={{ flex:1, position:'relative', background:'#000', minHeight:0 }}>
@@ -332,6 +526,21 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
                 padding:'10px 18px', fontSize:'0.8125rem', fontWeight:900, cursor:'pointer' }}>
               ↻ Retry Same Stream
             </button>
+          </div>
+        ) : isNativeBridgeHost ? (
+          <div style={{ position:'absolute', inset:0, background:'#000', display:'none' }}>
+          </div>
+        ) : false ? (
+          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
+            alignItems:'center', justifyContent:'center', color:'white', gap:12, padding:24, textAlign:'center',
+            background:'linear-gradient(180deg,#071f1f,#020617)' }}>
+            <div style={{ fontSize:'2.25rem' }}>📡</div>
+            <div style={{ fontWeight:900, fontSize:'1.0625rem' }}>
+              {phase === 'live' ? 'Native Android stream is live' : 'Native Android stream is connecting'}
+            </div>
+            <div style={{ fontSize:'0.8125rem', color:'#cbd5e1', lineHeight:1.5, maxWidth:330 }}>
+              The camera preview and controls are handled by Android for better quality. Tap the video screen to show native controls.
+            </div>
           </div>
         ) : (
           <>
@@ -353,7 +562,8 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
             {phase === 'live' && stats && (
               <div style={{ position:'absolute', top:10, left:10, background:'rgba(0,0,0,0.6)',
                 color:'white', fontSize:'0.6875rem', fontWeight:700, padding:'4px 10px', borderRadius:8,
-                display:'flex', gap:10 }}>
+                display:'flex', gap:10, transform: controlsAreVisible ? 'translateY(0)' : 'translateY(-8px)',
+                ...overlayControlsStyle }}>
                 <span>{stats.elapsed != null ? fmtTime(stats.elapsed) : '0:00'}</span>
                 {stats.qualityProfile ? <span>{stats.qualityProfile}</span> : null}
                 {stats.bytesSent && stats.elapsed
@@ -366,6 +576,8 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
                 background:'rgba(0,0,0,0.68)', color:'white', border:'1px solid rgba(255,255,255,0.18)',
                 borderRadius:12, padding:'8px 10px', display:'flex', alignItems:'center', gap:10,
                 boxShadow:'0 6px 20px rgba(0,0,0,0.35)',
+                transform: controlsAreVisible ? 'translateY(0)' : 'translateY(10px)',
+                ...overlayControlsStyle,
               }}>
                 <div style={{ fontSize:'0.75rem', fontWeight:900, minWidth:86, color: micOk ? '#86efac' : '#fca5a5' }}>
                   {micLabel}
@@ -398,8 +610,12 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
         )}
 
         {/* Camera controls */}
-        {phase !== 'error' && (
-          <div style={{ position:'absolute', bottom:14, right:14, display:'flex', gap:8 }}>
+        {phase !== 'error' && !isNativeBridgeHost && (
+          <div style={{
+            position:'absolute', bottom:14, right:14, display:'flex', gap:8,
+            transform: controlsAreVisible ? 'translateY(0)' : 'translateY(10px)',
+            ...overlayControlsStyle,
+          }}>
             <button onClick={handleSwitchCamera}
               style={{ background:'rgba(0,0,0,0.55)', color:'white', border:'1px solid rgba(255,255,255,0.3)',
                 borderRadius:10, padding:'8px 12px', fontSize:'0.75rem', fontWeight:800, cursor:'pointer' }}>

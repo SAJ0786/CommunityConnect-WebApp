@@ -1,0 +1,108 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Download Community Events Australia</title>
+  <meta name="robots" content="noindex">
+  <meta name="description" content="Download Community Events App to keep connected with community.">
+  <meta property="og:title" content="Community Events Australia">
+  <meta property="og:description" content="Download Community Events App to keep connected with community.">
+  <meta property="og:image" content="https://communityevents.siza.info/icons/icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:url" content="https://download.communityevents.siza.info">
+  <meta property="og:type" content="website">
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #ffffff;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #0f172a;
+    }
+
+    main {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+
+    .panel {
+      max-width: 360px;
+      width: 100%;
+    }
+
+    .logo {
+      width: 88px;
+      height: 88px;
+      object-fit: contain;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 1.35rem;
+      line-height: 1.2;
+    }
+
+    p {
+      margin: 0 0 18px;
+      color: #475569;
+      font-size: 0.98rem;
+      line-height: 1.45;
+    }
+
+    a.button {
+      display: block;
+      padding: 13px 16px;
+      border-radius: 12px;
+      text-decoration: none;
+      border: 1px solid #0f766e;
+      background: #0f766e;
+      color: #ffffff;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="panel">
+      <img class="logo" src="https://communityevents.siza.info/icons/icon-192.png" alt="Community Events Australia">
+      <h1>Download Community Events Australia</h1>
+      <p id="message">Opening the correct app store.</p>
+      <a class="button" id="storeLink" href="https://communityevents.siza.info">Open Store</a>
+    </div>
+  </main>
+
+  <script>
+    (function () {
+      var ua = navigator.userAgent || "";
+      var isIOS = /iPhone|iPad|iPod/i.test(ua);
+      var isAndroid = /Android/i.test(ua);
+      var iosStore = "https://apps.apple.com/au/app/community-events-australia/id6782770347";
+      var androidStore = "https://play.google.com/store/apps/details?id=info.siza.communityevents.app";
+      var microsoftStore = "https://apps.microsoft.com/detail/9NDGJZHL86KJ";
+      var storeUrl = microsoftStore;
+      var storeName = "Microsoft Store";
+
+      if (isIOS) {
+        storeUrl = iosStore;
+        storeName = "App Store";
+      } else if (isAndroid) {
+        storeUrl = androidStore;
+        storeName = "Google Play";
+      }
+
+      document.getElementById("storeLink").href = storeUrl;
+      document.getElementById("storeLink").textContent = "Open " + storeName;
+      document.getElementById("message").textContent = "Taking you to " + storeName + ".";
+      window.location.replace(storeUrl);
+    }());
+  </script>
+</body>
+</html>
+

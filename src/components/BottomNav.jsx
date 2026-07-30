@@ -2,10 +2,11 @@ import React from 'react';
 
 export default function BottomNav({ page, setPage, isGuest }) {
   // Always show bottom nav — even for guests (greyed out for restricted items)
-  const item = (key, icon, label, disabled = false) => {
+  const item = (key, icon, label, disabled = false, target = null) => {
     const active = !disabled && page === key;
     return (
       <button
+        data-walkthrough-target={target || undefined}
         onClick={() => { if (!disabled) setPage(key); }}
         title={disabled ? 'Sign in to access' : undefined}
         style={{
@@ -34,13 +35,14 @@ export default function BottomNav({ page, setPage, isGuest }) {
         boxShadow: '0 -2px 16px rgba(0,0,0,0.06)',
         maxWidth: 1200, margin: '0 auto',
       }}>
-        {item('home', '\u{1F3E0}', 'Home')}
-        {item('my',   '\u{1F4C5}', 'My Events', isGuest)}
+        {item('home', '\u{1F3E0}', 'Home', false, 'bottom-home')}
+        {item('my',   '\u{1F4C5}', 'My Events', isGuest, 'bottom-my-events')}
 
         {/* Center FAB — Add Event */}
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column',
           alignItems: 'center', justifyContent: 'center' }}>
           <button
+            data-walkthrough-target="bottom-add"
             onClick={() => { if (!isGuest) setPage('add'); }}
             aria-label="Add Event"
             title={isGuest ? 'Sign in to add events' : undefined}
@@ -63,10 +65,10 @@ export default function BottomNav({ page, setPage, isGuest }) {
           </span>
         </div>
 
-        {item('favourites', '\u2764\uFE0F', 'Favourites', isGuest)}
+        {item('favourites', '\u2764\uFE0F', 'Favourites', isGuest, 'bottom-favourites')}
 
         {/* Profile is always present and remains unavailable to guests. */}
-        {item('profile', '\u{1F464}', 'Profile', isGuest)}
+        {item('profile', '\u{1F464}', 'Profile', isGuest, 'bottom-profile')}
       </nav>
     </>
   );

@@ -1,5 +1,5 @@
 import {
-  collection, doc, getDoc, getDocs, query,
+  collection, deleteDoc, deleteField, doc, getDoc, getDocs, query,
   serverTimestamp, setDoc, updateDoc, where
 } from 'firebase/firestore';
 import { deleteUser } from 'firebase/auth';
@@ -28,18 +28,19 @@ export async function ensureUserProfile(user, extraData = {}) {
       const merged  = {
         ...oldData,
         phone:     user.phoneNumber || '',
+        phoneVerified: true,
         updatedAt: serverTimestamp(),
         linkedFrom: extraData._linkedFrom,
+        migratedFromUid: extraData._linkedFrom,
+        isActive: true,
+        migratedToUid: deleteField(),
+        inactiveReason: deleteField(),
         walkthroughCompleted: oldData.walkthroughCompleted ?? true,
       };
       // Write new profile under phone UID
       await setDoc(ref, merged, { merge: true });
-      // Mark the old profile as migrated (so it still exists but is inactive)
-      await updateDoc(oldRef, {
-        migratedToUid: user.uid,
-        migratedAt:    serverTimestamp(),
-        isActive:      false,
-      }).catch(() => {});
+      // The old social-login profile is now merged into the phone UID.
+      await deleteDoc(oldRef).catch(() => {});
       return merged;
     }
   }
@@ -56,6 +57,7 @@ export async function ensureUserProfile(user, extraData = {}) {
       role,
       isActive: true,
       reminderEmailEnabled: true,
+      pushNotificationsEnabled: true,
       adminAlertEmailEnabled: true,
       privacyAccepted: true,
       privacyAcceptedAt: serverTimestamp(),
@@ -99,11 +101,14 @@ export async function ensureUserProfile(user, extraData = {}) {
   return data;
 }
 
-export async function listUsers() {
+export async function listUsers({ includeHidden = false } = {}) {
   const snap = await getDocs(collection(db, 'users'));
-  return snap.docs
-    .map(d => ({ id: d.id, ...d.data() }))
-    .filter(u => u.isActive !== false && !u.migratedToUid);
+  const users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const hasPhone = u => !!String(u.phone || u.phoneNumber || u.mobile || u.mobileNumber || '').trim();
+  const isOldMigrated = u => !!u.migratedToUid && !(u.isActive !== false && hasPhone(u));
+  return includeHidden
+    ? users
+    : users.filter(u => u.isActive !== false && !isOldMigrated(u));
 }
 
 export async function updateUserRole(id, role) {
@@ -122,6 +127,13 @@ export async function updateUserRole(id, role) {
 export async function updateReminderPreference(uid, enabled) {
   return updateDoc(doc(db, 'users', uid), {
     reminderEmailEnabled: enabled,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updatePushPreference(uid, enabled) {
+  return updateDoc(doc(db, 'users', uid), {
+    pushNotificationsEnabled: enabled,
     updatedAt: serverTimestamp()
   });
 }

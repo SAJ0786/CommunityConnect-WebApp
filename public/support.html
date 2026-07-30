@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Support | Community Events</title>
-  <link rel="stylesheet" href="/brand-wordmark.css"/>
+  <title>Support | Community Events Australia</title>
   <style>
     :root{--teal:#0f766e;--teal-dark:#0b5d57;--bg:#f4f7f7;--card:#fff;--text:#1f2933;--muted:#6b7280;--border:#e5e7eb}
     *{box-sizing:border-box}
@@ -25,17 +24,7 @@
 </head>
 <body>
   <a class="static-back-link" href="/">&larr; Back to Home</a>
-<header class="hero">
-  <img src="/logo.png" alt="Community Events"/>
-  <div class="ce-wordmark ce-wordmark--hero" aria-label="Community Events Australia">
-    <span class="ce-wordmark__line ce-wordmark__community" aria-hidden="true"><span>C</span><span>o</span><span>m</span><span>m</span><span>u</span><span>n</span><span>i</span><span>t</span><span>y</span></span>
-    <span class="ce-wordmark__line ce-wordmark__events" aria-hidden="true"><span>E</span><span>v</span><span>e</span><span>n</span><span>t</span><span>s</span></span>
-    <span class="ce-wordmark__line ce-wordmark__australia" aria-hidden="true"><span>A</span><span>u</span><span>s</span><span>t</span><span>r</span><span>a</span><span>l</span><span>i</span><span>a</span></span>
-    <span class="ce-wordmark__rule" aria-hidden="true"></span>
-  </div>
-  <h1>Support</h1>
-  <p>Community Events Australia – Create · Share · Connect</p>
-</header>
+<header class="hero"><img src="/logo.png" alt="Community Events Australia"/><h1>Support</h1><p>Community Events Australia - Create &middot; Share &middot; Connect</p></header>
 <main class="container">
   <section class="card">
     <h2>Contact Us</h2>
@@ -46,7 +35,13 @@
     <h2>Common Questions</h2>
 
     <p><strong>How do I add an event?</strong><br/>
-    Log in and tap <em>Add</em> in the bottom navigation bar. Fill in the event details and submit.</p>
+    Log in and tap <em>Add Event</em> in the bottom navigation bar. Choose <em>Single Event</em>, or if you are an Admin/Super Admin choose <em>Recurring Event</em>. Fill in the mandatory date, time and address details, then submit. After saving, the form closes and the event appears on the Home screen.</p>
+
+    <p><strong>What is a recurring event?</strong><br/>
+    Recurring events are for repeated programs. Admins and Super Admins can repeat an event daily, weekly, monthly or yearly, preview the generated dates, and then create all occurrences in one action. Normal users can see this option but it is disabled for them.</p>
+
+    <p><strong>Can I use prayer time instead of a fixed time?</strong><br/>
+    Yes. In the event form, choose <em>Prayer Time (Variable)</em>, select the prayer name, and optionally add an offset in 30-minute steps. The app calculates the time from the event date and selected address GPS location. If you want an exact manually entered time, choose <em>Fixed Time</em>.</p>
 
     <p><strong>What is the difference between Centre and Private events?</strong><br/>
     Centre events are public community events hosted by an organisation. Private events are hosted by individuals. Both are visible to all logged-in users, but private event full addresses and host phone numbers are only shared by the host or admins.</p>
@@ -55,7 +50,7 @@
     Yes. Tick "I am adding this event on behalf of someone else" when filling in the event form.</p>
 
     <p><strong>How do I go live?</strong><br/>
-    Open one of your events, tap <em>Go Live</em>, choose <em>Public</em> or <em>Private</em>, then check your camera and microphone in the preview screen. Public streams show a "Watch on YouTube" button on the event card within about 15-20 seconds. Private streams use YouTube unlisted/link-only visibility and are not shown as public stream links in the app.</p>
+    Open one of your events, tap <em>Go Live</em>, choose <em>Public</em> or <em>Private</em>, choose the required orientation, then start the stream. Public streams show a "Watch on YouTube" button on the event card within about 15-20 seconds. Private streams use YouTube unlisted/link-only visibility and are not shown as public stream links in the app. Private stream links may be emailed to the host once the stream is live.</p>
 
     <p><strong>Why is my event still showing as LIVE after I stopped streaming?</strong><br/>
     Tapping "End Stream" and confirming should clear the LIVE status everywhere within a few seconds. If an event remains stuck as live (for example after a crash or lost connection), it will be automatically cleared within a couple of minutes. If it's still stuck after that, contact us and we can manually reset it.</p>
@@ -64,36 +59,42 @@
     Yes. Each event streams independently to its own YouTube broadcast, so multiple events can go live simultaneously without interfering with each other.</p>
 
     <p><strong>Why does my phone stay on while I'm live?</strong><br/>
-    The app keeps your screen awake automatically while streaming so the broadcast doesn't get interrupted by your phone locking. Switching to another app or manually locking your phone will still pause the broadcast — keep the streaming screen open until you tap "End Stream".</p>
+    The app keeps your screen awake automatically while streaming so the broadcast doesn't get interrupted by your phone locking. Switching to another app or manually locking your phone will still pause the broadcast &mdash; keep the streaming screen open until you tap "End Stream".</p>
 
     <p><strong>How do I sync events to my calendar?</strong><br/>
-    Go to the <em>Calendar</em> tab, select a date range and tap <em>Download Calendar File</em>. Open the .ics file on your device to import into any calendar app.</p>
+    Go to the <em>Calendar</em> tab and use the calendar sync option. Supported browsers/devices can open the subscription directly; where a native wrapper or browser blocks direct opening, the app provides a calendar feed URL or downloadable calendar file as a fallback.</p>
+
+    <p><strong>How does the map view work?</strong><br/>
+    Logged-in users can switch between List and Map views on Home. The map shows event locations from the saved event address coordinates and uses marker colours for audience type. Guest users cannot access Map view.</p>
 
     <p><strong>How do I turn off email reminders?</strong><br/>
-    Go to <em>Profile</em> and toggle <em>Email Reminders</em> off.</p>
+    Go to <em>Profile</em> and toggle <em>Email Reminders</em> off. Admin and Super Admin users can also turn off administrator-level alert emails separately.</p>
 
     <p><strong>How do I hide an event temporarily?</strong><br/>
-    In My Events, tap the eye icon on any event to toggle its visibility. Hidden events are not shown on the home screen and are excluded from all reminders and notifications — but you can still share them privately. Tap Share on a hidden event to send it directly to specific people; anyone you don't share it with will never see it in the app.</p>
+    In My Events, tap the eye icon on any event to toggle its visibility. Hidden events are not shown on the home screen and are excluded from all reminders and notifications &mdash; but you can still share them privately. Tap Share on a hidden event to send it directly to specific people; anyone you don't share it with will never see it in the app.</p>
 
     <p><strong>What is Bulk Share?</strong><br/>
-    Bulk Share lets you select several upcoming events at once and generate a single, neatly formatted message listing all of them — ready to paste into WhatsApp or any group chat. Useful for sharing a full week's program in one go.</p>
+    Bulk Share lets you select several upcoming events at once and generate a formatted message listing all of them. You can choose detailed or brief format. Messages are grouped into Centre Programs and Private Programs where applicable.</p>
 
     <p><strong>How do I use AI Search?</strong><br/>
-    Tap the AI Search tab and type or speak your query. You can ask things like "Jumu'ah near me this Friday" or "events for sisters this weekend" and the AI will find matching events.</p>
+    Tap the AI Search tab and type or speak your query. You can ask things like "Majlis in Sydney this weekend" or "ladies programs near me". If an AI response looks unsafe, incorrect or inappropriate, use the report option so it can be reviewed.</p>
 
     <p><strong>How do I delete my account?</strong><br/>
-    Go to <em>Profile → Delete My Account</em>. This will permanently delete your account and all events you created. See also: <a href="/delete-account.html">Account Deletion Policy</a>.</p>
+    Go to <em>Profile - Delete My Account</em>. This deletes your user account and profile details, but events you created are retained as event history. You can choose whether your active events become inactive immediately or remain active until their normal expiry date. See also: <a href="/delete-account.html">Account Deletion Policy</a>.</p>
+
+    <p><strong>Where can I install the app?</strong><br/>
+    The app is available on the Apple App Store, Google Play and Microsoft Store. Use <a href="/install.html">Install Community Events Australia</a> or the store links shown on the login page.</p>
 
     <div class="notice">
       <strong>Reporting Inappropriate Content:</strong> If you see an event with inappropriate or misleading information, please contact us at <strong>communityeventssydney@gmail.com</strong> with the event details.
     </div>
 
     <h2>User Guide</h2>
-    <p><a href="/docs/user-guide.html">📘 Open Full User Guide</a></p>
+    <p><a href="/docs/user-guide.html">Open Full User Guide</a></p>
 
     <div class="footer">
-      © <span id="yr"></span> Community Events Australia. All rights reserved.<br/>
-      <a href="/">← Back to App</a> &nbsp;|&nbsp;
+      &copy; <span id="yr"></span> Community Events Australia. All rights reserved.<br/>
+      <a href="/">&larr; Back to App</a> &nbsp;|&nbsp;
       <a href="/privacy.html">Privacy Policy</a> &nbsp;|&nbsp;
       <a href="/terms.html">Terms of Use</a> &nbsp;|&nbsp;
       <a href="/delete-account.html">Account Deletion</a>

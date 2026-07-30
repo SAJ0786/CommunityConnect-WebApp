@@ -1,9 +1,10 @@
 import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
-import { auth, firebaseConfigured } from './firebase/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { auth, firebaseConfigured, functions } from './firebase/firebase';
 import { ensureUserProfile, updateProfile } from './services/userService';
 import { deleteEvent, getActiveEvents, listenLiveEvents } from './services/eventService';
-import { requestNotificationPermission } from './services/notificationService';
+import { saveNativePushToken, startForegroundPushNotifications, syncGrantedNotificationToken } from './services/notificationService';
 import Header from './components/Header';
 import AuthPage from './pages/AuthPage';
 import Home from './pages/Home';
@@ -12,7 +13,7 @@ import AppWalkthrough from './components/AppWalkthrough';
 import ToastContainer from './components/Toast';
 import ShareSheet from './components/ShareSheet';
 import DefaultCityPrompt from './components/DefaultCityPrompt';
-import { normalizeCity } from './utils/cities';
+import { DEFAULT_CITY, normalizeCity } from './utils/cities';
 import {
   clearPrivateEventCaches,
   readEventCache,
@@ -29,11 +30,11 @@ const Profile = lazy(() => import('./pages/Profile'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const StreamCard = lazy(() => import('./pages/StreamCard'));
 const Favourites = lazy(() => import('./pages/Favourites'));
-const AddSeriesEvents = lazy(() => import('./pages/AddSeriesEvents'));
 const BulkShare = lazy(() => import('./pages/BulkShare'));
 const InstallApp = lazy(() => import('./pages/InstallApp'));
 const CalendarView = lazy(() => import('./pages/CalendarView'));
 const StreamedVideos = lazy(() => import('./pages/StreamedVideos'));
+const HijriCalendar = lazy(() => import('./pages/HijriCalendar'));
 
 function PageLoadingFallback() {
   return (
@@ -75,11 +76,18 @@ export default function App() {
   const [editingEvent, setEditingEvent] = useState(null);
   const [loading, setLoading]           = useState(true);
   const [authMode, setAuthMode]         = useState(null);
+  const [selectedCity, setSelectedCity] = useState(() => {
+    try {
+      return normalizeCity(localStorage.getItem('communitySelectedCity') || DEFAULT_CITY);
+    } catch {
+      return DEFAULT_CITY;
+    }
+  });
   const [activeStream,   setActiveStream]   = useState(null); // { event, role }
   const [streamRecovery, setStreamRecovery] = useState(null);
 
   useEffect(() => {
-    const dataEntryPages = new Set(['add', 'edit', 'series', 'bulkshare', 'admin']);
+    const dataEntryPages = new Set(['add', 'edit', 'bulkshare', 'admin']);
     window.__communityCanAutoUpdate = () => {
       const activeElement = document.activeElement;
       const enteringData = activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName);
@@ -108,6 +116,27 @@ export default function App() {
   const processingUidRef       = useRef(null);
   const registrationInProgress = useRef(false); // true while AuthPage collects name/email
   const eventsRequestRef        = useRef(0);
+  const authStateSettledRef     = useRef(false);
+
+  useEffect(() => {
+    if (!user?.uid || !profile) return undefined;
+    const preferenceEnabled = profile.pushNotificationsEnabled !== undefined
+      ? profile.pushNotificationsEnabled !== false
+      : profile.reminderEmailEnabled !== false;
+    if (!preferenceEnabled) return undefined;
+
+    const saveToken = event => {
+      const detail = event?.detail || {};
+      const token = detail.token || window.__communityEventsNativePushToken;
+      if (!token) return;
+      saveNativePushToken(user.uid, token, detail.platform || 'android-native').catch(() => {});
+    };
+
+    window.addEventListener('community-events-native-push-token', saveToken);
+    saveToken({ detail: { token: window.__communityEventsNativePushToken, platform: 'android-native' } });
+    startForegroundPushNotifications().catch(() => {});
+    return () => window.removeEventListener('community-events-native-push-token', saveToken);
+  }, [user?.uid, profile?.pushNotificationsEnabled, profile?.reminderEmailEnabled, profile]);
 
   const loadEvents = useCallback(async (guestMode = authMode === 'guest') => {
     const requestId = ++eventsRequestRef.current;
@@ -249,9 +278,24 @@ export default function App() {
       console.log('Processing authenticated user:', authenticatedUser.uid);
 
       let p = null;
+      let profileExtraData = extraData || {};
       let verifiedProfile = false;
       try {
-        p = await ensureUserProfile(authenticatedUser, extraData);
+        const isPhoneUser = !!authenticatedUser.phoneNumber ||
+          authenticatedUser.providerData?.some(provider => provider.providerId === 'phone');
+        if (isPhoneUser && !profileExtraData?._linkedFrom && !profileExtraData?.migratedFromUid) {
+          try {
+            const migratePhoneAccountByPhone = httpsCallable(functions, 'migratePhoneAccountByPhone');
+            const result = await migratePhoneAccountByPhone({});
+            if (result.data?.migrated && result.data?.profile) {
+              profileExtraData = { ...profileExtraData, ...result.data.profile };
+            }
+          } catch (migrationErr) {
+            console.warn('Startup phone profile migration check failed:', migrationErr);
+          }
+        }
+
+        p = await ensureUserProfile(authenticatedUser, profileExtraData);
         verifiedProfile = true;
         setAuthError('');
       } catch (profileErr) {
@@ -275,7 +319,9 @@ export default function App() {
       setUser(authenticatedUser);
       setProfile(p);
       setProfileVerified(verifiedProfile);
-      writeProfileCache(authenticatedUser.uid, p);
+      if (verifiedProfile && !p?.isProfileFallback) {
+        writeProfileCache(authenticatedUser.uid, p);
+      }
       setAuthMode('user');
       try { localStorage.removeItem('socialLoginStarted'); } catch (_) {}
       setPage('home');
@@ -284,8 +330,8 @@ export default function App() {
         const { getSavedEvents } = await import('./services/userService');
         getSavedEvents(authenticatedUser.uid).then(setSavedIds).catch(() => {});
       } catch {}
-      // Request push notification permission after login (non-blocking)
-      requestNotificationPermission(authenticatedUser.uid).catch(() => {});
+      // Refresh any already-granted push token after login without showing a permission prompt.
+      syncGrantedNotificationToken(authenticatedUser.uid, p).catch(() => {});
 
       await eventRefresh;
 
@@ -319,9 +365,11 @@ export default function App() {
     }
 
     let cancelled = false;
+    authStateSettledRef.current = false;
 
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (cancelled) return;
+      authStateSettledRef.current = true;
 
       console.log(
         'onAuthStateChanged fired:',
@@ -345,11 +393,11 @@ export default function App() {
             return;
           }
         }
-        // Only wait for redirect result if we explicitly started a social login
-        // AND it was within the last 3 minutes AND redirect hasn't been checked yet
+        // Ignore any social-login marker left by old app versions.
+        // The app is phone-only now, so startup should never wait here.
         try {
           const raw = localStorage.getItem('socialLoginStarted');
-          if (raw && !redirectChecked) {
+          if (false && raw && !redirectChecked) {
             const started = JSON.parse(raw);
             const age = Date.now() - Number(started.at || 0);
             // Only block if login was started recently (< 3 min) — not on signout
@@ -403,9 +451,31 @@ export default function App() {
 
     // Social login redirect handling removed — app now uses phone-only auth
     setRedirectChecked(true);
+    const startupTimer = window.setTimeout(() => {
+      if (cancelled || authStateSettledRef.current) return;
+      console.warn('Firebase auth startup timed out; releasing splash screen.');
+      const current = auth.currentUser;
+      if (current && !current.isAnonymous && !registrationInProgress.current) {
+        processAuthenticatedUser(current).catch((err) => {
+          console.warn('Timed startup user processing failed:', err);
+          setLoading(false);
+        });
+        return;
+      }
+      if (current?.isAnonymous) {
+        setUser(current);
+        setProfile(null);
+        setAuthMode('guest');
+        setAuthError('');
+      } else {
+        resetAuthState();
+      }
+      setLoading(false);
+    }, 8000);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(startupTimer);
       unsubscribe();
     };
   }, [loadEvents, processAuthenticatedUser, redirectChecked, resetAuthState]);
@@ -469,10 +539,11 @@ export default function App() {
     setPage('add');
   };
 
-  const afterSave = async () => {
+  const afterSave = async (message = 'Event saved successfully.') => {
     await loadEvents();
     setEditingEvent(null);
     setPage('home');
+    window.showToast?.(message, 'success');
   };
 
   const saveDefaultCity = async city => {
@@ -480,6 +551,7 @@ export default function App() {
     await updateProfile(user.uid, { defaultCity });
     const nextProfile = { ...profile, defaultCity };
     setProfile(nextProfile);
+    setSelectedCity(defaultCity);
     writeProfileCache(user.uid, nextProfile);
   };
 
@@ -494,6 +566,16 @@ export default function App() {
       writeProfileCache(user.uid, profile);
     }
   }, [authMode, user?.uid, profile]);
+
+  useEffect(() => {
+    if (profile?.defaultCity) {
+      setSelectedCity(normalizeCity(profile.defaultCity));
+    }
+  }, [profile?.defaultCity]);
+
+  useEffect(() => {
+    try { localStorage.setItem('communitySelectedCity', selectedCity); } catch {}
+  }, [selectedCity]);
 
   if (!firebaseConfigured) return <MissingConfig />;
 
@@ -527,9 +609,9 @@ export default function App() {
   );
 
   const isGuest    = authMode === 'guest';
-  const shared     = { user, profile, events, eventsLoading, offlineMode, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId };
-  const guestPage  = ['home','search','calendar','streams'].includes(page) ? page : 'home';
-  const activePage = isGuest ? guestPage : page;
+  const shared     = { user, profile, events, eventsLoading, offlineMode, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId, selectedCity, setSelectedCity };
+  const guestPage  = ['home','search','calendar','hijri-calendar','streams'].includes(page) ? page : 'home';
+  const activePage = isGuest ? guestPage : (page === 'series' ? 'add' : page);
 
   return (
     <div className="app-shell">
@@ -640,7 +722,10 @@ export default function App() {
           {/* Prominent back button on all sub-pages (not Home) */}
           {activePage !== 'home' && (
             <div style={{ padding:'10px 16px 4px' }}>
-              <button onClick={() => setPage(activePage === 'edit' ? 'my' : 'home')}
+              <button onClick={() => {
+                if (activePage === 'add' && window.__communityAddEventBack?.()) return;
+                setPage(activePage === 'edit' ? 'my' : 'home');
+              }}
                 style={{
                   display:'inline-flex', alignItems:'center', gap:8,
                   background:'white', border:'1px solid var(--border,#e8edec)',
@@ -660,7 +745,7 @@ export default function App() {
           {activePage === 'streams'   && <StreamedVideos isGuest={isGuest} />}
 
           {activePage === 'calendar'  && (
-            isGuest
+            false
               ? <div className="card center" style={{ marginTop: 24 }}>
                   <p style={{ fontSize: '2.5rem', margin: '0 0 12px' }}>🔒</p>
                   <h3 style={{ margin: '0 0 8px' }}>Login Required</h3>
@@ -677,12 +762,12 @@ export default function App() {
           {!isGuest && activePage === 'favourites'  && <Favourites    {...shared} />}
           {!isGuest && activePage === 'profile'    && <Profile       user={user} profile={profile} setProfile={setProfile} />}
           {!isGuest && activePage === 'admin'      && <AdminDashboard {...shared} />}
-          {!isGuest && activePage === 'series'     && <AddSeriesEvents user={user} profile={profile} setPage={setPage} />}
           {!isGuest && activePage === 'bulkshare'  && <BulkShare     events={events} profile={profile} user={user} />}
           {!isGuest && activePage === 'install'    && <InstallApp />}
+          {activePage === 'hijri-calendar' && <HijriCalendar profile={profile} />}
           </Suspense>
 
-          {isGuest && !['home','search','calendar','streams'].includes(page) && (
+          {isGuest && !['home','search','calendar','hijri-calendar','streams'].includes(page) && (
             <div className="card center" style={{ margin: '40px 16px' }}>
               <div style={{ fontSize: '2rem', marginBottom: 12 }}>🔒</div>
               <h3 style={{ margin: '0 0 8px' }}>Login Required</h3>

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import EventFilters from '../components/EventFilters';
-import { getSharePrivacy } from '../utils/permissions';
+import { getAdminCity, getSharePrivacy, isSuperAdminRole } from '../utils/permissions';
 import { todayLocal } from '../services/dateUtils';
 import { STORE_SHARE_LINES } from '../utils/storeLinks';
+import { getEventMetroArea } from '../utils/cities';
 
 const ICON_CALENDAR = String.fromCodePoint(0x1F4C5);
 const ICON_LOCK = String.fromCodePoint(0x1F512);
@@ -104,7 +105,12 @@ function buildMessage(selectedEvents, profile, uid, messageTitle, messageMode = 
 
 export default function BulkShare({ events, profile, user }) {
   const today = todayLocal();
-  const upcoming = events.filter(event => event.eventDate >= today);
+  const bulkShareCity = getAdminCity(profile);
+  const isNationalBulkShare = isSuperAdminRole(profile?.role);
+  const upcoming = events.filter(event => (
+    event.eventDate >= today &&
+    (isNationalBulkShare || getEventMetroArea(event) === bulkShareCity)
+  ));
   const [filtered, setFiltered] = useState(null);
   const [selected, setSelected] = useState(new Set());
   const [copied, setCopied] = useState(false);
@@ -151,6 +157,7 @@ export default function BulkShare({ events, profile, user }) {
         <h2 style={{ margin: '0 0 4px' }}>{ICON_SHARE} Bulk Share Events</h2>
         <p className="small" style={{ margin: 0, color: 'var(--muted)' }}>
           Filter events, select the ones you want, then share or copy.
+          {!isNationalBulkShare ? ' Your bulk share list is limited to your city.' : ''}
         </p>
         <label htmlFor="bulk-share-title" style={{ display:'block', marginTop:14 }}>
           Message title <span className="small">(optional)</span>

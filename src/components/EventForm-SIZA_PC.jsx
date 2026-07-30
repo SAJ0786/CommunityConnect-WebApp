@@ -5,7 +5,14 @@ import AddressAutocomplete from './AddressAutocomplete';
 import { AUDIENCE_TYPES, EVENT_TYPES, RELIGIOUS_EVENT_TYPES } from '../utils/constants';
 import { getHijriDisplay, getHijriParts, hijriDisplayFromParts } from '../services/hijriService';
 import { getHijriSettings } from '../services/settingsService';
+import { getOrganisations } from '../services/organisationsService';
 import { uploadEventImage, getFallbackImage } from '../services/imageService';
+
+const BUILT_IN_CENTRE_NAMES = {
+  muhammadi: 'Muhammadi Welfare Association',
+  imamhasan: 'Imam Hasan Centre',
+  alamdar: 'Alamdar Granville',
+};
 
 export default function EventForm({
   initialEvent, onSubmit, submitLabel = null,
@@ -36,6 +43,7 @@ export default function EventForm({
 
   const [form, setForm]             = useState(initialEvent || blank());
   const [overrides, setOverrides]   = useState([]);
+  const [dynamicOrgs, setDynamicOrgs] = useState([]);
   const [duplicates, setDuplicates] = useState([]);
   const [calendarMode, setCalendarMode] = useState('gregorian'); // 'gregorian' | 'hijri'
   const [hijriInput, setHijriInput]     = useState({});
@@ -49,6 +57,10 @@ export default function EventForm({
 
   useEffect(() => {
     getHijriSettings().then(s => setOverrides(s.overrides || [])).catch(() => {});
+    getOrganisations().then(orgs => {
+      const custom = (orgs || []).filter(o => !o.builtIn);
+      setDynamicOrgs(custom);
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -73,9 +85,38 @@ export default function EventForm({
 
   const update = (field, value) => setForm(p => ({ ...p, [field]: value }));
 
+  const getDynamicOrgById = id => dynamicOrgs.find(org => org.id === id);
+  const getDynamicOrgBySlug = slug => dynamicOrgs.find(org => org.slug === slug);
+
+  const getSelectedOrganiserValue = () => {
+    if (form.organiserId && getDynamicOrgById(form.organiserId)) return `org:${form.organiserId}`;
+    return form.organiserType || 'private';
+  };
+
+  const getCentreName = organiserType => {
+    if (!organiserType || organiserType === 'private' || organiserType === 'centre') return '';
+    if (form.organiserId) return getDynamicOrgById(form.organiserId)?.name || '';
+    return BUILT_IN_CENTRE_NAMES[organiserType]
+      || getDynamicOrgBySlug(organiserType)?.name
+      || '';
+  };
+
+  const handleOrganiserChange = value => {
+    const selectedOrg = value?.startsWith('org:') ? getDynamicOrgById(value.slice(4)) : null;
+    const organiserType = selectedOrg?.slug || value;
+    const centreName = selectedOrg?.name || BUILT_IN_CENTRE_NAMES[organiserType] || '';
+    setForm(p => ({
+      ...p,
+      organiserType,
+      organiserId: selectedOrg?.id || '',
+      organiserName: selectedOrg?.name || centreName || '',
+      hostName: centreName || (p.isOnBehalfOf ? '' : userName),
+    }));
+  };
+
   const toggleOnBehalf = checked => setForm(p => ({
     ...p, isOnBehalfOf: checked,
-    hostName:  checked ? '' : userName,
+    hostName:  getCentreName(p.organiserType) || (checked ? '' : userName),
     hostPhone: checked ? '' : userPhone
   }));
 
@@ -127,6 +168,8 @@ export default function EventForm({
 
     onSubmit({
       ...form,
+      hostName: getCentreName(form.organiserType) || form.hostName,
+      organiserName: getCentreName(form.organiserType) || form.organiserName || '',
       imageUrl,
       imagePath,
       eventTypeDisplay: resolvedType,    // human-readable label (e.g. "Aqeeqa")
@@ -177,46 +220,33 @@ export default function EventForm({
         <span>I am adding this event on behalf of someone else</span>
       </label>
 
-      {/* Organiser Type toggle — always shown, default private */}
+      {/* Organiser Type - private or specific organisation */}
       <div style={{ marginBottom: 14 }}>
         <label style={{ display: 'block', marginBottom: 6 }}>
           Organiser Type
           <span className="small" style={{ marginLeft: 6, fontWeight: 400 }}>
-            (Private = individual host · Centre = organisation or centre)
+            (Used to show the correct logo when no poster is uploaded)
           </span>
         </label>
-        <div style={{
-          display: 'inline-flex', borderRadius: 12,
-          border: '1px solid var(--border)', overflow: 'hidden',
-          background: 'var(--bg,#f3f4f6)'
-        }}>
-          {['private', 'centre'].map(opt => (
-            <button
-              key={opt}
-              type="button"
-              onClick={() => update('organiserType', opt)}
-              style={{
-                padding: '9px 22px',
-                border: 'none', cursor: 'pointer',
-                fontWeight: form.organiserType === opt ? 900 : 500,
-                fontSize: '0.875rem',
-                background: form.organiserType === opt ? 'var(--teal)' : 'transparent',
-                color:      form.organiserType === opt ? 'white'       : 'var(--muted)',
-                transition: 'all .15s',
-                textTransform: 'capitalize'
-              }}
-            >
-              {opt === 'private' ? '🔒 Private' : '🏛 Centre'}
-            </button>
+        <select value={getSelectedOrganiserValue()}
+          onChange={e => handleOrganiserChange(e.target.value)}>
+          <option value="private">Private (individual host)</option>
+          <option value="muhammadi">Muhammadi Welfare Association</option>
+          <option value="imamhasan">Imam Hasan Centre</option>
+          <option value="alamdar">Alamdar Granville</option>
+          {dynamicOrgs.map(org => (
+            <option key={org.id} value={`org:${org.id}`}>{org.name}{org.location ? ` - ${org.location}` : ''}</option>
           ))}
-        </div>
+          <option value="centre">Other Centre / Organisation</option>
+        </select>
       </div>
 
       {/* Host name */}
       <label>Host Name *</label>
       <input required
         placeholder={form.isOnBehalfOf ? "Enter the host's name" : 'Your name'}
-        value={form.hostName} onChange={e => update('hostName', e.target.value)} />
+        value={form.hostName} onChange={e => update('hostName', e.target.value)}
+        readOnly={!!getCentreName(form.organiserType)} />
 
       {/* Host phone — shown for all events */}
       <label>Host Phone Number <span className="small">(optional)</span></label>

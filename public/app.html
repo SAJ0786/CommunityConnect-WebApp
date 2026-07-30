@@ -43,6 +43,51 @@
       display: flex;
     }
 
+    .panel {
+      max-width: 360px;
+      width: 100%;
+    }
+
+    .logo {
+      width: 88px;
+      height: 88px;
+      object-fit: contain;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: 1.35rem;
+      line-height: 1.2;
+    }
+
+    p {
+      margin: 0 0 18px;
+      color: #475569;
+      font-size: 0.98rem;
+      line-height: 1.45;
+    }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    a.button {
+      display: block;
+      padding: 13px 16px;
+      border-radius: 12px;
+      text-decoration: none;
+      border: 1px solid #0f766e;
+      color: #0f766e;
+      font-weight: 800;
+    }
+
+    a.button.primary {
+      background: #0f766e;
+      color: #ffffff;
+    }
+
     a {
       color: #0f766e;
       font-weight: 800;
@@ -51,7 +96,14 @@
 </head>
 <body>
   <main class="fallback" id="fallback">
-    <p>Opening Community Events Australia. <a id="fallbackLink" href="/">Tap here if it does not open.</a></p>
+    <div class="panel">
+      <img class="logo" src="/icons/icon-192.png" alt="Community Events Australia">
+      <h1>Open Community Events Australia</h1>
+      <p id="fallbackText">Opening the correct app store. If it does not open, use the button below.</p>
+      <div class="actions">
+        <a class="button primary" id="storeLink" href="/">Download or open app</a>
+      </div>
+    </div>
   </main>
 
   <script>
@@ -64,29 +116,31 @@
       var microsoftStore = "https://apps.microsoft.com/detail/9NDGJZHL86KJ";
       var webApp = "https://communityevents.siza.info/";
       var fallback = document.getElementById("fallback");
-      var fallbackLink = document.getElementById("fallbackLink");
+      var fallbackText = document.getElementById("fallbackText");
+      var storeLink = document.getElementById("storeLink");
 
-      function showFallback(url) {
-        fallbackLink.href = url;
+      function showFallback(storeUrl, message) {
+        storeLink.href = storeUrl || webApp;
+        if (message) fallbackText.textContent = message;
         fallback.className = "fallback is-visible";
       }
 
       if (isAndroid) {
         var intentUrl = "intent://communityevents.siza.info/app#Intent;scheme=https;package=info.siza.communityevents.app;S.browser_fallback_url=" + encodeURIComponent(androidStore) + ";end";
-        fallbackLink.href = androidStore;
+        storeLink.href = androidStore;
         window.location.replace(intentUrl);
         setTimeout(function () { showFallback(androidStore); }, 1200);
         return;
       }
 
       if (isIOS) {
-        fallbackLink.href = iosStore;
+        storeLink.href = iosStore;
         window.location.replace(iosStore);
-        setTimeout(function () { showFallback(iosStore); }, 1200);
+        setTimeout(function () { showFallback(iosStore, "Open Community Events Australia from the App Store."); }, 1200);
         return;
       }
 
-      fallbackLink.href = microsoftStore;
+      storeLink.href = microsoftStore;
       window.location.replace(microsoftStore || webApp);
       setTimeout(function () { showFallback(webApp); }, 1200);
     }());

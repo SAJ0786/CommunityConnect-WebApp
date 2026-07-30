@@ -80,7 +80,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
           boxShadow:'0 2px 8px rgba(0,0,0,0.03)' }}>⚙️</button>
       </div>
 
-      {/* ── PINNED block: section header + View Calendar (does NOT scroll away) ── */}
+      {/* ── PINNED block: section header + View Calendar & Sync (does NOT scroll away) ── */}
       <div style={{ position:'sticky', top:0, zIndex:10,
         background:'var(--bg,#f4f7f6)', paddingTop:4 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
@@ -95,7 +95,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
           </button>
         </div>
 
-        {/* View Calendar card — pinned */}
+        {/* View Calendar & Sync card — pinned */}
         <div onClick={() => setPage('calendar')} style={{
           margin:'0 16px 10px', cursor:'pointer',
           background:'linear-gradient(120deg,#0f766e,#0b5d57)', borderRadius:16,
@@ -103,7 +103,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
           justifyContent:'space-between', color:'white',
           boxShadow:'0 4px 14px rgba(15,118,110,0.3)' }}>
           <span style={{ display:'flex', alignItems:'center', gap:10, fontWeight:800, fontSize:'0.875rem' }}>
-            📅 View Calendar
+            📅 View Calendar &amp; Sync
           </span>
           <span style={{ fontSize:'1.125rem' }}>›</span>
         </div>

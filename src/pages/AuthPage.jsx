@@ -92,6 +92,17 @@ export default function AuthPage({ onAuthComplete, authError = '', onRegistratio
 
       const snap = await getDoc(doc(db, 'users', user.uid));
 
+      try {
+        const migratePhoneAccountByPhone = httpsCallable(functions, 'migratePhoneAccountByPhone');
+        const result = await migratePhoneAccountByPhone({});
+        if (result.data?.migrated && result.data?.profile?.fullName) {
+          onAuthComplete(user, result.data.profile);
+          return;
+        }
+      } catch (migrationError) {
+        console.warn('Phone profile migration check failed:', migrationError);
+      }
+
       if (snap.exists() && snap.data()?.fullName) {
         // Fully registered user — go straight in
         onAuthComplete(user, {});

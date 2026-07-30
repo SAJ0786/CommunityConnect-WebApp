@@ -58,6 +58,7 @@
       { "source": "/cal",              "function": "calendarFeed",     "region": "australia-southeast1" },
       { "source": "/unsubscribe.html", "function": "unsubscribeEmail", "region": "australia-southeast1" },
       { "source": "/app",              "destination": "/app.html" },
+      { "source": "/download",         "destination": "/download.html" },
       { "source": "**",               "destination": "/index.html" }
     ]
   },

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import ReciterFields from './ReciterFields';
 import HijriDatePicker from './HijriDatePicker';
 import AddressAutocomplete from './AddressAutocomplete';
@@ -7,6 +7,7 @@ import { getHijriDisplay, getHijriParts, hijriDisplayFromParts } from '../servic
 import { getHijriSettings } from '../services/settingsService';
 import { getOrganisations } from '../services/organisationsService';
 import { uploadEventImage, getFallbackImage } from '../services/imageService';
+import { applyPrayerOffset, calculatePrayerTimes, hasPrayerLocation, prayerLabel, PRAYER_OPTIONS } from '../services/prayerTimeService';
 
 const BUILT_IN_CENTRE_NAMES = {
   muhammadi: 'Muhammadi Welfare Association',
@@ -28,6 +29,11 @@ export default function EventForm({
     eventDate:           initialDate || '',
     startTime:           '',
     endTime:             '',
+    timeMode:            'manual',
+    prayerName:          '',
+    prayerLabel:         '',
+    prayerOffsetMinutes: 0,
+    prayerTimeZone:      '',
     eventType:           'Majlis',
     customEventType:     '',
     eventSubject:        '',
@@ -56,6 +62,11 @@ export default function EventForm({
 
   const isCustom      = form.eventType === 'Custom';
   const showReligious = RELIGIOUS_EVENT_TYPES.includes(form.eventType);
+  const prayerTimes = useMemo(
+    () => calculatePrayerTimes(form.eventDate, form.address),
+    [form.eventDate, form.address]
+  );
+  const canUsePrayerTime = !!prayerTimes;
 
   useEffect(() => {
     getHijriSettings().then(s => setOverrides(s.overrides || [])).catch(() => {});
@@ -96,6 +107,93 @@ export default function EventForm({
     setForm(p => ({ ...p, [field]: value }));
     clearValidationError(field);
   };
+
+  const setManualStartTime = value => {
+    setForm(p => ({
+      ...p,
+      startTime: value,
+      timeMode: 'manual',
+      prayerName: '',
+      prayerLabel: '',
+      prayerOffsetMinutes: 0,
+      prayerTimeZone: '',
+    }));
+    clearValidationError('startTime');
+  };
+
+  const setTimeMode = mode => {
+    if (mode === 'prayer') {
+      setForm(p => ({
+        ...p,
+        timeMode: 'prayer',
+        startTime: p.prayerName && prayerTimes?.[p.prayerName]
+          ? applyPrayerOffset(prayerTimes[p.prayerName], p.prayerOffsetMinutes || 0)
+          : '',
+        prayerTimeZone: prayerTimes?.timeZone || '',
+      }));
+      clearValidationError('startTime');
+      return;
+    }
+
+    setForm(p => ({
+      ...p,
+      timeMode: 'manual',
+      prayerName: '',
+      prayerLabel: '',
+      prayerOffsetMinutes: 0,
+      prayerTimeZone: '',
+    }));
+  };
+
+  const applyPrayerTime = (prayerName, offsetMinutes = form.prayerOffsetMinutes || 0) => {
+    if (!prayerName || !prayerTimes?.[prayerName]) {
+      setForm(p => ({ ...p, startTime: '', prayerName: '', prayerLabel: '', prayerTimeZone: '' }));
+      return;
+    }
+    const adjustedTime = applyPrayerOffset(prayerTimes[prayerName], offsetMinutes);
+    setForm(p => ({
+      ...p,
+      startTime: adjustedTime,
+      timeMode: 'prayer',
+      prayerName,
+      prayerLabel: prayerLabel(prayerName),
+      prayerOffsetMinutes: Number(offsetMinutes || 0),
+      prayerTimeZone: prayerTimes.timeZone,
+    }));
+    clearValidationError('startTime');
+  };
+
+  const adjustPrayerOffset = delta => {
+    const nextOffset = Math.max(-360, Math.min(360, Number(form.prayerOffsetMinutes || 0) + delta));
+    if (form.prayerName) applyPrayerTime(form.prayerName, nextOffset);
+    else setForm(p => ({ ...p, prayerOffsetMinutes: nextOffset }));
+  };
+
+  useEffect(() => {
+    if (form.timeMode !== 'prayer') return;
+    if (!form.prayerName || !prayerTimes?.[form.prayerName]) {
+      if (!form.startTime && !form.prayerLabel && !form.prayerTimeZone) return;
+      setForm(p => ({
+        ...p,
+        startTime: '',
+        prayerLabel: '',
+        prayerTimeZone: '',
+      }));
+      return;
+    }
+    const adjustedTime = applyPrayerOffset(prayerTimes[form.prayerName], form.prayerOffsetMinutes || 0);
+    if (
+      form.startTime === adjustedTime &&
+      form.prayerTimeZone === prayerTimes.timeZone &&
+      form.prayerLabel === prayerLabel(form.prayerName)
+    ) return;
+    setForm(p => ({
+      ...p,
+      startTime: adjustedTime,
+      prayerLabel: prayerLabel(p.prayerName),
+      prayerTimeZone: prayerTimes.timeZone,
+    }));
+  }, [form.prayerLabel, form.prayerName, form.prayerOffsetMinutes, form.prayerTimeZone, form.startTime, form.timeMode, prayerTimes]);
 
   const getDynamicOrgById = id => dynamicOrgs.find(org => org.id === id);
   const getDynamicOrgBySlug = slug => dynamicOrgs.find(org => org.slug === slug);
@@ -161,7 +259,11 @@ export default function EventForm({
       : String(form.address?.fullAddress || '').trim();
     const errors = {};
     if (!seriesMode && !form.eventDate) errors.eventDate = 'Please select the event date.';
-    if (!form.startTime) errors.startTime = 'Please select the event start time.';
+    if (form.timeMode === 'prayer' && !form.prayerName) {
+      errors.startTime = 'Please select the prayer time for this event.';
+    } else if (!form.startTime) {
+      errors.startTime = 'Please select the event start time.';
+    }
     if (addressText.length < 5) errors.address = 'Please enter the full event address.';
     if (Object.keys(errors).length) {
       setValidationErrors(errors);
@@ -367,20 +469,48 @@ export default function EventForm({
       </div>
       )}
 
-      <div className="row" style={{ marginTop: 4 }}>
-        <div>
-          <label>Start Time *</label>
-          <input type="time" required value={form.startTime}
-            aria-invalid={!!validationErrors.startTime}
-            onChange={e => update('startTime', e.target.value)} />
-          {validationErrors.startTime && <p className="field-error">{validationErrors.startTime}</p>}
-        </div>
-        <div>
-          <label>End Time <span className="small">(optional)</span></label>
-          <input type="time" value={form.endTime || ''}
-            onChange={e => update('endTime', e.target.value)} />
+      <div style={{ marginTop: 8, marginBottom: 12 }}>
+        <label style={{ display: 'block', marginBottom: 6 }}>Time Selection *</label>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 8,
+          border: '1px solid var(--border)',
+          borderRadius: 14,
+          padding: 6,
+          background: 'var(--bg,#f3f4f6)',
+        }}>
+          <button type="button"
+            className={form.timeMode === 'prayer' ? 'btn-light' : ''}
+            onClick={() => setTimeMode('manual')}
+            style={{ margin: 0 }}>
+            Fixed Time
+          </button>
+          <button type="button"
+            className={form.timeMode === 'prayer' ? '' : 'btn-light'}
+            onClick={() => setTimeMode('prayer')}
+            style={{ margin: 0 }}>
+            Prayer Time (Variable)
+          </button>
         </div>
       </div>
+
+      {form.timeMode !== 'prayer' && (
+        <div className="row" style={{ marginTop: 4 }}>
+          <div>
+            <label>Start Time *</label>
+            <input type="time" required value={form.startTime}
+              aria-invalid={!!validationErrors.startTime}
+              onChange={e => setManualStartTime(e.target.value)} />
+            {validationErrors.startTime && <p className="field-error">{validationErrors.startTime}</p>}
+          </div>
+          <div>
+            <label>End Time <span className="small">(optional)</span></label>
+            <input type="time" value={form.endTime || ''}
+              onChange={e => update('endTime', e.target.value)} />
+          </div>
+        </div>
+      )}
 
       {/* Duplicate warning */}
       {duplicates.length > 0 && (
@@ -412,6 +542,68 @@ export default function EventForm({
         invalid={!!validationErrors.address}
       />
       {validationErrors.address && <p className="field-error">{validationErrors.address}</p>}
+
+      {form.timeMode === 'prayer' && (
+        <div className="notice" style={{ marginTop: 10, marginBottom: 14 }}>
+          <label style={{ marginTop: 0 }}>Prayer Time *</label>
+          <select
+            value={form.prayerName || ''}
+            onChange={e => applyPrayerTime(e.target.value)}
+            disabled={!canUsePrayerTime}
+            aria-invalid={!!validationErrors.startTime}
+          >
+            <option value="">Select prayer time</option>
+            {PRAYER_OPTIONS.map(option => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+
+          <label style={{ marginTop: 12 }}>Offset</label>
+          <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr 48px', gap: 8, alignItems: 'center' }}>
+            <button type="button" className="btn-light" onClick={() => adjustPrayerOffset(-30)} style={{ margin: 0 }}>-</button>
+            <div style={{
+              textAlign: 'center',
+              border: '1px solid var(--border)',
+              borderRadius: 12,
+              padding: '10px 12px',
+              background: 'white',
+              fontWeight: 900,
+              color: 'var(--text)',
+            }}>
+              {Number(form.prayerOffsetMinutes || 0) > 0 ? '+' : ''}{Number(form.prayerOffsetMinutes || 0)} mins
+            </div>
+            <button type="button" className="btn-light" onClick={() => adjustPrayerOffset(30)} style={{ margin: 0 }}>+</button>
+          </div>
+
+          {canUsePrayerTime && form.prayerName && (
+            <div style={{
+              marginTop: 10,
+              padding: '10px 12px',
+              borderRadius: 12,
+              background: 'rgba(15,118,110,0.08)',
+              border: '1px solid rgba(15,118,110,0.18)',
+              color: 'var(--text)',
+            }}>
+              <div style={{ fontWeight: 900 }}>
+                {prayerLabel(form.prayerName)}: {prayerTimes[form.prayerName]}
+              </div>
+              <div className="small" style={{ marginTop: 3, color: 'var(--teal)', fontWeight: 900 }}>
+                Event start time: {form.startTime || prayerTimes[form.prayerName]}
+              </div>
+            </div>
+          )}
+          {validationErrors.startTime && <p className="field-error">{validationErrors.startTime}</p>}
+          <p className="small" style={{ margin: '6px 0 0', color: 'var(--muted)' }}>
+            {canUsePrayerTime
+              ? `Calculated from this event date and selected address GPS location (${prayerTimes.timeZone}).`
+              : hasPrayerLocation(form.address)
+                ? 'Select the event date first to calculate prayer times.'
+                : 'Select the event date and choose a full address from Google suggestions before choosing prayer time.'}
+          </p>
+        </div>
+      )}
 
       {/* Event type */}
       <label>Event Type *</label>

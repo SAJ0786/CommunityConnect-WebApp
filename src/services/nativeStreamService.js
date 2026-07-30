@@ -1,17 +1,26 @@
 const CHUNK_INTERVAL_MS = 1000;
 const AUDIO_BITRATE = 128000;
 const IS_ANDROID = /android/i.test(navigator.userAgent);
-const ANDROID_RECORDING_FPS = 24;
-const ANDROID_VIDEO_BITRATE = 2200000;
+const ANDROID_RECORDING_FPS = 30;
+const ANDROID_VIDEO_BITRATE = 4200000;
 const RELAY_HTTP_URL = import.meta.env.VITE_NATIVE_STREAM_RELAY_HTTP_URL
   || 'https://native-stream-relay-209723097611.australia-southeast1.run.app';
 
 export const QUALITY_PROFILES = {
-  '1080p': { label: '1080p HD', width: 1920, height: 1080, videoBitrate: 6000000 },
-  '720p':  { label: '720p HD',  width: 1280, height: 720,  videoBitrate: 4500000 },
+  '1080p': { label: '1080p HD', width: 1920, height: 1080, videoBitrate: 8000000 },
+  '720p':  { label: '720p HD',  width: 1280, height: 720,  videoBitrate: 5500000 },
   '480p':  { label: '480p',     width: 854,  height: 480,  videoBitrate: 2200000 },
 };
 const QUALITY_ORDER = ['480p', '720p', '1080p'];
+
+function getAndroidNativeBridge() {
+  try {
+    const bridge = window.CommunityEventsAndroid;
+    return bridge && bridge.isAvailable?.() ? bridge : null;
+  } catch {
+    return null;
+  }
+}
 
 function getBestMimeType() {
   const candidates = IS_ANDROID
@@ -83,6 +92,7 @@ export class NativeStreamer {
     this._lastOrientationMismatch = false;
     this.qualityProfile = '720p';
     this.audioMode = 'natural';
+    this.startMuted = false;
     this.uploadMbps = null;
     this._qualityChanging = false;
     this._congestedChecks = 0;
@@ -92,6 +102,63 @@ export class NativeStreamer {
     this._rtmpUrl = 'OAUTH';
     this._reconnecting = false;
     this._reconnectStartedAt = 0;
+    this._nativeStopRetries = 0;
+    this.androidBridge = getAndroidNativeBridge();
+    this.isNativeBridge = !!this.androidBridge;
+    this._nativeWaiters = [];
+    this.onNativeEndConfirmed = null;
+
+    this._onNativeStreamEvent = (event) => {
+      if (!this.isNativeBridge) return;
+      const detail = event.detail || {};
+      const type = detail.type || 'status';
+      const message = detail.message || '';
+
+      if (type === 'endConfirmed') {
+        window.__communityEventsNativeEndRequested = Date.now();
+        this.onStatus(message || 'Ending stream...');
+        this.onNativeEndConfirmed?.();
+      } else if (type === 'error') this.onError(message || 'Native Android streaming error.');
+      else if (type === 'stats') this.onStats(detail);
+      else if (type === 'live') {
+        this.active = true;
+        this._nativeStopRetries = 0;
+        this.onStatus(message || 'Streaming to YouTube');
+      } else if (type === 'stopped') {
+        this.active = false;
+        if (this.ending) {
+          this.onStatus(message || 'Stopped');
+        } else if (this._rtmpUrl && this._rtmpUrl !== 'OAUTH' && this._nativeStopRetries < 1) {
+          this._nativeStopRetries++;
+          this.onStatus('Native camera stopped during startup - retrying same YouTube stream...');
+          window.setTimeout(() => {
+            if (!this.ending) this.retryReconnect();
+          }, 900);
+        } else {
+          this.onError(message || 'Native stream stopped unexpectedly.');
+        }
+      } else {
+        this.onStatus(message || type);
+      }
+
+      this._nativeWaiters = this._nativeWaiters.filter(waiter => {
+        if (waiter.types.includes(type)) {
+          clearTimeout(waiter.timer);
+          waiter.resolve(detail);
+          return false;
+        }
+        if (type === 'error') {
+          clearTimeout(waiter.timer);
+          waiter.reject(new Error(message || 'Native Android streaming error.'));
+          return false;
+        }
+        return true;
+      });
+    };
+
+    if (this.isNativeBridge) {
+      window.addEventListener('communityevents:nativeStreamEvent', this._onNativeStreamEvent);
+    }
 
     this._onVisibilityChange = () => {
       if (document.visibilityState === 'visible' && this.active) this._acquireWakeLock();
@@ -148,8 +215,44 @@ export class NativeStreamer {
     this.onStatus(`Stream orientation locked to ${this._streamOrientationLock}`);
   }
 
+  tuneQualityForStream() {
+    const upload = Number(this.uploadMbps || 0);
+    const hasUploadTest = upload > 0;
+    const isPortrait = this._forcedStreamOrientation !== 'landscape';
+
+    if (hasUploadTest && upload < 2.2) {
+      this.qualityProfile = '480p';
+    } else if (!IS_ANDROID && isPortrait && (!hasUploadTest || upload >= 5.5)) {
+      // Portrait video sits inside YouTube's 16:9 frame. 1080p keeps the
+      // portrait image visibly sharper after the relay adds side bars.
+      this.qualityProfile = '1080p';
+    } else if (!IS_ANDROID && !isPortrait && hasUploadTest && upload >= 5) {
+      this.qualityProfile = '1080p';
+    } else {
+      this.qualityProfile = '720p';
+    }
+
+    this.onStatus(`Stream quality selected: ${QUALITY_PROFILES[this.qualityProfile].label}`);
+    return { profile: this.qualityProfile, uploadMbps: this.uploadMbps, ...QUALITY_PROFILES[this.qualityProfile] };
+  }
+
   setAudioMode(mode) {
     this.audioMode = mode === 'speech' ? 'speech' : 'natural';
+  }
+
+  setMuted(muted) {
+    this.startMuted = !!muted;
+    if (this.isNativeBridge) {
+      try { this.androidBridge.setMuted(this.startMuted); } catch {}
+      this.onStatus(this.startMuted ? 'Microphone muted' : 'Microphone active');
+      return;
+    }
+    this.stream?.getAudioTracks?.().forEach(track => { track.enabled = !this.startMuted; });
+  }
+
+  setFacingMode(facingMode) {
+    this.currentFacingMode = facingMode === 'user' ? 'user' : 'environment';
+    this.onStatus(this.currentFacingMode === 'user' ? 'Front camera selected' : 'Back camera selected');
   }
 
   setQualityProfile(profile) {
@@ -170,7 +273,7 @@ export class NativeStreamer {
       if (!response.ok) throw new Error(`Upload test failed (${response.status})`);
       const seconds = Math.max((performance.now() - started) / 1000, 0.1);
       this.uploadMbps = (bytes * 8) / seconds / 1000000;
-      this.qualityProfile = this.uploadMbps >= 8 ? '1080p' : this.uploadMbps >= 5.5 ? '720p' : '480p';
+      this.qualityProfile = this.uploadMbps >= 9 ? '1080p' : this.uploadMbps >= 3.8 ? '720p' : '480p';
     } catch (error) {
       console.warn('[NativeStream] Upload test unavailable:', error.message);
       const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
@@ -180,9 +283,9 @@ export class NativeStreamer {
       clearTimeout(timer);
     }
     // Android Chrome/Samsung Internet must decode camera, draw to canvas,
-    // encode WebM, and upload while the relay transcodes again. 720p/1080p can
-    // overload mobile encoders and produces blocky frames or missing audio.
-    if (IS_ANDROID) this.qualityProfile = '480p';
+    // encode WebM, and upload while the relay transcodes again. Keep Android
+    // capped at 720p for stability, but do not force 480p on good Wi-Fi/5G.
+    if (IS_ANDROID && this.qualityProfile === '1080p') this.qualityProfile = '720p';
     const selected = QUALITY_PROFILES[this.qualityProfile];
     this.onStatus(`Network quality: ${this.uploadMbps ? `${this.uploadMbps.toFixed(1)} Mbps - ` : ''}${selected.label}`);
     return { profile: this.qualityProfile, uploadMbps: this.uploadMbps, ...selected };
@@ -219,7 +322,35 @@ export class NativeStreamer {
     this._wakeLock = null;
   }
 
-  async requestCamera(facingMode = 'environment') {
+  _videoConstraintsForQuality(quality, preferPortrait, strong = false) {
+    const targetWidth = preferPortrait ? quality.height : quality.width;
+    const targetHeight = preferPortrait ? quality.width : quality.height;
+    const minWidth = strong ? Math.round(targetWidth * 0.82) : (preferPortrait ? 540 : 960);
+    const minHeight = strong ? Math.round(targetHeight * 0.82) : (preferPortrait ? 960 : 540);
+
+    return {
+      width: { ideal: targetWidth, min: minWidth },
+      height: { ideal: targetHeight, min: minHeight },
+      aspectRatio: { ideal: preferPortrait ? 9 / 16 : 16 / 9 },
+      frameRate: { ideal: 30, min: strong ? 24 : 15 },
+    };
+  }
+
+  async requestCamera(facingMode = 'environment', strong = false) {
+    if (this.isNativeBridge) {
+      this.onStatus('Requesting native Android camera access...');
+      this.currentFacingMode = facingMode;
+      this.androidBridge.requestPreview(JSON.stringify({
+        facingMode,
+        orientation: this._forcedStreamOrientation || 'landscape',
+        qualityProfile: this.qualityProfile,
+        audioMode: this.audioMode,
+      }));
+      await this._waitForNativeEvent(['previewReady'], 15000);
+      this.onStatus('Native Android camera ready');
+      return null;
+    }
+
     this.onStatus('Requesting camera access...');
     this.currentFacingMode = facingMode;
     const preferPortrait = this._forcedStreamOrientation === 'portrait';
@@ -229,10 +360,7 @@ export class NativeStreamer {
     const constraints = {
       video: {
         facingMode,
-        width: { ideal: preferPortrait ? quality.height : quality.width, min: preferPortrait ? 540 : 960 },
-        height: { ideal: preferPortrait ? quality.width : quality.height, min: preferPortrait ? 960 : 540 },
-        aspectRatio: { ideal: preferPortrait ? 9 / 16 : 16 / 9 },
-        frameRate: { ideal: 30, min: 15 },
+        ...this._videoConstraintsForQuality(quality, preferPortrait, strong),
       },
       audio: IS_ANDROID ? true : {
         echoCancellation: speechMode,
@@ -251,6 +379,16 @@ export class NativeStreamer {
     this._lastOrientation = this._getOrientationKey();
     this.onStatus(`Camera ready - ${settings.width || '?'}x${settings.height || '?'} @ ${settings.frameRate || '?'}fps`);
     return stream;
+  }
+
+  _cameraSettingsMeetQuality(settings, quality, preferPortrait) {
+    const width = Number(settings?.width || 0);
+    const height = Number(settings?.height || 0);
+    if (!width || !height) return true;
+
+    const targetWidth = preferPortrait ? quality.height : quality.width;
+    const targetHeight = preferPortrait ? quality.width : quality.height;
+    return width >= targetWidth * 0.82 && height >= targetHeight * 0.82;
   }
 
   async reacquireCamera() {
@@ -281,12 +419,19 @@ export class NativeStreamer {
 
       const videoTrack = this.stream.getVideoTracks()[0];
       const audioTrack = this.stream.getAudioTracks()[0];
-      await videoTrack.applyConstraints?.({
-        width: { ideal: preferPortrait ? quality.height : quality.width },
-        height: { ideal: preferPortrait ? quality.width : quality.height },
-        aspectRatio: { ideal: preferPortrait ? 9 / 16 : 16 / 9 },
-        frameRate: { ideal: 30, min: 15 },
-      }).catch(error => console.warn('[NativeStream] Video constraints unchanged:', error.message));
+      await videoTrack.applyConstraints?.(this._videoConstraintsForQuality(quality, preferPortrait, true))
+        .catch(async error => {
+          console.warn('[NativeStream] Strong video constraints unchanged:', error.message);
+          await videoTrack.applyConstraints?.(this._videoConstraintsForQuality(quality, preferPortrait, false))
+            .catch(inner => console.warn('[NativeStream] Video constraints unchanged:', inner.message));
+        });
+      const settings = videoTrack.getSettings?.() || {};
+      if (!IS_ANDROID && !this._cameraSettingsMeetQuality(settings, quality, preferPortrait)) {
+        this.onStatus(`Reopening camera for ${quality.label} capture`);
+        this.stream.getTracks().forEach(track => track.stop());
+        this.stream = null;
+        return this.requestCamera(this.currentFacingMode || 'environment', true);
+      }
       if (!IS_ANDROID) {
         await audioTrack.applyConstraints?.({
           echoCancellation: speechMode,
@@ -315,6 +460,13 @@ export class NativeStreamer {
   }
 
   async connect(wsUrl, streamToken) {
+    if (this.isNativeBridge) {
+      this._wsUrl = wsUrl || '';
+      this._streamToken = streamToken || '';
+      this.onStatus('Native Android streaming bridge ready');
+      return;
+    }
+
     this._wsUrl = wsUrl;
     this._streamToken = streamToken;
     return this._connectSocket();
@@ -401,6 +553,22 @@ export class NativeStreamer {
   }
 
   async startRecording(rtmpUrl) {
+    if (this.isNativeBridge) {
+      if (!rtmpUrl || rtmpUrl === 'OAUTH') {
+        throw new Error('Native Android streaming needs a direct RTMPS target.');
+      }
+      this._rtmpUrl = rtmpUrl;
+      this.ending = false;
+      this._nativeStopRetries = 0;
+      this.startTime = Date.now();
+      this.onStatus('Preparing YouTube connection...');
+      this.androidBridge.startStream(JSON.stringify(this._nativeStartOptions()));
+      await this._waitForNativeEvent(['live'], 90000);
+      this.active = true;
+      this.onStatus('Streaming to YouTube');
+      return;
+    }
+
     if (!this.ws) throw new Error('WebSocket not ready');
 
     this._rtmpUrl = rtmpUrl || 'OAUTH';
@@ -511,7 +679,35 @@ export class NativeStreamer {
 
   retryReconnect() {
     if (this.ending) return;
+    if (this.isNativeBridge) {
+      if (!this._rtmpUrl || this._rtmpUrl === 'OAUTH') {
+        this.onError('Could not retry native stream because the YouTube stream target is missing.');
+        return;
+      }
+      this.active = true;
+      this.ending = false;
+      this.startTime = this.startTime || Date.now();
+      this.onStatus('Restarting native Android RTMPS stream...');
+      try {
+        this.androidBridge.startStream(JSON.stringify(this._nativeStartOptions()));
+      } catch (error) {
+        this.onError(error?.message || 'Could not restart native Android stream.');
+      }
+      return;
+    }
     this._beginReconnect();
+  }
+
+  _nativeStartOptions() {
+    return {
+      rtmpUrl: this._rtmpUrl,
+      orientation: this._forcedStreamOrientation || 'landscape',
+      qualityProfile: this.qualityProfile,
+      audioMode: this.audioMode,
+      muted: this.startMuted,
+      facingMode: this.currentFacingMode || 'environment',
+      eventTitle: this.eventTitle || '',
+    };
   }
 
   async _startRecorder() {
@@ -567,6 +763,8 @@ export class NativeStreamer {
     canvas.height = streamHeight;
 
     const ctx = canvas.getContext('2d', { alpha: false });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     const video = document.createElement('video');
     video.srcObject = this.stream;
     video.muted = true;
@@ -797,6 +995,18 @@ export class NativeStreamer {
   stop() {
     this.ending = true;
     this.active = false;
+    if (this.isNativeBridge) {
+      try { this.androidBridge.stopStream(); } catch {}
+      window.removeEventListener('communityevents:nativeStreamEvent', this._onNativeStreamEvent);
+      this._nativeWaiters.forEach(waiter => {
+        clearTimeout(waiter.timer);
+        waiter.reject(new Error('Native stream stopped.'));
+      });
+      this._nativeWaiters = [];
+      this.onStatus('Stopped');
+      return;
+    }
+
     clearInterval(this._statsTimer);
     this._clearStartWaiters();
     this._releaseWakeLock();
@@ -836,6 +1046,12 @@ export class NativeStreamer {
   }
 
   async switchCamera() {
+    if (this.isNativeBridge) {
+      this.androidBridge.switchCamera();
+      this.onStatus('Switching native Android camera...');
+      return null;
+    }
+
     if (this._switching) return this.stream;
 
     this._switching = true;
@@ -873,6 +1089,11 @@ export class NativeStreamer {
   }
 
   async refreshOrientation() {
+    if (this.isNativeBridge) {
+      this.onStatus('Native Android stream orientation is locked at stream start');
+      return null;
+    }
+
     if (this._switching) return this.stream;
 
     this._switching = true;
@@ -908,5 +1129,24 @@ export class NativeStreamer {
     } finally {
       this._switching = false;
     }
+  }
+
+  _waitForNativeEvent(types, timeoutMs = 15000) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this._nativeWaiters = this._nativeWaiters.filter(waiter => waiter.timer !== timer);
+        reject(new Error(`Native Android streaming timed out waiting for ${types.join('/')}.`));
+      }, timeoutMs);
+      this._nativeWaiters.push({ types, resolve, reject, timer });
+    });
+  }
+
+  _rejectNativeWaiters(message = 'Native Android stream was stopped.') {
+    const waiters = this._nativeWaiters || [];
+    this._nativeWaiters = [];
+    waiters.forEach(waiter => {
+      clearTimeout(waiter.timer);
+      waiter.reject(new Error(message));
+    });
   }
 }

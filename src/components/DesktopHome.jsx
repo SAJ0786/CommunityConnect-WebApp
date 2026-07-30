@@ -73,8 +73,8 @@ function TodayRail({ events, setExpandedId, setPage, isGuest }) {
       </div>
       <div className="desktop-rail-actions">
         {!isGuest && <button onClick={() => setPage('add')}><Plus size={15} /> Add Event</button>}
-        <button className="secondary" onClick={() => setPage('calendar')}>
-          <CalendarDays size={15} /> View Calendar
+        <button className="secondary" data-walkthrough-target="bottom-calendar" onClick={() => setPage('calendar')}>
+          <CalendarDays size={15} /> View Calendar &amp; Sync
         </button>
       </div>
     </aside>
@@ -179,7 +179,9 @@ export default function DesktopHome({
   return (
     <div className={`desktop-home desktop-home-${layout}`}>
       <div className="desktop-home-toolbar">
-        <CitySelector value={selectedCity} onChange={onCityChange} compact />
+        <div data-walkthrough-target="city-and-view">
+          <CitySelector value={selectedCity} onChange={onCityChange} compact />
+        </div>
         {!isGuest && (
           <div className="home-view-toggle desktop-view-toggle" role="group" aria-label="Choose list or map view">
             <button type="button" onClick={() => setViewMode?.('list')} className={viewMode === 'list' ? 'active' : ''}>
@@ -190,7 +192,7 @@ export default function DesktopHome({
             </button>
           </div>
         )}
-        <div className="desktop-search">
+        <div className="desktop-search" data-walkthrough-target="bottom-search">
           <Search size={19} />
           <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search events..." />
           {query && <button onClick={() => setQuery('')} aria-label="Clear search"><X size={16} /></button>}

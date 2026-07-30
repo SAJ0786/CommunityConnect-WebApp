@@ -15,16 +15,25 @@ import { NativeStreamer } from '../services/nativeStreamService';
 // onCancel() — called if the host backs out — camera is released.
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PreCheckCard({ event, onConfirm, onCancel }) {
+  const isAndroidNative = (() => {
+    try { return !!window.CommunityEventsAndroid?.isAvailable?.(); } catch { return false; }
+  })();
   const [phase,   setPhase]   = useState('opening'); // opening | ready | error | starting
   const [errMsg,  setErrMsg]  = useState('');
   const [muted,   setMuted]   = useState(false);
-  const [streamOrientation, setStreamOrientation] = useState('portrait');
+  const initialOrientation = () => (window.innerWidth > window.innerHeight ? 'landscape' : 'portrait');
+  const [streamOrientation, setStreamOrientation] = useState(initialOrientation);
+  const [deviceOrientation, setDeviceOrientation] = useState(() => (
+    window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
+  ));
   const [landscapeRotation, setLandscapeRotation] = useState('ccw');
+  const [androidFacingMode, setAndroidFacingMode] = useState('environment');
   const [audioMode, setAudioMode] = useState('natural');
   const [qualityInfo, setQualityInfo] = useState({ checking:true, label:'Checking network…' });
 
   const videoRef    = useRef(null);
   const streamerRef = useRef(null);
+  const handedOffRef = useRef(false);
 
   // ── Open camera immediately on mount ──────────────────────────────────────
   useEffect(() => {
@@ -36,10 +45,26 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
     );
     streamerRef.current = streamer;
 
+    if (isAndroidNative) {
+      setPhase('ready');
+      streamer.detectQuality()
+        .then(info => setQualityInfo({
+          checking:false,
+          label:`${info.label}${info.uploadMbps ? ` · ${info.uploadMbps.toFixed(1)} Mbps upload` : ''}`
+        }))
+        .catch(() => setQualityInfo({ checking:false, label:'720p HD' }));
+      return () => {
+        cancelled = true;
+        if (streamerRef.current && !handedOffRef.current) {
+          streamerRef.current.stop?.();
+        }
+      };
+    }
+
     streamer.requestCamera('environment')
       .then((stream) => {
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-        if (videoRef.current) {
+        if (cancelled) { stream?.getTracks?.().forEach(t => t.stop()); return; }
+        if (stream && videoRef.current) {
           videoRef.current.srcObject = stream;
           videoRef.current.muted = true;
           videoRef.current.play().catch(() => {});
@@ -59,7 +84,7 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
     return () => {
       cancelled = true;
       // Only release camera if we never handed off to the parent
-      if (streamerRef.current && phaseRef.current !== 'starting') {
+      if (streamerRef.current && !handedOffRef.current) {
         streamerRef.current.stream?.getTracks().forEach(t => t.stop());
       }
     };
@@ -70,8 +95,29 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
   const phaseRef = useRef(phase);
   useEffect(() => { phaseRef.current = phase; }, [phase]);
 
+  useEffect(() => {
+    const updateOrientation = () => {
+      setDeviceOrientation(window.innerWidth > window.innerHeight ? 'landscape' : 'portrait');
+    };
+    updateOrientation();
+    window.addEventListener('resize', updateOrientation);
+    window.addEventListener('orientationchange', updateOrientation);
+    return () => {
+      window.removeEventListener('resize', updateOrientation);
+      window.removeEventListener('orientationchange', updateOrientation);
+    };
+  }, []);
+
+  const orientationMatches = !isAndroidNative || deviceOrientation === streamOrientation;
+
   // ── Camera controls ────────────────────────────────────────────────────────
   const handleSwitchCamera = async () => {
+    if (isAndroidNative) {
+      const nextFacing = androidFacingMode === 'environment' ? 'user' : 'environment';
+      setAndroidFacingMode(nextFacing);
+      streamerRef.current?.setFacingMode?.(nextFacing);
+      return;
+    }
     try {
       const stream = await streamerRef.current?.switchCamera();
       if (stream && videoRef.current) videoRef.current.srcObject = stream;
@@ -79,6 +125,12 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
   };
 
   const handleToggleMic = () => {
+    if (isAndroidNative) {
+      const nextMuted = !muted;
+      streamerRef.current?.setMuted?.(nextMuted);
+      setMuted(nextMuted);
+      return;
+    }
     const stream = streamerRef.current?.stream;
     if (!stream) return;
     stream.getAudioTracks().forEach(t => { t.enabled = muted; });
@@ -86,15 +138,29 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
   };
 
   const handleCancel = () => {
-    streamerRef.current?.stream?.getTracks().forEach(t => t.stop());
+    if (isAndroidNative) streamerRef.current?.stop?.();
+    else streamerRef.current?.stream?.getTracks().forEach(t => t.stop());
     onCancel?.();
   };
 
   const handleConfirm = async () => {
+    if (!orientationMatches) {
+      setErrMsg(`Rotate your phone to ${streamOrientation} before starting the stream.`);
+      return;
+    }
+    handedOffRef.current = true;
     setPhase('starting');
     await streamerRef.current?.requestOrientationPermission?.();
     streamerRef.current?.setStreamOrientation(streamOrientation, landscapeRotation);
     streamerRef.current?.setAudioMode(audioMode);
+    streamerRef.current?.setMuted?.(muted);
+    streamerRef.current?.setFacingMode?.(androidFacingMode);
+    streamerRef.current.eventTitle = [
+      event?.eventTypeDisplay || event?.eventType,
+      event?.hostName,
+      event?.eventSubject || ''
+    ].filter(Boolean).join(' - ');
+    streamerRef.current?.tuneQualityForStream?.();
     onConfirm?.(streamerRef.current);
   };
 
@@ -143,6 +209,32 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
             <div style={{ fontSize:'0.8125rem', color:'#fca5a5' }}>{errMsg}</div>
           </div>
         ) : (
+          isAndroidNative ? (
+          <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
+            alignItems:'center', justifyContent:'center', color:'white', gap:14, padding:24, textAlign:'center',
+            background:'linear-gradient(180deg,#071f1f,#020617)' }}>
+            <div style={{ fontSize:'2.25rem' }}>📹</div>
+            <div style={{ fontWeight:900, fontSize:'1.125rem' }}>Native Android Stream Setup</div>
+            <div style={{ maxWidth:340, color:'#cbd5e1', fontSize:'0.8125rem', lineHeight:1.5 }}>
+              Choose portrait or landscape, check microphone setting, then start streaming. Camera preview will open when the stream starts.
+            </div>
+            {!orientationMatches && (
+              <div style={{
+                maxWidth:340,
+                color:'#fde68a',
+                background:'rgba(120,53,15,0.45)',
+                border:'1px solid rgba(251,191,36,0.55)',
+                borderRadius:12,
+                padding:'10px 12px',
+                fontSize:'0.8125rem',
+                fontWeight:900,
+                lineHeight:1.4,
+              }}>
+                Rotate your phone to {streamOrientation} to start.
+              </div>
+            )}
+          </div>
+          ) : (
           <>
             <video ref={videoRef} autoPlay playsInline muted
               style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
@@ -167,6 +259,7 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
               </div>
             )}
           </>
+          )
         )}
 
         {/* Stream layout controls */}
@@ -240,16 +333,18 @@ export default function PreCheckCard({ event, onConfirm, onCancel }) {
         <div style={{ color:'#5eead4', fontSize:'0.6875rem', textAlign:'center', marginBottom:9, fontWeight:700 }}>
           {qualityInfo.checking ? '⏳' : '📶'} {qualityInfo.label}
         </div>
-        <button onClick={handleConfirm} disabled={phase !== 'ready'}
+        <button onClick={handleConfirm} disabled={phase !== 'ready' || !orientationMatches}
           style={{
             width:'100%', padding:'14px', borderRadius:14, border:'none',
-            background: phase === 'ready' ? '#0f766e' : '#555',
+            background: phase === 'ready' && orientationMatches ? '#0f766e' : '#555',
             color:'white', fontWeight:900, fontSize:'0.9375rem',
-            cursor: phase === 'ready' ? 'pointer' : 'not-allowed',
+            cursor: phase === 'ready' && orientationMatches ? 'pointer' : 'not-allowed',
             display:'flex', alignItems:'center', justifyContent:'center', gap:8,
           }}>
           {phase === 'starting'
             ? 'Starting…'
+            : phase === 'ready' && !orientationMatches
+              ? `Rotate phone to ${streamOrientation}`
             : phase === 'ready'
               ? <>🔴 Start Streaming — Go Live on YouTube</>
               : 'Preparing camera…'}

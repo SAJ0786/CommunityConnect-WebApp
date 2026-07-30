@@ -8,7 +8,9 @@ async function updateEventSeries(sourceEvent, event) {
   if (!sourceEvent.seriesId) throw new Error('Identify this older series before editing it.');
   const protectedFields = new Set([
     'id', '__editSeries', 'eventDate', 'hijriDate', 'hijriDay', 'hijriMonth',
-    'hijriYear', 'enteredAsHijri', 'seriesId', 'seriesStartDate', 'seriesEndDate',
+    'hijriYear', 'enteredAsHijri', 'seriesId', 'recurringSeriesId', 'isRecurring',
+    'recurrenceIndex', 'recurrenceTotal', 'recurrenceRuleSnapshot',
+    'seriesStartDate', 'seriesEndDate',
     'createdAt', 'createdByUserId', 'createdByUserEmail', 'createdByName',
     'isLive', 'liveUrl', 'liveWatchUrl', 'liveRoomCode', 'liveStartedAt', 'liveEndedAt'
   ]);

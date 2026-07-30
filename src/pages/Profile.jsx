@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/firebase';
-import { deleteMyAccountAndEvents, updateAdminAlertPreference, updateProfile, updateReminderPreference, updateUserContactProfile } from '../services/userService';
+import { deleteMyAccountAndEvents, updateAdminAlertPreference, updateProfile, updatePushPreference, updateReminderPreference, updateUserContactProfile } from '../services/userService';
+import { enablePushNotifications, getNotificationPermissionState, sendTestPushNotification, showLocalTestNotification, syncGrantedNotificationToken } from '../services/notificationService';
 import { isAdminRole } from '../utils/permissions';
 import CitySelector from '../components/CitySelector';
 import { DEFAULT_CITY, normalizeCity } from '../utils/cities';
-import { APP_OPEN_LINK } from '../utils/storeLinks';
+import { STORE_SHARE_LINES } from '../utils/storeLinks';
 
 // Injected at build time by vite.config.js — Date.now() when `npm run build` ran
 const BUILD_TIME = typeof __APP_BUILD_TIME__ !== 'undefined' ? __APP_BUILD_TIME__ : null;
@@ -19,6 +20,27 @@ function formatBuildNumber(ts) {
   return `${date} ${time} (v${ts})`;
 }
 
+function formatPushDiagnostic(result = {}) {
+  const tokenSummary = Object.entries(result.tokenSummary || {})
+    .map(([key, count]) => `${key} ${count}`)
+    .join(', ');
+  const failures = (result.failures || [])
+    .map(failure => `${failure.platform || 'unknown'}:${failure.source || 'unknown'} ${failure.code || 'failed'}`)
+    .join(', ');
+  return [
+    tokenSummary ? `Tokens: ${tokenSummary}.` : '',
+    failures ? `Failed: ${failures}.` : '',
+    result.invalidRemoved ? `Removed ${result.invalidRemoved} expired token(s).` : '',
+  ].filter(Boolean).join(' ');
+}
+
+function formatLocalNotificationMessage(localResult) {
+  if (localResult?.shown) return 'A local notification preview was also triggered on this device.';
+  if (localResult?.reason === 'unsupported') return 'Local notification preview is not supported on this device.';
+  if (localResult?.reason === 'denied') return 'Local notification preview is blocked in this device settings.';
+  return `Local notification preview could not be shown (${localResult?.reason || 'unknown'}).`;
+}
+
 export default function Profile({ user, profile, setProfile }) {
   const [preferenceError, setPreferenceError] = useState('');
   const [savingPreference, setSavingPreference] = useState('');
@@ -29,7 +51,14 @@ export default function Profile({ user, profile, setProfile }) {
   const [detailsMessage, setDetailsMessage] = useState({ text: '', type: '' });
   const [defaultCity, setDefaultCity] = useState(normalizeCity(profile?.defaultCity || DEFAULT_CITY));
   const [savingCity, setSavingCity] = useState(false);
+  const [pushStatus, setPushStatus] = useState(() => getNotificationPermissionState());
+  const [pushMessage, setPushMessage] = useState('');
+  const [pushBusy, setPushBusy] = useState('');
   const isAdmin = isAdminRole(profile?.role);
+  const emailReminderEnabled = profile?.reminderEmailEnabled !== false;
+  const pushEnabled = profile?.pushNotificationsEnabled !== undefined
+    ? profile.pushNotificationsEnabled !== false
+    : emailReminderEnabled;
 
   useEffect(() => {
     if (editingDetails) return;
@@ -40,6 +69,10 @@ export default function Profile({ user, profile, setProfile }) {
   useEffect(() => {
     setDefaultCity(normalizeCity(profile?.defaultCity || DEFAULT_CITY));
   }, [profile?.defaultCity]);
+
+  useEffect(() => {
+    setPushStatus(getNotificationPermissionState());
+  }, []);
 
   const saveCity = async () => {
     setSavingCity(true);
@@ -86,7 +119,7 @@ export default function Profile({ user, profile, setProfile }) {
   };
 
   const toggleReminder = async () => {
-    const next = !profile?.reminderEmailEnabled;
+    const next = !emailReminderEnabled;
     setSavingPreference('reminders');
     setPreferenceError('');
     try {
@@ -96,6 +129,62 @@ export default function Profile({ user, profile, setProfile }) {
       setPreferenceError(error.message || 'Could not update email reminders.');
     } finally {
       setSavingPreference('');
+    }
+  };
+
+  const enablePush = async () => {
+    setPushBusy('enable');
+    setPushMessage('');
+    setPreferenceError('');
+    try {
+      await updatePushPreference(user.uid, true);
+      const token = await enablePushNotifications(user.uid);
+      const status = getNotificationPermissionState();
+      setPushStatus(status);
+      setProfile(prev => ({ ...prev, pushNotificationsEnabled: true }));
+      setPushMessage(token
+        ? 'Push notifications are enabled on this device.'
+        : status.permission === 'denied'
+          ? 'Notifications are blocked on this device. Please enable them in browser or app settings.'
+          : 'This device does not support push notifications yet.');
+    } catch (error) {
+      setPreferenceError(error.message || 'Could not enable push notifications.');
+    } finally {
+      setPushBusy('');
+    }
+  };
+
+  const disablePush = async () => {
+    setPushBusy('disable');
+    setPushMessage('');
+    setPreferenceError('');
+    try {
+      await updatePushPreference(user.uid, false);
+      setProfile(prev => ({ ...prev, pushNotificationsEnabled: false }));
+      setPushMessage('Push notifications are disabled for your account.');
+    } catch (error) {
+      setPreferenceError(error.message || 'Could not disable push notifications.');
+    } finally {
+      setPushBusy('');
+    }
+  };
+
+  const testPush = async () => {
+    setPushBusy('test');
+    setPushMessage('');
+    setPreferenceError('');
+    try {
+      await syncGrantedNotificationToken(user.uid, profile);
+      const result = await sendTestPushNotification();
+      const localResult = result?.sent ? await showLocalTestNotification() : null;
+      const diagnostic = formatPushDiagnostic(result);
+      setPushMessage(result?.sent
+        ? `Test push sent to ${result.sent} of ${result.tokenCount || result.sent} token(s). ${formatLocalNotificationMessage(localResult)} ${diagnostic}`
+        : 'No active push token was found for this account. Enable notifications on this device first.');
+    } catch (error) {
+      setPreferenceError(error.message || 'Could not send a test notification.');
+    } finally {
+      setPushBusy('');
     }
   };
 
@@ -199,14 +288,47 @@ export default function Profile({ user, profile, setProfile }) {
       <p><b>Role:</b> {profile?.role}</p>
       <p>
         <b>Email Reminders:</b>{' '}
-        {profile?.reminderEmailEnabled ? 'Enabled' : 'Disabled'}
+        {emailReminderEnabled ? 'Enabled' : 'Disabled'}
       </p>
 
       <button className="btn-light" onClick={toggleReminder} disabled={!!savingPreference}>
         {savingPreference === 'reminders'
           ? 'Saving...'
-          : `${profile?.reminderEmailEnabled ? 'Disable' : 'Enable'} Email Reminders`}
+          : `${emailReminderEnabled ? 'Disable' : 'Enable'} Email Reminders`}
       </button>
+
+      <div style={{ marginTop:16, padding:16, border:'1px solid var(--border)',
+        borderRadius:10, background:'var(--card-alt, #f8fafc)' }}>
+        <h3 style={{ margin:'0 0 6px', fontSize:'1rem' }}>Push Notifications</h3>
+        <p className="small" style={{ margin:'0 0 12px', lineHeight:1.55 }}>
+          App alerts for daily reminders and live streams. You can keep email reminders and push notifications separate.
+        </p>
+        <p style={{ margin:'0 0 10px', fontSize:'0.875rem' }}>
+          <b>Status:</b> {pushEnabled ? 'Enabled' : 'Disabled'}
+          {' '}<span style={{ color:'var(--muted)' }}>
+            ({pushStatus.native ? 'native app' : pushStatus.permission === 'granted' ? 'device allowed' : pushStatus.permission === 'denied' ? 'device blocked' : pushStatus.supported ? 'permission needed' : 'not supported'})
+          </span>
+        </p>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {pushEnabled ? (
+            <button className="btn-light" onClick={disablePush} disabled={!!pushBusy}>
+              {pushBusy === 'disable' ? 'Saving...' : 'Disable Push Notifications'}
+            </button>
+          ) : (
+            <button className="btn-light" onClick={enablePush} disabled={!!pushBusy}>
+              {pushBusy === 'enable' ? 'Enabling...' : 'Enable Push Notifications'}
+            </button>
+          )}
+          {pushEnabled && (
+            <button className="btn-muted" onClick={testPush} disabled={!!pushBusy}>
+              {pushBusy === 'test' ? 'Sending...' : 'Send Test Push'}
+            </button>
+          )}
+        </div>
+        {pushMessage && (
+          <div className="success" style={{ marginTop:10 }} role="status">{pushMessage}</div>
+        )}
+      </div>
 
       {isAdmin && (
         <div style={{ marginTop:16, padding:16, border:'1px solid var(--border)',
@@ -239,11 +361,9 @@ export default function Profile({ user, profile, setProfile }) {
         Invite your community to join Community Events Australia.
       </p>
       <button style={{ width: '100%' }} onClick={() => {
-        const url = APP_OPEN_LINK;
         const msg = [
           '🌙 *Community Events Australia*',
           '_Your free community events app_',
-          '',
           '*Features:*',
           '📅 Browse upcoming Majalis, Milads & community events',
           '🔔 Get push notifications before events',
@@ -256,7 +376,7 @@ export default function Profile({ user, profile, setProfile }) {
           '⭐ Save your favourite events',
           '➕ Add & manage your own events',
           '',
-          `👉 *${url}*`,
+          ...STORE_SHARE_LINES,
           '',
           '_Download Community Events App to keep connected with community_',
         ].join('\n');
@@ -414,3 +534,5 @@ export default function Profile({ user, profile, setProfile }) {
     </div>
   );
 }
+
+

@@ -1,6 +1,7 @@
 const CACHE_VERSION = 2;
 const CACHE_PREFIX = `community-events-v${CACHE_VERSION}`;
-const PROFILE_PREFIX = `community-profile-v${CACHE_VERSION}`;
+const PROFILE_CACHE_VERSION = 3;
+const PROFILE_PREFIX = `community-profile-v${PROFILE_CACHE_VERSION}`;
 const FRESH_AGE_MS = 15 * 60 * 1000;
 const MAX_STALE_AGE_MS = 60 * 24 * 60 * 60 * 1000;
 
@@ -63,6 +64,7 @@ export function readProfileCache(uid) {
 export function writeProfileCache(uid, profile) {
   const storage = storageFor();
   if (!storage || !uid || !profile) return;
+  if (profile.isProfileFallback) return;
   const cachedProfile = {
     fullName: profile.fullName || '',
     email: profile.email || '',

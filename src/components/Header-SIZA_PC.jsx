@@ -8,7 +8,6 @@ import { compareEventsByDateTime } from '../services/dateUtils';
 const AUTH_ITEMS = [
   { key: 'home',       label: '🏠 Home' },
   { key: 'search',     label: '🤖 AI Search' },
-  { key: 'series',     label: '📅 Add Series Events' },
   { key: 'bulkshare',  label: '📤 Bulk Share Events', adminOnly: true },
   { key: 'calendar',   label: '📅 Calendar' },
   { key: 'profile',    label: '👤 Profile & Settings' },

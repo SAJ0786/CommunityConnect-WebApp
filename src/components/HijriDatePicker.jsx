@@ -1,8 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { HIJRI_MONTHS, hijriToGregorian, hijriDisplayFromParts, getHijriParts } from '../services/hijriService';
+import { HIJRI_MONTHS, hijriToGregorian, hijriDisplayFromParts, getHijriParts, getHijriMonthLength } from '../services/hijriService';
 import { getHijriSettings } from '../services/settingsService';
-
-const DAYS = Array.from({ length: 30 }, (_, i) => i + 1);
 
 const SEL_STYLE = {
   flex: 1, padding: '10px 8px', fontSize: '0.875rem',
@@ -40,6 +38,20 @@ export default function HijriDatePicker({ value = {}, onChange, overrides: overr
   const [gregResult, setGregResult] = useState('');
   const [error,      setError]      = useState('');
   const [todayReady, setTodayReady] = useState(false);
+
+  const daysInSelectedMonth = useMemo(() => {
+    const len = getHijriMonthLength(Number(year || today.y), Number(month || today.m), overrides);
+    return len === 29 ? 29 : 30;
+  }, [year, month, today.y, today.m, overrides]);
+
+  const DAYS = useMemo(
+    () => Array.from({ length: daysInSelectedMonth }, (_, i) => i + 1),
+    [daysInSelectedMonth]
+  );
+
+  useEffect(() => {
+    if (Number(day) > daysInSelectedMonth) setDay(String(daysInSelectedMonth));
+  }, [day, daysInSelectedMonth]);
 
   // Once overrides load, set initial day/month/year to today if not provided
   useEffect(() => {

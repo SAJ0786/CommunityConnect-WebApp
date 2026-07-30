@@ -76,7 +76,7 @@ export async function getActiveEvents(isGuest = false) {
       where('status', '==', 'active'),
       where('eventDate', '>=', yesterday),
       orderBy('eventDate', 'asc'),
-      limit(150)
+      limit(750)
     )),
     getDocs(query(collection(db, 'events'), where('isLive', '==', true))),
   ]);

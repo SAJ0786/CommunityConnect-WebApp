@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import EventForm from '../components/EventForm';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
-import { getHijriDisplay, getHijriParts, hijriToGregorian } from '../services/hijriService';
+import { getHijriDisplay, getHijriParts, hijriToGregorian, hijriDisplayFromParts } from '../services/hijriService';
 import { getHijriSettings } from '../services/settingsService';
 import { classifyMetroArea } from '../utils/cities';
 import { validateRequiredEventFields } from '../services/eventService';
@@ -93,6 +93,12 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
     return { d: nd, m: nm, y: ny };
   }
 
+  function addHijriDays(d, m, y, offset) {
+    let cur = { d: parseInt(d), m: parseInt(m), y: parseInt(y) };
+    for (let i = 0; i < offset; i += 1) cur = plusOneDay(cur.d, cur.m, cur.y);
+    return cur;
+  }
+
   // ── Push end = start + 1 ─────────────────────────────────────────────────
   function pushEndToStartPlusOne(sd, sm, sy) {
     const { d, m, y } = plusOneDay(parseInt(sd), parseInt(sm), parseInt(sy));
@@ -122,7 +128,7 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
     setHStartDay(String(selD));
     setHStartMonth(String(newM));
     setHStartYear(String(newY));
-    pushEndToStartPlusOne(newM !== selM ? newM : selD, newM, newY);
+    pushEndToStartPlusOne(selD, newM, newY);
   }
 
   function handleStartMonthChange(e) {
@@ -237,19 +243,23 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
       const seriesId = typeof crypto !== 'undefined' && crypto.randomUUID
         ? crypto.randomUUID()
         : `${user.uid}_${Date.now()}`;
-      await Promise.all(preview.map((date) => {
-        let hijriDisplay = '';
-        try { hijriDisplay = getHijriDisplay(date, overrides) || ''; } catch {}
+      await Promise.all(preview.map((date, index) => {
+        const anchoredHijri = calType === 'hijri'
+          ? addHijriDays(hStartDay, hStartMonth, hStartYear, index)
+          : null;
+        let hijriDisplay = anchoredHijri
+          ? hijriDisplayFromParts(anchoredHijri.d, anchoredHijri.m, anchoredHijri.y)
+          : '';
+        if (!hijriDisplay) {
+          try { hijriDisplay = getHijriDisplay(date, overrides) || ''; } catch {}
+        }
         let hijriComponents = {};
-        if (calType === 'hijri') {
-          // Use getHijriParts on the actual Gregorian date for accurate Hijri components
-          // This avoids the /30 approximation which breaks at month boundaries
-          try {
-            const h = getHijriParts(new Date(date + 'T00:00:00'), overrides);
-            if (h && h.day && h.month && h.year) {
-              hijriComponents = { hijriDay: h.day, hijriMonth: h.month, hijriYear: h.year };
-            }
-          } catch {}
+        if (anchoredHijri) {
+          hijriComponents = {
+            hijriDay: anchoredHijri.d,
+            hijriMonth: anchoredHijri.m,
+            hijriYear: anchoredHijri.y,
+          };
         }
         return addDoc(collection(db, 'events'), {
           ...eventDataFromForm,

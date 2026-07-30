@@ -11,7 +11,8 @@ const EventMapView = lazy(() => import('../components/EventMapView'));
 export default function Home({ events, user, profile, setPage, setEditingEvent,
   handleDelete, handleCopy, isGuest = false, loadEvents,
   savedIds = [], onSaveToggle, onStreamStart, focusEventId, setFocusEventId,
-  eventsLoading = false, offlineMode = false }) {
+  eventsLoading = false, offlineMode = false, selectedCity: selectedCityProp,
+  setSelectedCity: setSelectedCityProp }) {
 
   const today    = todayLocal();
   const yesterday = localDateStr(-1);
@@ -20,7 +21,8 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
   const [visibleCount, setVisibleCount] = useState(12);
   const [query,      setQuery]      = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedCity, setSelectedCity] = useState(() => normalizeCity(profile?.defaultCity || DEFAULT_CITY));
+  const selectedCity = normalizeCity(selectedCityProp || profile?.defaultCity || DEFAULT_CITY);
+  const setSelectedCity = setSelectedCityProp || (() => {});
   const [viewMode, setViewMode] = useState('list');
   const [wideLayout, setWideLayout] = useState(() => (
     typeof window !== 'undefined' && window.matchMedia?.('(min-width: 700px) and (min-height: 600px)').matches
@@ -39,10 +41,6 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
     setVisibleCount(12);
     setViewMode('list');
   }, [selectedCity]);
-
-  useEffect(() => {
-    if (profile?.defaultCity) setSelectedCity(normalizeCity(profile.defaultCity));
-  }, [profile?.defaultCity]);
 
   const cityEvents = events.filter(event => getEventMetroArea(event) === selectedCity);
   // A stream may legitimately continue past midnight. Keep it reachable until
@@ -149,7 +147,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
   return (
     <>
       {!wideLayout && <div className="home-mobile-layout">
-      <div style={{ padding:'8px 16px 0', display:'grid',
+      <div data-walkthrough-target="city-and-view" style={{ padding:'8px 16px 0', display:'grid',
         gridTemplateColumns: isGuest ? '1fr' : 'minmax(0,1fr) minmax(0,1fr)', gap:8 }}>
         <CitySelector value={selectedCity} onChange={setSelectedCity} />
         {!isGuest && (
@@ -167,7 +165,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
       {viewMode === 'list' && (
       <>
       <div style={{ padding: '8px 16px 6px' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8,
+        <div data-walkthrough-target="bottom-search" style={{ display:'flex', alignItems:'center', gap:8,
           background:'white', border:'1px solid var(--border,#e8edec)',
           borderRadius:14, height:46, padding:'0 8px 0 14px',
           boxShadow:'0 2px 8px rgba(0,0,0,0.03)' }}>
@@ -279,8 +277,8 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
 
       <div style={{ height: 88 }} />
 
-      {/* ── View Calendar — fixed bar above bottom nav ── */}
-      <div onClick={() => setPage('calendar')} style={{
+      {/* ── View Calendar & Sync — fixed bar above bottom nav ── */}
+      <div data-walkthrough-target="bottom-calendar" onClick={() => setPage('calendar')} style={{
         position:'fixed', bottom:'calc(76px + env(safe-area-inset-bottom))',
         left:16, right:16, zIndex:35, cursor:'pointer',
         background:'white',
@@ -290,7 +288,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
         border:'1px solid var(--border,#e8edec)' }}>
         <span style={{ display:'flex', alignItems:'center', gap:10,
           fontWeight:900, fontSize:'0.9375rem', color:'var(--text,#1a2b29)' }}>
-          📅 <span>View Calendar</span>
+          📅 <span>View Calendar &amp; Sync</span>
         </span>
         <span style={{ fontSize:'1.25rem', color:'var(--teal,#0f766e)', fontWeight:800 }}>›</span>
       </div>

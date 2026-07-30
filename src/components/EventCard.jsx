@@ -10,18 +10,14 @@ const GoLiveButton = lazy(() => import('./LiveStream').then(module => ({ default
 const WatchLiveButton = lazy(() => import('./LiveStream').then(module => ({ default: module.WatchLiveButton })));
 
 let hijriOverridesCache = [];
-let hijriSettingsPromise = null;
 
 function loadHijriOverrides() {
-  if (!hijriSettingsPromise) {
-    hijriSettingsPromise = getHijriSettings()
-      .then(settings => {
-        hijriOverridesCache = settings.overrides || [];
-        return hijriOverridesCache;
-      })
-      .catch(() => hijriOverridesCache);
-  }
-  return hijriSettingsPromise;
+  return getHijriSettings()
+    .then(settings => {
+      hijriOverridesCache = settings.overrides || [];
+      return hijriOverridesCache;
+    })
+    .catch(() => hijriOverridesCache);
 }
 
 // Display normaliser — old events stored as "Mixed Audience" show as "Family Event"
@@ -85,6 +81,7 @@ export default function EventCard({
   const suburb = a.suburb || '';
 
   const displayType   = event.eventTypeDisplay || event.eventType || '';
+  const displayTime   = `${event.prayerLabel ? `${event.prayerLabel} ` : ''}${event.startTime || ''}${event.endTime ? ` – ${event.endTime}` : ''}`.trim();
   const isPrivate     = event.organiserType === 'private';
   const showReligious = RELIGIOUS_EVENT_TYPES.includes(event.eventType);
   const canCopy       = isAdminRole(profile?.role);
@@ -132,16 +129,16 @@ export default function EventCard({
   };
 
   const hijriDisplay = (() => {
+    if (event.eventDate) {
+      const computed = getHijriDisplay(event.eventDate, hijriOverrides);
+      if (computed && storedHijriLooksValid(computed)) return computed;
+    }
+
     if (event.enteredAsHijri === true && event.hijriDay && event.hijriMonth && event.hijriYear) {
       const day = Number(event.hijriDay);
       if (day >= 1 && day <= 30) {
         return hijriDisplayFromParts(day, Number(event.hijriMonth), Number(event.hijriYear));
       }
-    }
-
-    if (event.eventDate) {
-      const computed = getHijriDisplay(event.eventDate, hijriOverrides);
-      if (computed && storedHijriLooksValid(computed)) return computed;
     }
 
     return storedHijriLooksValid(event.hijriDate) ? event.hijriDate : '';
@@ -166,7 +163,7 @@ export default function EventCard({
       `📅 *${displayType}*`,
       `🏠 *Host:* ${event.hostName}`,
       `📆 *Date:* ${fmtD(event.eventDate)}`,
-      `⏰ *Time:* ${event.startTime}${event.endTime ? ' – ' + event.endTime : ''}`,
+      `⏰ *Time:* ${displayTime}`,
       loc ? `📍 ${locLabel} ${loc}` : '',
       sharePrivacy.showPhone && event.hostPhone ? `📞 *Phone:* ${event.hostPhone}` : '',
       hijriDisplay       ? `🌙 *Hijri:* ${hijriDisplay}`       : '',
@@ -286,7 +283,7 @@ export default function EventCard({
           </div>
           {/* Meta */}
           <div className="event-card-meta" style={{ fontSize:'0.78125rem', color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)', marginBottom:2 }}>
-            ⏰ {event.startTime}{event.endTime ? ` – ${event.endTime}` : ''}
+            ⏰ {displayTime}
           </div>
           {suburb && (
             <div className="event-card-meta" style={{ fontSize:'0.78125rem', color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)', marginBottom:6,

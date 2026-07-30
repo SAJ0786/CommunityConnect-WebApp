@@ -38,7 +38,7 @@
   <link rel="stylesheet" href="/static-pages.css"/>
 </head>
 <body>
-  <a class="static-back-link" href="/">&larr; Back to Home</a>
+  <a class="static-back-link" href="/" onclick="if (history.length > 1) { event.preventDefault(); history.back(); }">&larr; Back to Home</a>
 <header class="hero">
   <img src="/logo.png" alt="Community Events Australia"/>
   <h1>User Guide</h1>
@@ -48,7 +48,7 @@
   <section class="card">
 
     <h2 style="margin-top:0">What is Community Events Australia?</h2>
-    <p>Community Events Australia helps you discover, share and manage local community events — Majlis, Milad, lectures, Quran classes, programs and more — with full Hijri calendar support, private event sharing, and live streaming straight to YouTube.</p>
+    <p>Community Events Australia helps you discover, share and manage local community events, including Majlis, Milad, lectures, prayers, duas, programs and more, with Hijri calendar support, recurring events, map view, private event sharing, calendar sync and live streaming to YouTube.</p>
 
     <div class="toc">
       <h3>On this page</h3>
@@ -56,11 +56,13 @@
         <li><a href="#home">Home Screen</a></li>
         <li><a href="#cards">Event Cards</a></li>
         <li><a href="#add">Adding an Event</a></li>
-        <li><a href="#series">Series Events</a></li>
+        <li><a href="#recurring">Recurring Events</a></li>
         <li><a href="#myevents">My Events &amp; Hidden Events</a></li>
+        <li><a href="#map">Map View</a></li>
         <li><a href="#stream">Live Streaming</a></li>
         <li><a href="#bulkshare">Bulk Share</a></li>
         <li><a href="#calendar">Calendar Sync &amp; Reminders</a></li>
+        <li><a href="#admin">Admin Dashboard</a></li>
         <li><a href="#roles">User Roles</a></li>
         <li><a href="#notes">Important Notes</a></li>
       </ol>
@@ -68,22 +70,22 @@
 
     <!-- ───────────────────────── HOME ───────────────────────── -->
     <h2 id="home">🏠 Home Screen</h2>
-    <img class="shot" src="/docs/screenshots/home-screen.png" alt="Home screen showing upcoming events list"/>
+    <img class="shot" src="/docs/screenshots/home-list-view-current.jpg" alt="Home screen showing city selector, list view and upcoming events"/>
     <div class="step">
       <h3>Browsing events</h3>
-      <p>The Home screen shows all upcoming community events in order, with the current Hijri date shown at the top based on community moon-sighting decisions.</p>
+      <p>The Home screen shows upcoming community events in date and time order for your selected city. Users can choose a default city in Profile and temporarily switch city from the Home screen.</p>
     </div>
     <div class="step">
       <h3>Search &amp; filter</h3>
-      <p>Use the search bar to find events by keyword, suburb or organiser. Tap the filter icon to narrow results by audience type — <strong>Gents, Ladies, Family, Kids</strong>.</p>
+      <p>Use the search bar to find events by keyword, suburb, organiser, audience type, speaker or event type. Tap the filter icon to narrow results by time period, organiser type, audience type, host or suburb.</p>
     </div>
     <div class="step">
       <h3>Notifications</h3>
-      <p>Tap the bell icon to see a quick preview of tomorrow's events.</p>
+      <p>Tap the bell icon to see upcoming alerts grouped into <strong>Today</strong> and <strong>Tomorrow</strong>. A section only appears when it has events.</p>
     </div>
     <div class="step">
       <h3>Navigation</h3>
-      <p>The bottom bar gives you: <strong>Home</strong>, <strong>My Events</strong>, the green <strong>＋</strong> button to add a new event, <strong>Favourites</strong>, and your <strong>Profile</strong>.</p>
+      <p>The bottom bar gives you: <strong>Home</strong>, <strong>My Events</strong>, the green <strong>+</strong> button to add a new event, <strong>Favourites</strong>, and your <strong>Profile</strong>.</p>
     </div>
 
     <!-- ───────────────────────── EVENT CARDS ───────────────────────── -->
@@ -106,12 +108,12 @@
     <!-- ───────────────────────── ADD EVENT ───────────────────────── -->
     <h2 id="add">➕ Adding an Event</h2>
     <div class="step">
-      <h3>Step 1 — Open the form</h3>
-      <p>Tap the green <strong>＋</strong> button in the bottom navigation.</p>
+      <h3>Step 1 — Choose event mode</h3>
+      <p>Tap the green <strong>+</strong> button in the bottom navigation. Choose <strong>Single Event</strong>. Admins and Super Admins can also choose <strong>Recurring Event</strong>; normal users can see recurring events but the option is disabled.</p>
     </div>
     <div class="step">
       <h3>Step 2 — Basic details</h3>
-      <p>Choose an event type (Majlis, Milad, Lecture, Quran Class, Program, etc.), enter the title/subject, host name, and organiser. The organiser determines which logo appears on the card if no poster is uploaded — choose your centre, or mark the event as <strong>Private</strong>.</p>
+      <p>Choose an event type such as <strong>Majlis</strong>, <strong>Milad</strong>, <strong>Prayers</strong>, <strong>Dua</strong>, <strong>Prayers &amp; Amal</strong>, lecture or other custom program type. Enter the subject, host name and organiser. If you choose a centre, the host name is filled from the centre name. Private and other-centre events can still use the "on behalf of" host fields.</p>
     </div>
     <img class="shot" src="/docs/screenshots/add-event-poster.png" alt="Add Event form showing poster upload and organiser type"/>
     <div class="step">
@@ -120,28 +122,33 @@
     </div>
     <img class="shot" src="/docs/screenshots/add-event-date-address.png" alt="Add Event form showing date, time, address and event type fields"/>
     <div class="step">
-      <h3>Step 4 — Audience, address &amp; poster</h3>
-      <p>Select the audience type — <strong>Gents, Ladies, Kids, or Family Event</strong>. Use the address field's Google Maps autocomplete to set the venue. Optionally upload a poster image — it will be used as the card thumbnail.</p>
+      <h3>Step 4 — Time</h3>
+      <p>Choose <strong>Fixed Time</strong> to enter the start and optional end time manually, or choose <strong>Prayer Time (Variable)</strong> to select Fajr, Zohrain, Asr, Maghreb or Isha. Prayer-time events can use a positive or negative offset in 30-minute steps, and the app calculates the actual time from the event date and selected address.</p>
     </div>
     <div class="step">
-      <h3>Step 5 — On behalf of someone else</h3>
+      <h3>Step 5 — Audience, address, notes &amp; poster</h3>
+      <p>Select the audience type — <strong>Gents, Ladies, Kids, or Family Event</strong>. Use the address field's Google Maps autocomplete to set the venue; this is required for directions, map view and prayer-time calculation. Optional notes are shown on event cards and included in generated share messages. You can also upload a poster image for the card thumbnail.</p>
+    </div>
+    <div class="step">
+      <h3>Step 6 — On behalf of someone else</h3>
       <p>Tick <strong>"Adding on behalf of someone else"</strong> if you're submitting for another host — you'll still own and manage the event.</p>
     </div>
     <img class="shot" src="/docs/screenshots/add-event-reciters.png" alt="Add Event form showing speaker and reciters fields for Majlis events"/>
     <div class="step">
-      <h3>Step 6 — Submit</h3>
-      <p>For Majlis events, you can also add a Speaker and multiple Reciters (e.g. Soz, Salam, Noha, Manqebat). Tap Submit and the event is immediately visible to the whole community on the home screen.</p>
+      <h3>Step 7 — Submit</h3>
+      <p>For Majlis events, you can also add a speaker and multiple reciters, including Hadees-e-Kisa, Soz, Salam, Noha, Manqebat and other recitation types. Reciters can be reordered so they appear in the event flow. The app highlights any missing mandatory date, time or address before saving. After a successful save, it confirms the event was added, clears the form and returns to the Home screen.</p>
     </div>
 
     <!-- ───────────────────────── SERIES EVENTS ───────────────────────── -->
-    <h2 id="series">📆 Series Events</h2>
-    <img class="shot" src="/docs/screenshots/series-events-form.png" alt="Add Series Events form with start and end date pickers"/>
+    <h2 id="recurring">📆 Recurring Events</h2>
+    <img class="shot" src="/docs/screenshots/recurring-event-form-current.jpg" alt="Recurring event form with Gregorian and Hijri date options, frequency and occurrences"/>
     <div class="step">
-      <h3>For multi-day programs</h3>
-      <p>Series Events extends the Add Event form for programs running on consecutive days — like a Muharram lecture series or a Ramadan program. Fill in the event details once, then set a <strong>start date</strong> and <strong>end date</strong>. A preview shows every date that will be created (Gregorian or Hijri).</p>
-      <p>Submitting creates one individual event for every date in the range — for example, a ten-night program becomes ten separate events, each on its correct date, in a single action.</p>
+      <h3>For repeated programs</h3>
+      <p>Recurring Events are available to Admins and Super Admins. Choose daily, weekly, monthly or yearly recurrence, then choose the interval and either an end date or number of occurrences. Daily, weekly and monthly recurring events are limited to one year ahead. Yearly recurring events are limited to five occurrences.</p>
+      <p>A preview shows every date that will be created before submission. Submitting creates separate event records for each occurrence, while keeping them linked as one recurring series for administration.</p>
+      <p>Admins can filter recurring events in the Admin Dashboard and edit, deactivate or delete an entire recurring series where required.</p>
     </div>
-    <img class="shot" src="/docs/screenshots/series-events-preview.png" alt="Series Events preview showing the list of dates that will be created"/>
+    <img class="shot" src="/docs/screenshots/recurring-event-preview-current.jpg" alt="Recurring event preview showing generated dates and the Add Event form"/>
 
     <!-- ───────────────────────── MY EVENTS / HIDDEN ───────────────────────── -->
     <h2 id="myevents">✏️ My Events &amp; Hidden Events</h2>
@@ -167,19 +174,38 @@
       <p>From My Events, tap <strong>Share</strong> on a hidden event to send its details directly to specific people via WhatsApp, SMS, or any message. The recipient can view full event details — but anyone else using the app will never see this event unless you specifically share it with them. This is ideal for ladies' programs, private gatherings, or anything where you need to control who knows about it.</p>
     </div>
 
+    <!-- ───────────────────────── MAP VIEW ───────────────────────── -->
+    <h2 id="map">🗺️ Map View</h2>
+    <img class="shot" src="/docs/screenshots/home-map-view-current.jpg" alt="Map view showing city selector, audience filters and event marker popup"/>
+    <div class="step">
+      <h3>Viewing events on a map</h3>
+      <p>Logged-in users can switch between <strong>List</strong> and <strong>Map</strong> view from the Home screen city selector row. The map shows eligible events using the saved address coordinates and helps you see which areas have programs before planning travel.</p>
+    </div>
+    <div class="step">
+      <h3>Marker colours</h3>
+      <p>Markers use audience colours where available: ladies-only events are pink, gents-only events are blue, family events are teal, and kids or other events use the default marker style. Tap a marker to see the event and open directions.</p>
+    </div>
+    <div class="step amber">
+      <h3>Guest access</h3>
+      <p>Guest users cannot use Map view. This protects private event address information for users who have not signed in.</p>
+    </div>
+
     <!-- ───────────────────────── LIVE STREAMING ───────────────────────── -->
     <h2 id="stream">🔴 Live Streaming</h2>
     <img class="shot" src="/docs/screenshots/go-live-card.png" alt="Event card showing the Go Live button"/>
     <div class="step red">
       <h3>Going live</h3>
-      <p>Open one of your events and tap <strong>Go Live</strong>. Choose <strong>Public</strong> if the community should see a Watch on YouTube button, or <strong>Private</strong> if you want YouTube unlisted/link-only visibility. A camera preview then opens immediately &mdash; check your camera and microphone, and use <strong>Flip Camera</strong> to switch between front and back cameras. Nothing is broadcast yet at this stage.</p>
+      <p>Open one of your events and tap <strong>Go Live</strong>. Choose <strong>Public</strong> if the community should see a Watch on YouTube button, or <strong>Private</strong> if you want YouTube unlisted/link-only visibility. Choose portrait or landscape before starting. On Android native streaming, the app waits for the phone to match the chosen orientation before the stream can start.</p>
     </div>
     <img class="shot" src="/docs/screenshots/camera-check.png" alt="Camera Check screen with Flip and Mic On controls and Start Streaming button"/>
     <div class="step red">
       <h3>While you're live</h3>
-      <p>When you're ready, tap <strong>Start Streaming</strong>. The app creates a YouTube broadcast and starts streaming your camera directly to the Community Events YouTube channel — usually live within 15-20 seconds.</p>
-      <p>The streaming screen shows "YOU ARE LIVE" with your live duration and bitrate. For public streams, a <strong>LIVE NOW</strong> badge and a <strong>Watch on YouTube</strong> button appear on the event card for the community. Private streams are intended for host-controlled sharing and are not shown as public stream links in the app.</p>
-      <p>Your screen will stay awake automatically while streaming. Switching to another app or manually locking your phone will still pause the broadcast — keep the streaming screen open until you end the stream. If you switch apps, a <strong>Return to Stream</strong> button stays visible so you can jump straight back.</p>
+      <p>The app creates or resumes a YouTube broadcast and starts streaming to the Community Events YouTube channel. Public streams show a <strong>LIVE NOW</strong> badge and <strong>Watch on YouTube</strong> button on the event card. Private streams are host-controlled, are not shown as public stream links in the app, and the host may receive the private YouTube link by email once live.</p>
+      <p>The streaming screen shows live status, mic level, orientation warning and stream controls. Controls can auto-hide while the video remains visible. Your screen stays awake automatically while streaming, but switching apps or locking your phone can still interrupt the broadcast.</p>
+    </div>
+    <div class="step red">
+      <h3>Streaming from another device</h3>
+      <p>If you are using another camera or streaming device, choose that option and enter the YouTube live video URL. Once accepted, the event is marked live and public viewers use that YouTube link. End the stream from the app when it should no longer appear live.</p>
     </div>
     <div class="shot-row">
       <img class="shot" src="/docs/screenshots/event-live-card.png" alt="Event card showing LIVE badge and Watch on YouTube button"/>
@@ -187,24 +213,31 @@
     </div>
     <div class="step red">
       <h3>Ending the stream</h3>
-      <p>Tap <strong>End Stream</strong> and confirm. The broadcast stops immediately, and any LIVE badge or Watch on YouTube button disappears from the event card within a few seconds.</p>
+      <p>Tap <strong>End Stream</strong>. The app clears the event live status and removes any LIVE badge or Watch on YouTube button from event cards. YouTube may take a short time to finish processing the broadcast or recording.</p>
     </div>
     <img class="shot" src="/docs/screenshots/stream-ended.png" alt="Stream Ended confirmation screen"/>
+    <div class="step red">
+      <h3>Streamed videos archive</h3>
+      <p>The streamed-videos screen lists public broadcasts from the Community Events Australia YouTube channel that are available for viewing. Deleted or unavailable YouTube videos are not intended to remain visible in the app.</p>
+    </div>
+    <img class="shot" src="/docs/screenshots/streamed-videos-current.jpg" alt="Streamed videos archive with YouTube thumbnail and Watch on YouTube button"/>
 
     <!-- ───────────────────────── BULK SHARE ───────────────────────── -->
     <h2 id="bulkshare">📤 Bulk Share</h2>
     <img class="shot" src="/docs/screenshots/bulk-share.png" alt="Bulk Share Events screen showing multiple selected events"/>
     <div class="step">
       <h3>Sharing multiple events at once</h3>
-      <p>Bulk Share lets organisers select several upcoming events and generate one neatly formatted message — with dates, times, locations and Hijri dates — ready to paste into a WhatsApp group. Great for sharing a full week's program in one go instead of sharing each event individually.</p>
+      <p>Bulk Share lets organisers select several upcoming events and generate one formatted message ready for WhatsApp, SMS or other sharing apps. The detailed format includes full event details where permitted. The brief format lists host, date, time and suburb only.</p>
+      <p>Generated messages group events under <strong>Centre Programs</strong> and <strong>Private Programs</strong>, include notes where entered, and finish with the app download link so recipients can install Community Events Australia.</p>
     </div>
 
     <!-- ───────────────────────── CALENDAR ───────────────────────── -->
     <h2 id="calendar">📅 Calendar Sync &amp; Reminders</h2>
-    <img class="shot" src="/docs/screenshots/calendar-sync.png" alt="Sync Calendar screen with Apple Calendar and Google Calendar quick sync buttons"/>
+    <img class="shot" src="/docs/screenshots/calendar-sync-current.jpg" alt="Sync Calendar screen with iPhone/iPad and Android quick sync buttons"/>
     <div class="step">
       <h3>Calendar Sync</h3>
-      <p>Go to the <strong>Calendar</strong> view, select a date range, then download the calendar file. Open the <code>.ics</code> file to import events into iPhone Calendar, Google Calendar, or Outlook. Calendar entries include host name, event type, date &amp; time, address and audience type — speaker and reciter details are not included.</p>
+      <p>Go to the <strong>Calendar</strong> view and use calendar sync to subscribe to the Community Events feed where supported. If a browser or native wrapper blocks one-tap subscription, the app can provide a calendar feed URL or downloadable <code>.ics</code> file as a fallback.</p>
+      <p>Calendar entries include host name, event type, date, calculated or fixed time, address and audience type. Hidden events are excluded.</p>
     </div>
     <div class="shot-row">
       <img class="shot" src="/docs/screenshots/calendar-month-view.png" alt="Calendar month view"/>
@@ -212,7 +245,22 @@
     </div>
     <div class="step">
       <h3>Email reminders</h3>
-      <p>A daily email is sent for events happening today. Toggle reminders on or off anytime in <strong>Profile</strong>. Hidden events are never included in reminders or calendar sync.</p>
+      <p>A daily reminder email may be sent around 7:00 PM for upcoming programs, where reminders are enabled. Admin and Super Admin users may also receive separate administrator alerts, which can be turned off separately in Profile.</p>
+    </div>
+
+    <!-- ───────────────────────── ADMIN DASHBOARD ───────────────────────── -->
+    <h2 id="admin">🛠️ Admin Dashboard</h2>
+    <div class="step">
+      <h3>Managing organisations</h3>
+      <p>Admins and Super Admins can manage registered organisations from the Admin Dashboard. Organisation logos are used on event cards when an event does not have its own poster. Built-in organisations can be refreshed and updated with corrected names, logos and locations.</p>
+    </div>
+    <div class="shot-row">
+      <img class="shot" src="/docs/screenshots/admin-organisations-top.jpg" alt="Admin organisations list showing built-in organisations and edit controls"/>
+      <img class="shot" src="/docs/screenshots/admin-organisations-list.jpg" alt="Admin organisations list showing additional centres and organisation logos"/>
+    </div>
+    <div class="step">
+      <h3>Other admin tools</h3>
+      <p>The Admin Dashboard includes event management, ownership transfer, recurring-series filters, Hijri calendar correction, user management, calendar sync visibility, stream tools and email controls. Some actions, such as user export, are restricted to Super Admins.</p>
     </div>
 
     <!-- ───────────────────────── ROLES ───────────────────────── -->
@@ -220,26 +268,27 @@
     <div class="roles">
       <div class="role-card">
         <h3>👤 User</h3>
-        <p>Add, edit, hide and delete their own events. View all public events, go live, and sync calendars.</p>
+        <p>Add, edit, hide and delete their own single events. View eligible event details, use map view, go live for their own events, manage favourites, sync calendars and update their profile.</p>
       </div>
       <div class="role-card">
         <h3>🛠 Admin</h3>
-        <p>All User permissions plus: edit, hide or transfer ownership of any event, manage organisations, and adjust Hijri calendar settings.</p>
+        <p>All User permissions plus: create recurring events, edit or deactivate recurring series, edit or transfer ownership of events, manage organisations, adjust Hijri calendar settings and receive optional admin alerts.</p>
       </div>
       <div class="role-card">
         <h3>👑 Super Admin</h3>
-        <p>All Admin permissions plus: manage user roles, promote/demote or ban users. Cannot remove themselves as the last Super Admin.</p>
+        <p>All Admin permissions plus: manage user roles, promote, demote or ban users, export user contact lists and access super-admin-only controls. A final remaining Super Admin cannot remove their own Super Admin role without appointing another Super Admin first.</p>
       </div>
     </div>
 
     <!-- ───────────────────────── NOTES ───────────────────────── -->
     <h2 id="notes">ℹ️ Important Notes</h2>
     <ul>
-      <li>Events are automatically removed from the app after a set period following the event date.</li>
-      <li>Calendar entries show basic info only — full details are always available in the app.</li>
+      <li>Past events are moved out of the active list and retained as inactive/archive records rather than simply erased.</li>
+      <li>Calendar entries show basic info only — full details are always available in the app for authorised users.</li>
       <li>Hidden events are excluded from search, the home screen, reminders and calendar sync — but can still be shared privately.</li>
       <li>Public streams can appear on event cards and in the streamed-videos list. Private streams use YouTube unlisted/link-only visibility and should be shared only by the host or YouTube channel administrator.</li>
-      <li>Deleting your account permanently deletes all your events.</li>
+      <li>Prayer-time events depend on the selected address coordinates, date, time zone and calculation method. Always verify final program times with the host.</li>
+      <li>Deleting your account deletes your account/profile details, but events you created are retained as event history and can be made inactive immediately or at their normal expiry date.</li>
     </ul>
 
     <h2>Need Help?</h2>
@@ -247,7 +296,7 @@
 
     <div class="footer">
       © <span id="yr"></span> Community Events Australia. All rights reserved.<br/>
-      <a href="/">← Back to App</a> &nbsp;|&nbsp;
+      <a href="/" onclick="if (history.length > 1) { event.preventDefault(); history.back(); }">← Back to App</a> &nbsp;|&nbsp;
       <a href="/privacy.html">Privacy Policy</a> &nbsp;|&nbsp;
       <a href="/terms.html">Terms of Use</a> &nbsp;|&nbsp;
       <a href="/delete-account.html">Account Deletion</a>

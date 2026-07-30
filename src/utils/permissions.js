@@ -1,9 +1,23 @@
 import { ROLES } from './constants';
+import { DEFAULT_CITY, getEventMetroArea, normalizeCity } from './cities';
 
 export const isAdminRole = role => role === ROLES.ADMIN || role === ROLES.SUPER_ADMIN;
-export const canEditEvent  = (profile, event, uid) => isAdminRole(profile?.role) || event?.createdByUserId === uid;
+export const isSuperAdminRole = role => role === ROLES.SUPER_ADMIN;
+export const getAdminCity = profile => normalizeCity(profile?.adminCity || profile?.defaultCity || DEFAULT_CITY);
+export const canAdminAccessEvent = (profile, event) => {
+  if (isSuperAdminRole(profile?.role)) return true;
+  if (profile?.role !== ROLES.ADMIN) return false;
+  return getEventMetroArea(event) === getAdminCity(profile);
+};
+export const canAdminAccessUser = (profile, userRecord) => {
+  if (isSuperAdminRole(profile?.role)) return true;
+  if (profile?.role !== ROLES.ADMIN) return false;
+  return normalizeCity(userRecord?.adminCity || userRecord?.defaultCity || DEFAULT_CITY) === getAdminCity(profile);
+};
+export const canManageHijriSettings = profile => isSuperAdminRole(profile?.role);
+export const canEditEvent  = (profile, event, uid) => canAdminAccessEvent(profile, event) || event?.createdByUserId === uid;
 export const canDeleteEvent = canEditEvent;
-export const canManageUsers = profile => profile?.role === ROLES.SUPER_ADMIN;
+export const canManageUsers = profile => isAdminRole(profile?.role);
 
 /**
  * Privacy matrix for SHARING (share message content):

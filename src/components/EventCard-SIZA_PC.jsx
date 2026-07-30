@@ -8,18 +8,14 @@ import { getHijriSettings } from '../services/settingsService';
 import { STORE_SHARE_LINES } from '../utils/storeLinks';
 
 let hijriOverridesCache = [];
-let hijriSettingsPromise = null;
 
 function loadHijriOverrides() {
-  if (!hijriSettingsPromise) {
-    hijriSettingsPromise = getHijriSettings()
-      .then(settings => {
-        hijriOverridesCache = settings.overrides || [];
-        return hijriOverridesCache;
-      })
-      .catch(() => hijriOverridesCache);
-  }
-  return hijriSettingsPromise;
+  return getHijriSettings()
+    .then(settings => {
+      hijriOverridesCache = settings.overrides || [];
+      return hijriOverridesCache;
+    })
+    .catch(() => hijriOverridesCache);
 }
 
 // Display normaliser — old events stored as "Mixed Audience" show as "Family Event"
@@ -116,16 +112,16 @@ export default function EventCard({
   };
 
   const hijriDisplay = (() => {
+    if (event.eventDate) {
+      const computed = getHijriDisplay(event.eventDate, hijriOverrides);
+      if (computed && storedHijriLooksValid(computed)) return computed;
+    }
+
     if (event.enteredAsHijri === true && event.hijriDay && event.hijriMonth && event.hijriYear) {
       const day = Number(event.hijriDay);
       if (day >= 1 && day <= 30) {
         return hijriDisplayFromParts(day, Number(event.hijriMonth), Number(event.hijriYear));
       }
-    }
-
-    if (event.eventDate) {
-      const computed = getHijriDisplay(event.eventDate, hijriOverrides);
-      if (computed && storedHijriLooksValid(computed)) return computed;
     }
 
     return storedHijriLooksValid(event.hijriDate) ? event.hijriDate : '';

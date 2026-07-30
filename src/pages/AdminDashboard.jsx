@@ -3,9 +3,21 @@ import EventCard from '../components/EventCard';
 import EventFilters from '../components/EventFilters';
 import { saveHijriSettings, getHijriSettings, saveMonthOverride } from '../services/settingsService';
 import { listUsers, updateUserContactProfile, updateUserRole } from '../services/userService';
-import { canManageUsers, isAdminRole } from '../utils/permissions';
+import {
+  canAdminAccessEvent,
+  canAdminAccessUser,
+  canManageHijriSettings,
+  getAdminCity,
+  isAdminRole,
+} from '../utils/permissions';
 import { ROLES } from '../utils/constants';
 import { getHijriDisplay, getHijriParts, hijriToGregorian, HIJRI_MONTHS } from '../services/hijriService';
+import {
+  DEFAULT_HIJRI_OBSERVANCES,
+  getHijriObservances,
+  saveHijriObservances,
+  sortHijriObservances,
+} from '../services/hijriObservanceService';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getApp } from 'firebase/app';
 import * as XLSX from 'xlsx';
@@ -14,12 +26,34 @@ import { invalidateOrgsCache } from '../services/imageService';
 import { CITY_OPTIONS, DEFAULT_CITY, cityCode, cityLabel, normalizeCity } from '../utils/cities';
 import { compareEventsByDateTime } from '../services/dateUtils';
 import { hasGoogleMapsKey, loadGoogleMapsScript, waitForGoogleMaps } from '../services/googleMapsLoader';
+import { localDateStr } from '../services/dateUtils';
 
 const ROLE_LABELS = {
   [ROLES.USER]:        { label: 'User',        color: '#6b7280', bg: '#f3f4f6' },
   [ROLES.ADMIN]:       { label: 'Admin',       color: '#0f766e', bg: '#e6f4f1' },
   [ROLES.SUPER_ADMIN]: { label: 'Super Admin', color: '#7c3aed', bg: '#ede9fe' },
 };
+
+const HIJRI_OBSERVANCE_CATEGORIES = ['Wiladat', 'Shahadat', 'Wafat', 'Eid', 'Ayyam-e-Aza', 'Amaal', 'Season', 'Event'];
+
+const blankHijriObservanceForm = {
+  id: '',
+  name: '',
+  day: 1,
+  month: 1,
+  category: 'Event',
+  notes: '',
+  enabled: true,
+  priority: 50,
+};
+
+const slugHijriObservance = value => (
+  String(value || 'observance')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || `observance-${Date.now()}`
+);
 
 const normalisePhone = value => {
   let digits = String(value || '').replace(/\D/g, '');
@@ -274,7 +308,13 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   const [anchorDate,     setAnchorDate]     = useState('');
   const [anchorMonth,    setAnchorMonth]    = useState('');
   const [anchorYear,     setAnchorYear]     = useState('');
+  const [hijriObservances, setHijriObservances] = useState(DEFAULT_HIJRI_OBSERVANCES);
+  const [hijriObsForm, setHijriObsForm] = useState(blankHijriObservanceForm);
+  const [editingHijriObsId, setEditingHijriObsId] = useState(null);
+  const [hijriObsSelection, setHijriObsSelection] = useState('');
+  const [savingHijriObs, setSavingHijriObs] = useState(false);
   const [users,          setUsers]          = useState([]);
+  const [userStats,      setUserStats]      = useState(null);
   const [calCount,       setCalCount]       = useState(null);
   const [inactiveCount,  setInactiveCount]  = useState(null);
   const [calSyncUids,    setCalSyncUids]     = useState(new Set());
@@ -286,6 +326,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   const [editUserName,   setEditUserName]   = useState('');
   const [editUserEmail,  setEditUserEmail]  = useState('');
   const [savingUserEdit, setSavingUserEdit] = useState(false);
+  const [cleaningMigratedProfiles, setCleaningMigratedProfiles] = useState(false);
+  const [mergingDuplicateProfiles, setMergingDuplicateProfiles] = useState(false);
   const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
   const [recalculating,  setRecalculating]  = useState(false);
@@ -320,6 +362,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   // Transfer ownership state
   const [selectedEventIds, setSelectedEventIds] = useState(new Set());
   const [filteredAdminEvents, setFilteredAdminEvents] = useState(null);
+  const [adminSeriesFilter, setAdminSeriesFilter] = useState('all');
+  const [adminEventPanelFilter, setAdminEventPanelFilter] = useState('all');
   const [showTransferPanel, setShowTransferPanel] = useState(false);
   const [transferToUid,    setTransferToUid]    = useState('');
   const [transferring,     setTransferring]     = useState(false);
@@ -339,15 +383,30 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   const fileInputRef = useRef(null);
 
   const isSuperAdmin = profile?.role === ROLES.SUPER_ADMIN;
+  const adminCity = getAdminCity(profile);
   const fns = getFunctions(getApp(), 'australia-southeast1');
-  const displayedAdminEvents = useMemo(
-    () => [...(filteredAdminEvents ?? adminEvents ?? [])].sort(compareEventsByDateTime),
-    [filteredAdminEvents, adminEvents]
-  );
+  const displayedAdminEvents = useMemo(() => {
+    const base = filteredAdminEvents ?? adminEvents ?? [];
+    const filtered = base.filter(event => {
+      const isRecurring = !!(event.isRecurring || event.recurringSeriesId);
+      const isAnySeries = !!(event.isSeries || event.seriesId || event.recurringSeriesId);
+      if (adminEventPanelFilter === 'live') return !!event.isLive;
+      if (adminEventPanelFilter === 'single') return !isAnySeries;
+      if (adminEventPanelFilter === 'recurring') return isRecurring;
+      if (adminEventPanelFilter === 'legacySeries') return isAnySeries && !isRecurring;
+      if (adminEventPanelFilter === 'centre') return event.organiserType === 'centre';
+      if (adminEventPanelFilter === 'private') return event.organiserType === 'private';
+      if (adminSeriesFilter === 'single') return !isAnySeries;
+      if (adminSeriesFilter === 'recurring') return isRecurring;
+      if (adminSeriesFilter === 'legacySeries') return isAnySeries && !isRecurring;
+      return true;
+    });
+    return [...filtered].sort(compareEventsByDateTime);
+  }, [filteredAdminEvents, adminEvents, adminSeriesFilter, adminEventPanelFilter]);
   const seriesCounts = useMemo(() => {
     const counts = new Map();
     for (const event of adminEvents || []) {
-      if (!event.isSeries) continue;
+      if (!event.isSeries && !event.recurringSeriesId) continue;
       const key = event.seriesId || legacySeriesKey(event);
       counts.set(key, (counts.get(key) || 0) + 1);
     }
@@ -356,13 +415,21 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
   useEffect(() => {
     if (!isAdminRole(profile?.role)) return;
-    getHijriSettings().then(s => {
-      setHijriSettings(s);
-      setAnchorDate(s.anchorDate || '');
-      setAnchorMonth(s.anchorMonth || '');
-      setAnchorYear(s.anchorYear || '');
-    });
-    listUsers().then(setUsers);
+    if (canManageHijriSettings(profile)) {
+      getHijriSettings().then(s => {
+        setHijriSettings(s);
+        setAnchorDate(s.anchorDate || '');
+        setAnchorMonth(s.anchorMonth || '');
+        setAnchorYear(s.anchorYear || '');
+      });
+      getHijriObservances()
+        .then(items => setHijriObservances(sortHijriObservances(items)))
+        .catch(() => setHijriObservances(DEFAULT_HIJRI_OBSERVANCES));
+    }
+    listUsers({ includeHidden: true }).then(setUsers);
+    httpsCallable(fns, 'getUserDashboardStats')()
+      .then(r => setUserStats(r.data))
+      .catch(() => setUserStats(null));
     httpsCallable(fns, 'getCalendarStats')()
       .then(r => { setCalCount(r.data.count); setCalSyncUids(new Set(r.data.uids || [])); })
       .catch(() => {});
@@ -390,10 +457,13 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
   // ── Hijri recalculate ────────────────────────────────────────────────────────
   const recalculateHijri = async () => {
+    if (!canManageHijriSettings(profile)) return showMsg('Only Super Admins can recalculate Hijri dates.', 'error');
     setRecalculating(true);
     try {
       const fn = httpsCallable(fns, 'recalculateHijriEvents');
-      const result = await fn({});
+      const result = await fn({
+        adjustmentDays: 0,
+      });
       const { hijriEvents, gregEvents, updated } = result.data;
       showMsg(`✅ Recalculated ${updated} events — ${hijriEvents} Hijri-entered (Gregorian dates updated), ${gregEvents} Gregorian-entered (Hijri tags updated).`);
     } catch (e) { showMsg('Recalculate failed: ' + e.message, 'error'); }
@@ -402,6 +472,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
   // ── Hijri save + auto-recalculate ───────────────────────────────────────────
   const saveHijri = async () => {
+    if (!canManageHijriSettings(profile)) return showMsg('Only Super Admins can adjust Hijri dates.', 'error');
     if (!anchorDate) return showMsg('Please select the Gregorian date for 1st of the Hijri month.', 'error');
     if (!anchorMonth) return showMsg('Please select the Hijri month.', 'error');
     if (!anchorYear) return showMsg('Please enter the Hijri year.', 'error');
@@ -409,15 +480,14 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     try {
       const hMonth = Number(anchorMonth);
       const hYear = Number(anchorYear);
-      const anchor = new Date(anchorDate + 'T00:00:00');
-      const today  = new Date();
-      today.setHours(0,0,0,0);
-      const diffDays = Math.round((anchor - today) / 86400000);
-      const overrides = await saveMonthOverride(hYear, hMonth, anchorDate);
+      // Preserve the selected date exactly as provided by the date input.
+      // Converting through UTC can shift the value by one day in some time zones.
+      const anchorDateOnly = anchorDate;
+      const overrides = await saveMonthOverride(hYear, hMonth, anchorDateOnly);
       const settings = {
         ...(hijriSettings || {}),
-        adjustmentDays: diffDays,
-        anchorDate,
+        adjustmentDays: 0,
+        anchorDate: anchorDateOnly,
         anchorMonth: hMonth,
         anchorYear: hYear,
         overrides,
@@ -432,6 +502,92 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   };
 
   // ── Load all events for admin ───────────────────────────────────────────────
+  const resetHijriObservanceForm = (nextSelection = '') => {
+    setHijriObsForm(blankHijriObservanceForm);
+    setEditingHijriObsId(null);
+    setHijriObsSelection(nextSelection);
+  };
+
+  const editHijriObservance = item => {
+    setHijriObsForm({
+      id: item.id || '',
+      name: item.name || '',
+      day: item.day || 1,
+      month: item.month || 1,
+      category: item.category || 'Event',
+      notes: item.notes || '',
+      enabled: item.enabled !== false,
+      priority: item.priority || 50,
+    });
+    setEditingHijriObsId(item.id);
+    setHijriObsSelection(item.id);
+  };
+
+  const persistHijriObservances = async nextItems => {
+    const sorted = sortHijriObservances(nextItems);
+    setHijriObservances(sorted);
+    await saveHijriObservances(sorted);
+  };
+
+  const saveHijriObservance = async e => {
+    e.preventDefault();
+    if (!canManageHijriSettings(profile)) return showMsg('Only Super Admins can manage important Hijri dates.', 'error');
+    if (!hijriObsSelection) {
+      showMsg('Please select an important date to edit, or select New important date.', 'error');
+      return;
+    }
+    if (!hijriObsForm.name.trim()) {
+      showMsg('Please enter the important date name.', 'error');
+      return;
+    }
+
+    const nextItem = {
+      ...hijriObsForm,
+      id: editingHijriObsId || hijriObsForm.id || slugHijriObservance(hijriObsForm.name),
+      name: hijriObsForm.name.trim(),
+      day: Math.max(1, Math.min(30, Number(hijriObsForm.day) || 1)),
+      month: Math.max(1, Math.min(12, Number(hijriObsForm.month) || 1)),
+      priority: Number(hijriObsForm.priority || 50),
+      enabled: hijriObsForm.enabled !== false,
+    };
+
+    setSavingHijriObs(true);
+    try {
+      const merged = editingHijriObsId
+        ? hijriObservances.map(item => item.id === editingHijriObsId ? nextItem : item)
+        : [...hijriObservances.filter(item => item.id !== nextItem.id), nextItem];
+      await persistHijriObservances(merged);
+      resetHijriObservanceForm();
+      showMsg('Important Hijri date saved.');
+    } catch (e2) {
+      showMsg('Unable to save Hijri date: ' + e2.message, 'error');
+    } finally {
+      setSavingHijriObs(false);
+    }
+  };
+
+  const toggleHijriObservance = async item => {
+    try {
+      await persistHijriObservances(hijriObservances.map(entry =>
+        entry.id === item.id ? { ...entry, enabled: entry.enabled === false } : entry
+      ));
+      showMsg(item.enabled === false ? 'Important date enabled.' : 'Important date disabled.');
+    } catch (e) {
+      showMsg('Unable to update Hijri date: ' + e.message, 'error');
+    }
+  };
+
+  const deleteHijriObservance = async item => {
+    if (!window.confirm(`Delete "${item.name}" from important Hijri dates?`)) return;
+    try {
+      await persistHijriObservances(hijriObservances.filter(entry => entry.id !== item.id));
+      if (editingHijriObsId === item.id) resetHijriObservanceForm();
+      showMsg('Important Hijri date deleted.');
+    } catch (e) {
+      showMsg('Unable to delete Hijri date: ' + e.message, 'error');
+    }
+  };
+
   const loadAdminEvents = async () => {
     try {
       const { getDocs, collection, query, orderBy, where } = await import('firebase/firestore');
@@ -441,8 +597,12 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         where('status', '==', 'active'),
         orderBy('eventDate', 'asc')
       ));
-      setAdminEvents(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(compareEventsByDateTime));
+      setAdminEvents(snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(event => canAdminAccessEvent(profile, event))
+        .sort(compareEventsByDateTime));
       setFilteredAdminEvents(null);
+      setAdminEventPanelFilter('all');
       setSelectedEventIds(new Set());
       setShowTransferPanel(false);
     } catch (e) { showMsg('Error loading events: ' + e.message, 'error'); }
@@ -451,6 +611,10 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   // ── Clear live status ───────────────────────────────────────────────────────
   // ── Repair: load all Hijri-entered events ────────────────────────────────
   const loadRepairEvents = async () => {
+    if (!canManageHijriSettings(profile)) {
+      setRepairMsg('Only Super Admins can use the Hijri repair tool.');
+      return;
+    }
     setRepairLoading(true); setRepairMsg('');
     try {
       const { getDocs, collection, query, where } = await import('firebase/firestore');
@@ -465,6 +629,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
       ));
       const evs = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
+        .filter(event => canAdminAccessEvent(profile, event))
         .sort((a, b) => (a.eventDate || '').localeCompare(b.eventDate || ''));
       setRepairEvents(evs);
       if (evs.length === 0) setRepairMsg('No Hijri-entered events found.');
@@ -583,27 +748,14 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     };
 
     const doTransferEvents = async () => {
-      const toUser = users.find(u => u.id === transferToUid);
+      const toUser = scopedUsers.find(u => u.id === transferToUid);
       if (!toUser) { setTransferError('Please select a valid user.'); return; }
       const ids = [...selectedEventIds];
       if (ids.length === 0) { setTransferError('Select at least one event.'); return; }
       setTransferring(true);
       setTransferError('');
       try {
-        const { doc, writeBatch, serverTimestamp } = await import('firebase/firestore');
-        const { db } = await import('../firebase/firebase');
-        for (let offset = 0; offset < ids.length; offset += 450) {
-          const batch = writeBatch(db);
-          ids.slice(offset, offset + 450).forEach(eventId => {
-            batch.update(doc(db, 'events', eventId), {
-              createdByUserId: transferToUid,
-              createdByName: toUser.fullName || toUser.email || '',
-              createdByUserEmail: toUser.email || '',
-              updatedAt: serverTimestamp(),
-            });
-          });
-          await batch.commit();
-        }
+        await httpsCallable(fns, 'transferEventOwnership')({ eventIds: ids, toUid: transferToUid });
         showMsg(`${ids.length} event${ids.length === 1 ? '' : 's'} transferred to ${toUser.fullName || toUser.email}.`);
         setAdminEvents(prev => prev ? prev.map(e =>
           selectedEventIds.has(e.id)
@@ -666,6 +818,49 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         await loadAdminEvents();
       } catch (e) { showMsg('Series ID backfill failed: ' + e.message, 'error'); }
       setBackfillingSeries(false);
+    };
+
+    const deleteEntireSeries = async (event) => {
+      const seriesId = event.seriesId || event.recurringSeriesId;
+      if (!seriesId) {
+        showMsg('This series needs a permanent series ID before it can be deleted as a group.', 'error');
+        return;
+      }
+      const label = event.isRecurring ? 'recurring series' : 'series';
+      if (!confirm(`Mark every event in this ${label} as inactive? This keeps the records archived but removes them from active event lists.`)) return;
+      try {
+        const { collection, doc, getDocs, query, serverTimestamp, setDoc, where, writeBatch } = await import('firebase/firestore');
+        const { db } = await import('../firebase/firebase');
+        const snap = await getDocs(query(collection(db, 'events'), where('seriesId', '==', seriesId)));
+        if (snap.empty) {
+          showMsg('No matching series events were found.', 'error');
+          return;
+        }
+        for (let offset = 0; offset < snap.docs.length; offset += 450) {
+          const batch = writeBatch(db);
+          snap.docs.slice(offset, offset + 450).forEach(docSnap => {
+            batch.update(doc(db, 'events', docSnap.id), {
+              status: 'inactive',
+              hidden: true,
+              inactiveReason: event.isRecurring ? 'recurring-series-deleted' : 'series-deleted',
+              deletedAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          });
+          await batch.commit();
+        }
+        if (event.isRecurring || event.recurringSeriesId) {
+          await setDoc(doc(db, 'recurringEventSeries', seriesId), {
+            status: 'inactive',
+            updatedAt: serverTimestamp(),
+            deletedAt: serverTimestamp(),
+          }, { merge: true });
+        }
+        showMsg(`${snap.docs.length} event${snap.docs.length === 1 ? '' : 's'} in the ${label} marked inactive.`);
+        await loadAdminEvents();
+      } catch (e) {
+        showMsg('Series delete failed: ' + e.message, 'error');
+      }
     };
 
     const repairMissingGps = async () => {
@@ -799,13 +994,27 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
     const clearLiveStatus = async (eventId) => {
     try {
+      const liveEvent = adminEvents?.find(ev => ev.id === eventId);
+      const sessionId = liveEvent?.liveUrl || null;
+      if (sessionId) {
+        try {
+          await httpsCallable(fns, 'nativeStreamEndEvent')({ eventId, sessionId });
+        } catch (endErr) {
+          console.warn('[Admin] nativeStreamEndEvent failed, falling back to direct clear:', endErr.message);
+        }
+      }
       const { doc, updateDoc, serverTimestamp } = await import('firebase/firestore');
       const { db } = await import('../firebase/firebase');
       await updateDoc(doc(db, 'events', eventId), {
-        isLive: false, liveUrl: null, updatedAt: serverTimestamp()
+        isLive: false,
+        liveUrl: null,
+        liveWatchUrl: null,
+        liveSource: null,
+        liveAppVisibility: null,
+        updatedAt: serverTimestamp()
       });
       setAdminEvents(prev => prev
-        ? prev.map(ev => ev.id === eventId ? { ...ev, isLive: false, liveUrl: null } : ev)
+        ? prev.map(ev => ev.id === eventId ? { ...ev, isLive: false, liveUrl: null, liveWatchUrl: null, liveSource: null, liveAppVisibility: null } : ev)
         : null
       );
       showMsg('✅ Live status cleared');
@@ -821,6 +1030,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
       if (reminderMode === 'date')  payload.date  = reminderDate;
       if (reminderMode === 'range') { payload.from = reminderFrom; payload.to = reminderTo; }
       if (reminderMode === 'month') payload.month = reminderMonth;
+      payload.city = isSuperAdmin ? 'all' : adminCity;
       const result = await fn(payload);
       setReminderResult({ message: result.data.message, error: false });
     } catch (e) {
@@ -840,6 +1050,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         date: new Date().toISOString().slice(0, 10),
         customMode: true,
         customMessage: communityMsg.trim(),
+        city: isSuperAdmin ? 'all' : adminCity,
       });
       setReminderResult({ message: result.data.message || '✅ Message sent!', error: false });
       setCommunityMsg('');
@@ -860,6 +1071,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         date: new Date().toISOString().slice(0, 10),
         customMode: true,
         customTemplate: 'storeAnnouncement',
+        city: isSuperAdmin ? 'all' : adminCity,
       });
       setReminderResult({ message: result.data.message || 'Store announcement sent.', error: false });
     } catch (e) {
@@ -875,7 +1087,10 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     }
     try {
       await updateUserRole(u.id, role);
-      setUsers(await listUsers());
+      setUsers(await listUsers({ includeHidden: true }));
+      httpsCallable(fns, 'getUserDashboardStats')()
+        .then(r => setUserStats(r.data))
+        .catch(() => setUserStats(null));
       showMsg(`${u.fullName || u.email} is now ${ROLE_LABELS[role].label}.`);
     } catch (e) { alert(e.message); }
   };
@@ -937,13 +1152,48 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   };
 
   const [calFilter, setCalFilter] = useState(false); // when true, show only calendar-synced users
+  const [userPanelFilter, setUserPanelFilter] = useState('all');
 
-  const filteredUsers = useMemo(() => users.filter(u => {
+  const hasUserPhone = u => !!String(u.phone || u.phoneNumber || u.mobile || u.mobileNumber || '').trim();
+  const isStaleMigratedPhoneProfile = u => u.isActive !== false && !!u.migratedToUid && hasUserPhone(u);
+  const isOldMigratedProfile = u => !!u.migratedToUid && !isStaleMigratedPhoneProfile(u);
+  const isActiveUserProfile = u => u.isActive !== false && !isOldMigratedProfile(u);
+  const isInactiveUserProfile = u => u.isActive === false && !u.migratedToUid;
+  const activePhoneEmails = useMemo(() => {
+    const emails = new Set();
+    users.forEach(item => {
+      if (!isActiveUserProfile(item) || !hasUserPhone(item)) return;
+      const email = String(item.emailLower || item.email || '').trim().toLowerCase();
+      if (email) emails.add(email);
+    });
+    return emails;
+  }, [users]);
+  const isDuplicateEmailProfile = u => {
+    const email = String(u.emailLower || u.email || '').trim().toLowerCase();
+    return isActiveUserProfile(u) && !hasUserPhone(u) && email && activePhoneEmails.has(email);
+  };
+  const isNotMigratedPhoneProfile = u => isActiveUserProfile(u) && !hasUserPhone(u) && !isDuplicateEmailProfile(u);
+  const userMatchesPanelFilter = u => {
+    if (userPanelFilter === 'active') return isActiveUserProfile(u);
+    if (userPanelFilter === 'inactive') return isInactiveUserProfile(u);
+    if (userPanelFilter === 'notMigrated') return isNotMigratedPhoneProfile(u);
+    if (userPanelFilter === 'duplicateEmail') return isDuplicateEmailProfile(u);
+    if (userPanelFilter === 'migrated') return isOldMigratedProfile(u);
+    if (userPanelFilter === 'superAdmin') return isActiveUserProfile(u) && u.role === ROLES.SUPER_ADMIN;
+    if (userPanelFilter === 'admin') return isActiveUserProfile(u) && u.role === ROLES.ADMIN;
+    if (userPanelFilter === 'calendar') return calSyncUids.has(u.id);
+    return true;
+  };
+
+  const scopedUsers = useMemo(() => users.filter(u => canAdminAccessUser(profile, u)), [users, profile]);
+
+  const filteredUsers = useMemo(() => scopedUsers.filter(u => {
     const userCity = normalizeCity(u.defaultCity || DEFAULT_CITY);
     return userMatchesSearch(u, search)
+      && userMatchesPanelFilter(u)
       && (!calFilter || calSyncUids.has(u.id))
       && (cityFilter === 'all' || userCity === cityFilter);
-  }), [users, search, calFilter, calSyncUids, cityFilter]);
+  }), [scopedUsers, search, userPanelFilter, calFilter, calSyncUids, cityFilter]);
 
   const openUserEditor = (target) => {
     setEditingUser(target);
@@ -1015,14 +1265,115 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     URL.revokeObjectURL(url);
   };
 
-  const stats = [
-    { label: 'Total Users',    value: users.length },
-    { label: 'Super Admins',   value: users.filter(u => u.role === ROLES.SUPER_ADMIN).length },
-    { label: 'Admins',         value: users.filter(u => u.role === ROLES.ADMIN).length },
-    { label: 'Calendar Syncs', value: calCount ?? '…' },
-    { label: 'Active Events',  value: events.length },
-    { label: 'Inactive Events', value: inactiveCount ?? '...' },
+  const hiddenUserProfiles = userStats
+    ? (userStats.inactiveProfiles || 0) + (userStats.migratedProfiles || 0)
+    : null;
+
+  const cleanupOldMigratedProfiles = async () => {
+    if (!isSuperAdmin) return;
+    if (!confirm('Delete old migrated profile documents that have already been merged into phone login profiles?')) return;
+    setCleaningMigratedProfiles(true);
+    try {
+      const result = await httpsCallable(fns, 'cleanupMigratedUserProfiles')();
+      const data = result.data || {};
+      setUsers(await listUsers({ includeHidden: true }));
+      httpsCallable(fns, 'getUserDashboardStats')()
+        .then(r => setUserStats(r.data))
+        .catch(() => setUserStats(null));
+      const deleted = data.deletedProfiles || 0;
+      const repaired = data.repairedActiveProfiles || 0;
+      showMsg(`Cleaned ${deleted} old migrated profile${deleted === 1 ? '' : 's'} and repaired ${repaired} active phone profile${repaired === 1 ? '' : 's'}.`);
+    } catch (error) {
+      showMsg(`Migrated profile cleanup failed: ${error.message}`, 'error');
+    } finally {
+      setCleaningMigratedProfiles(false);
+    }
+  };
+
+  const mergeDuplicateEmailProfiles = async () => {
+    if (!isSuperAdmin) return;
+    if (!confirm('Merge active email-only profiles into matching phone-login profiles with the same email address?')) return;
+    setMergingDuplicateProfiles(true);
+    try {
+      const result = await httpsCallable(fns, 'mergeDuplicateEmailProfiles')();
+      const data = result.data || {};
+      setUsers(await listUsers({ includeHidden: true }));
+      httpsCallable(fns, 'getUserDashboardStats')()
+        .then(r => setUserStats(r.data))
+        .catch(() => setUserStats(null));
+      showMsg(`Merged ${data.mergedProfiles || 0} duplicate email profile${data.mergedProfiles === 1 ? '' : 's'}.`);
+    } catch (error) {
+      showMsg(`Duplicate email merge failed: ${error.message}`, 'error');
+    } finally {
+      setMergingDuplicateProfiles(false);
+    }
+  };
+
+  const applyUserSummaryFilter = key => {
+    setTab('users');
+    setUserPanelFilter(key);
+    setSearch('');
+    setCityFilter(isSuperAdmin ? 'all' : adminCity);
+    setCalFilter(false);
+  };
+
+  const userSummaryPanels = [
+    { key: 'all', label: 'Total Users', value: isSuperAdmin ? (userStats?.totalProfiles ?? users.length) : scopedUsers.length },
+    { key: 'active', label: 'Active Users', value: isSuperAdmin ? (userStats?.activeUsers ?? users.filter(isActiveUserProfile).length) : scopedUsers.filter(isActiveUserProfile).length },
+    { key: 'inactive', label: 'Inactive Users', value: isSuperAdmin ? (userStats?.inactiveProfiles ?? users.filter(isInactiveUserProfile).length) : scopedUsers.filter(isInactiveUserProfile).length },
+    { key: 'superAdmin', label: 'Super Admins', value: isSuperAdmin ? (userStats?.activeSuperAdmins ?? users.filter(u => isActiveUserProfile(u) && u.role === ROLES.SUPER_ADMIN).length) : scopedUsers.filter(u => isActiveUserProfile(u) && u.role === ROLES.SUPER_ADMIN).length },
+    { key: 'admin', label: 'Admins', value: isSuperAdmin ? (userStats?.activeAdmins ?? users.filter(u => isActiveUserProfile(u) && u.role === ROLES.ADMIN).length) : scopedUsers.filter(u => isActiveUserProfile(u) && u.role === ROLES.ADMIN).length },
+    { key: 'notMigrated', label: 'Not Migrated', value: isSuperAdmin ? (userStats?.activeNotMigrated ?? users.filter(isNotMigratedPhoneProfile).length) : scopedUsers.filter(isNotMigratedPhoneProfile).length },
+    { key: 'duplicateEmail', label: 'Duplicate Email', value: isSuperAdmin ? (userStats?.duplicateEmailProfiles ?? users.filter(isDuplicateEmailProfile).length) : scopedUsers.filter(isDuplicateEmailProfile).length },
+    { key: 'migrated', label: 'Old Migrated', value: isSuperAdmin ? (userStats?.migratedProfiles ?? users.filter(isOldMigratedProfile).length) : scopedUsers.filter(isOldMigratedProfile).length },
+    { key: 'calendar', label: 'Calendar Syncs', value: isSuperAdmin ? (calCount ?? calSyncUids.size) : scopedUsers.filter(u => calSyncUids.has(u.id)).length },
   ];
+
+  const eventSummarySource = adminEvents || [];
+  const eventIsAnySeries = event => !!(event.isSeries || event.seriesId || event.recurringSeriesId);
+  const eventIsRecurring = event => !!(event.isRecurring || event.recurringSeriesId);
+  const applyEventSummaryFilter = key => {
+    setTab('events');
+    setAdminEventPanelFilter(key);
+    setAdminSeriesFilter('all');
+    setSelectedEventIds(new Set());
+  };
+  const eventSummaryPanels = [
+    { key: 'all', label: 'Active Events', value: eventSummarySource.length },
+    { key: 'live', label: 'Live Events', value: eventSummarySource.filter(e => e.isLive).length },
+    { key: 'single', label: 'Single Events', value: eventSummarySource.filter(e => !eventIsAnySeries(e)).length },
+    { key: 'recurring', label: 'Recurring', value: eventSummarySource.filter(eventIsRecurring).length },
+    { key: 'legacySeries', label: 'Old Series', value: eventSummarySource.filter(e => eventIsAnySeries(e) && !eventIsRecurring(e)).length },
+    { key: 'centre', label: 'Centre Events', value: eventSummarySource.filter(e => e.organiserType === 'centre').length },
+    { key: 'private', label: 'Private Events', value: eventSummarySource.filter(e => e.organiserType === 'private').length },
+  ];
+
+  const renderSummaryPanels = (panels, activeKey, onClick) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(118px,1fr))',
+      gap: 1, background: 'var(--border)', border: '1px solid var(--border)', borderTop: 'none',
+      marginBottom: 16 }}>
+      {panels.map(panel => {
+        const active = activeKey === panel.key;
+        return (
+          <button key={panel.key} type="button" onClick={() => onClick(panel.key)}
+            style={{
+              background: active ? '#e6f4f1' : 'white',
+              padding: '14px 12px',
+              textAlign: 'center',
+              border: 'none',
+              borderBottom: active ? '3px solid #0f766e' : '3px solid transparent',
+              cursor: 'pointer',
+              boxShadow: 'none',
+            }}>
+            <div style={{ fontSize: '1.375rem', fontWeight: 900, color: '#0f766e' }}>{panel.value}</div>
+            <div style={{ fontSize: '0.6875rem', color: active ? '#0f766e' : 'var(--muted)', marginTop: 2, fontWeight: active ? 900 : 700 }}>
+              {panel.label}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
 
   const TABS = [
     { key: 'users',    label: 'Users'         },
@@ -1031,7 +1382,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     { key: 'repair',   label: '🛠 Repair'     },
     { key: 'orgs',     label: '🏛 Orgs'       },
     { key: 'settings', label: 'Settings'      },
-  ];
+  ].filter(t => isSuperAdmin || t.key !== 'repair');
 
   return (
     <>
@@ -1044,17 +1395,6 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         <p style={{ color: 'rgba(255,255,255,.85)', margin: 0, fontSize: '0.8125rem' }}>
           {profile?.fullName || user?.email} · <RoleBadge role={profile?.role} />
         </p>
-      </div>
-
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))',
-        gap: 1, background: 'var(--border)', border: '1px solid var(--border)', borderTop: 'none' }}>
-        {stats.map(s => (
-          <div key={s.label} style={{ background: 'white', padding: '14px 12px', textAlign: 'center' }}>
-            <div style={{ fontSize: '1.375rem', fontWeight: 900, color: '#0f766e' }}>{s.value}</div>
-            <div style={{ fontSize: '0.6875rem', color: 'var(--muted)', marginTop: 2 }}>{s.label}</div>
-          </div>
-        ))}
       </div>
 
       {/* Tabs */}
@@ -1071,6 +1411,9 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         ))}
       </div>
 
+      {tab === 'users' && renderSummaryPanels(userSummaryPanels, userPanelFilter, applyUserSummaryFilter)}
+      {tab === 'events' && adminEvents !== null && renderSummaryPanels(eventSummaryPanels, adminEventPanelFilter, applyEventSummaryFilter)}
+
       {/* Global message */}
       {msg.text && (
         <div className={msg.type === 'error' ? 'error' : 'success'} style={{ margin: '0 16px 12px' }}>
@@ -1085,7 +1428,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             marginBottom:14, flexWrap:'wrap', gap:8 }}>
             <h3 style={{ margin:0 }}>User Management</h3>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
-              <button onClick={() => setCalFilter(f => !f)}
+              <button onClick={() => { setUserPanelFilter('all'); setCalFilter(f => !f); }}
                 style={{ fontSize:'0.75rem', padding:'8px 12px', borderRadius:10,
                   border: calFilter ? '1px solid #0f766e' : '1px solid var(--border)',
                   background: calFilter ? '#e6f4f1' : 'white',
@@ -1101,11 +1444,13 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   Export CSV ({filteredUsers.length})
                 </button>
               )}
-              <select value={cityFilter} onChange={event => setCityFilter(event.target.value)}
+              <select value={isSuperAdmin ? cityFilter : adminCity} onChange={event => setCityFilter(event.target.value)}
+                disabled={!isSuperAdmin}
                 aria-label="Filter users by city"
                 style={{ width:180, padding:'8px 12px', fontSize:'0.8125rem',
-                  borderRadius:10, border:'1px solid var(--border)', margin:0 }}>
-                <option value="all">All locations</option>
+                  borderRadius:10, border:'1px solid var(--border)', margin:0,
+                  opacity: isSuperAdmin ? 1 : 0.8 }}>
+                {isSuperAdmin && <option value="all">All locations</option>}
                 {CITY_OPTIONS.map(city => (
                   <option key={city.value} value={city.value}>
                     {cityCode(city.value)} - {city.label.replace(', Australia', '')}
@@ -1120,6 +1465,25 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
           </div>
           {!isSuperAdmin && (
             <div className="notice" style={{ marginBottom:12 }}>You can correct user names and emails. Role changes and account deletion require Super Admin access.</div>
+          )}
+          {isSuperAdmin && userStats && (hiddenUserProfiles > 0 || userStats.hiddenSuperAdmins > 0) && (
+            <div className="notice" style={{ marginBottom:12 }}>
+              Active user records shown here: <strong>{userStats.activeUsers}</strong>. Firestore profile documents: <strong>{userStats.totalProfiles}</strong>.
+              Hidden/inactive or old migrated profile documents: <strong>{hiddenUserProfiles}</strong>
+              {userStats.hiddenSuperAdmins ? <>. Hidden Super Admin profiles: <strong>{userStats.hiddenSuperAdmins}</strong></> : null}.
+              {isSuperAdmin && (userStats.migratedProfiles || 0) > 0 && (
+                <button className="btn-light" onClick={cleanupOldMigratedProfiles} disabled={cleaningMigratedProfiles}
+                  style={{ marginLeft:10, fontSize:'0.75rem', padding:'6px 10px' }}>
+                  {cleaningMigratedProfiles ? 'Cleaning...' : 'Clean Old Migrated Profiles'}
+                </button>
+              )}
+              {isSuperAdmin && (userStats.duplicateEmailProfiles || 0) > 0 && (
+                <button className="btn-light" onClick={mergeDuplicateEmailProfiles} disabled={mergingDuplicateProfiles}
+                  style={{ marginLeft:10, fontSize:'0.75rem', padding:'6px 10px' }}>
+                  {mergingDuplicateProfiles ? 'Merging...' : 'Merge Duplicate Email Profiles'}
+                </button>
+              )}
+            </div>
           )}
           {editingUser && (
             <div style={{ marginBottom:14, padding:14, border:'1px solid #acd9d5', borderRadius:8, background:'#f3fbfa' }}>
@@ -1173,6 +1537,34 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   )}
                   <div style={{ marginTop:4, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
                     <RoleBadge role={u.role} />
+                    {isOldMigratedProfile(u) && (
+                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#92400e',
+                        background:'#fef3c7', border:'1px solid #fde68a',
+                        borderRadius:20, padding:'2px 9px' }}>
+                        Old Migrated
+                      </span>
+                    )}
+                    {!isOldMigratedProfile(u) && isNotMigratedPhoneProfile(u) && (
+                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#1d4ed8',
+                        background:'#dbeafe', border:'1px solid #bfdbfe',
+                        borderRadius:20, padding:'2px 9px' }}>
+                        Not Migrated
+                      </span>
+                    )}
+                    {!isOldMigratedProfile(u) && isDuplicateEmailProfile(u) && (
+                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#7c2d12',
+                        background:'#ffedd5', border:'1px solid #fed7aa',
+                        borderRadius:20, padding:'2px 9px' }}>
+                        Duplicate Email
+                      </span>
+                    )}
+                    {!isOldMigratedProfile(u) && u.isActive === false && (
+                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#991b1b',
+                        background:'#fee2e2', border:'1px solid #fecaca',
+                        borderRadius:20, padding:'2px 9px' }}>
+                        Inactive
+                      </span>
+                    )}
                     <span title={cityLabel(normalizeCity(u.defaultCity || DEFAULT_CITY))}
                       style={{ fontSize:'0.6875rem', fontWeight:900, color:'#0f5f59',
                         background:'#ecfdf9', border:'1px solid #99d8d1',
@@ -1309,6 +1701,18 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                 </div>
               </div>
               <EventFilters events={adminEvents} onChange={setFilteredAdminEvents} />
+              <div className="card" style={{ padding: 12 }}>
+                <label style={{ display:'block', fontSize:'0.75rem', fontWeight:800, marginBottom:6 }}>
+                  Event set type
+                </label>
+                <select value={adminSeriesFilter} onChange={e => { setAdminEventPanelFilter('all'); setAdminSeriesFilter(e.target.value); }}
+                  style={{ width:'100%', margin:0 }}>
+                  <option value="all">All active events</option>
+                  <option value="single">Single events only</option>
+                  <option value="recurring">Recurring event series only</option>
+                  <option value="legacySeries">Old series only</option>
+                </select>
+              </div>
               {showTransferPanel && (
                 <div className="card" style={{ border:'1px solid #b2d8d0' }}>
                   <h3 style={{ margin:'0 0 6px' }}>
@@ -1320,7 +1724,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   <select value={transferToUid} onChange={e => { setTransferToUid(e.target.value); setTransferError(''); }}
                     style={{ width:'100%', marginBottom:10 }}>
                     <option value="">Select a user</option>
-                    {users.slice().sort((a,b) => (a.fullName || a.email || '').localeCompare(b.fullName || b.email || '')).map(u => (
+                    {scopedUsers.filter(isActiveUserProfile).slice().sort((a,b) => (a.fullName || a.email || '').localeCompare(b.fullName || b.email || '')).map(u => (
                       <option key={u.id} value={u.id}>
                         {u.fullName || u.email}{u.fullName && u.email ? ` (${u.email})` : ''}
                       </option>
@@ -1347,6 +1751,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               {displayedAdminEvents.map(e => {
                 const seriesKey = e.seriesId || legacySeriesKey(e);
                 const seriesCount = seriesCounts.get(seriesKey) || 0;
+                const isRecurringSeries = !!(e.isRecurring || e.recurringSeriesId);
+                const isAnySeries = !!(e.isSeries || e.seriesId || e.recurringSeriesId);
                 return (
                 <div key={e.id}>
                   <div style={{ margin:'8px 16px 4px', display:'flex', alignItems:'center',
@@ -1356,11 +1762,11 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                         onChange={() => toggleEventSelection(e.id)} />
                       <span>Select event</span>
                     </label>
-                    {e.isSeries && (
+                    {isAnySeries && (
                       <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
                         <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#7c3aed',
                           background:'#ede9fe', padding:'4px 8px', borderRadius:6 }}>
-                          <i className="ti ti-calendar-repeat" /> Series · {seriesCount} events
+                          <i className="ti ti-calendar-repeat" /> {isRecurringSeries ? 'Recurring' : 'Series'} · {seriesCount} events
                         </span>
                         <button className="btn-light" disabled={!e.seriesId} onClick={() => {
                           setEditingEvent({ ...e, __editSeries:true });
@@ -1368,6 +1774,11 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                         }} title={!e.seriesId ? 'Use Identify Older Series first' : 'Edit every event in this series'}
                           style={{ fontSize:'0.6875rem', padding:'5px 9px', margin:0, opacity:e.seriesId ? 1 : 0.5 }}>
                           <i className="ti ti-edit" /> {e.seriesId ? 'Edit entire series' : 'Identify series first'}
+                        </button>
+                        <button className="btn-light" disabled={!e.seriesId} onClick={() => deleteEntireSeries(e)}
+                          title={!e.seriesId ? 'Use Identify Older Series first' : 'Mark every event in this series inactive'}
+                          style={{ fontSize:'0.6875rem', padding:'5px 9px', margin:0, opacity:e.seriesId ? 1 : 0.5, color:'#b91c1c' }}>
+                          <i className="ti ti-trash" /> Delete entire series
                         </button>
                       </div>
                     )}
@@ -1771,15 +2182,17 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
       {tab === 'settings' && (
         <>
           {/* Hijri Calendar */}
+          {isSuperAdmin && (
+          <>
           <div className="card">
             <h3 style={{ margin:'0 0 6px' }}>Hijri Calendar Adjustment</h3>
             <p className="small" style={{ margin:'0 0 16px' }}>
-              Select the Gregorian date that corresponds to the <strong>1st of the current Hijri month</strong>.
-              The app calculates correct Hijri dates for all events automatically.
+              Select the Gregorian date that corresponds to the <strong>1st of the observed Hijri month</strong>.
+              Saved month starts are retained, and unconfirmed months use a 29/30-day calendar fallback automatically.
             </p>
             <div className="notice" style={{ marginBottom:16 }}>
               <strong>Current Hijri month:</strong>{' '}
-              {getHijriDisplay(new Date().toLocaleDateString('en-CA', { timeZone: 'Australia/Sydney' }), hijriSettings.overrides || [])}
+              {getHijriDisplay(localDateStr(), hijriSettings.overrides || [])}
               {hijriSettings.anchorDate && (
                 <span style={{ marginLeft:8, color:'var(--muted)', fontSize:'0.75rem' }}>
                   (anchor: {hijriSettings.anchorDate})
@@ -1838,6 +2251,141 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             </p>
           </div>
 
+          <div className="card">
+            <h3 style={{ margin:'0 0 6px' }}>Important Hijri Dates</h3>
+            <p className="small" style={{ margin:'0 0 14px' }}>
+              Add, edit, disable, or delete the Shia Islamic dates shown in the Hijri Calendar page.
+            </p>
+
+            <form onSubmit={saveHijriObservance} style={{
+              display:'grid', gap:10, padding:12, border:'1px solid var(--border)',
+              borderRadius:12, background:'#fbfffe', marginBottom:16,
+            }}>
+              <label>Important date</label>
+              <select
+                value={hijriObsSelection}
+                onChange={e => {
+                  const selectedId = e.target.value;
+                  if (!selectedId) {
+                    resetHijriObservanceForm('');
+                    return;
+                  }
+                  if (selectedId === '__new__') {
+                    resetHijriObservanceForm('__new__');
+                    return;
+                  }
+                  const item = hijriObservances.find(entry => entry.id === selectedId);
+                  if (item) editHijriObservance(item);
+                }}
+              >
+                <option value="">Select important date</option>
+                <option value="__new__">New important date</option>
+                {sortHijriObservances(hijriObservances).map(item => (
+                  <option key={item.id} value={item.id}>
+                    {item.day} {HIJRI_MONTHS.find(month => month.value === Number(item.month))?.name || item.month} - {item.name}
+                  </option>
+                ))}
+              </select>
+              {hijriObsSelection && (
+                <>
+                  <label>Name</label>
+                  <input
+                    value={hijriObsForm.name}
+                    onChange={e => setHijriObsForm(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g. Wiladat Imam Ali (as)"
+                  />
+                  <div className="row">
+                    <div>
+                      <label>Day</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="30"
+                        value={hijriObsForm.day}
+                        onChange={e => setHijriObsForm(prev => ({ ...prev, day: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label>Month</label>
+                      <select
+                        value={hijriObsForm.month}
+                        onChange={e => setHijriObsForm(prev => ({ ...prev, month: e.target.value }))}
+                      >
+                        {HIJRI_MONTHS.map(month => (
+                          <option key={month.value} value={month.value}>{month.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="row">
+                    <div>
+                      <label>Category</label>
+                      <select
+                        value={hijriObsForm.category}
+                        onChange={e => setHijriObsForm(prev => ({ ...prev, category: e.target.value }))}
+                      >
+                        {HIJRI_OBSERVANCE_CATEGORIES.map(item => (
+                          <option key={item} value={item}>{item}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label>Priority</label>
+                      <input
+                        type="number"
+                        value={hijriObsForm.priority}
+                        onChange={e => setHijriObsForm(prev => ({ ...prev, priority: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <label>Notes</label>
+                  <input
+                    value={hijriObsForm.notes}
+                    onChange={e => setHijriObsForm(prev => ({ ...prev, notes: e.target.value }))}
+                    placeholder="Optional short note"
+                  />
+                  <label style={{ display:'flex', alignItems:'center', gap:10, fontWeight:800 }}>
+                    <input
+                      type="checkbox"
+                      checked={hijriObsForm.enabled !== false}
+                      onChange={e => setHijriObsForm(prev => ({ ...prev, enabled: e.target.checked }))}
+                      style={{ width:20, height:20, accentColor:'var(--teal)' }}
+                    />
+                    Show this date to users
+                  </label>
+                  <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+                    <button type="submit" disabled={savingHijriObs}>
+                      {savingHijriObs ? 'Saving...' : editingHijriObsId ? 'Save Important Date' : 'Add New Important Date'}
+                    </button>
+                    {editingHijriObsId && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => resetHijriObservanceForm('__new__')}
+                          style={{ background:'transparent', color:'var(--teal)', border:'1.5px solid var(--teal)' }}
+                        >
+                          New Item
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const item = hijriObservances.find(entry => entry.id === editingHijriObsId);
+                            if (item) deleteHijriObservance(item);
+                          }}
+                          style={{ background:'#fff5f5', color:'#b91c1c', border:'1.5px solid #fecaca' }}
+                        >
+                          Delete Selected
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </form>
+          </div>
+          </>
+          )}
+
           {/* Email Reminders */}
           <div className="card">
             <h3 style={{ margin:'0 0 6px' }}>Email Reminders</h3>
@@ -1845,7 +2393,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               <strong>Automatic schedule:</strong>
               <ul style={{ margin:'8px 0 0', paddingLeft:20, lineHeight:1.9 }}>
                 <li><strong>7:00 PM Sydney time, every day</strong> — tomorrow's events</li>
-                <li><strong>8:00 AM, 1st of every month</strong> — Hijri reminder to Super Admins</li>
+                <li><strong>8:00 AM, one day before the Hijri month ends</strong> — Hijri correction reminder to Super Admins</li>
               </ul>
             </div>
             <label>Send mode</label>

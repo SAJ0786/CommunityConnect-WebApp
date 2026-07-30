@@ -7,8 +7,17 @@ import { updateDoc, doc } from 'firebase/firestore';
 import { db } from '../firebase/firebase';
 import PreCheckCard from './PreCheckCard';
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const LIVE_DOT_ICON = String.fromCodePoint(0x1F534);
 const WARNING_ICON = String.fromCodePoint(0x26A0, 0xFE0F);
+
+function hasAndroidNativeBridge() {
+  try {
+    return !!window.CommunityEventsAndroid?.isAvailable?.();
+  } catch {
+    return false;
+  }
+}
 
 // ── Popup helper ──────────────────────────────────────────────────────────────
 function Popup({ icon, title, message, confirmLabel, cancelLabel, onConfirm, onCancel, onClose, infoOnly }) {
@@ -42,7 +51,11 @@ function Popup({ icon, title, message, confirmLabel, cancelLabel, onConfirm, onC
   );
 }
 
-function StreamMethodDialog({ step, url, error, loading, visibility, onVisibilityChange, onUrlChange, onThisDevice, onAnotherDevice, onBack, onCancel, onExternalStart }) {
+function StreamMethodDialog({
+  step, url, error, loading, visibility, orientation, isNativeDevice,
+  onVisibilityChange, onOrientationChange, onUrlChange, onThisDevice,
+  onAnotherDevice, onBack, onCancel, onExternalStart
+}) {
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.72)', zIndex:10000,
       display:'flex', alignItems:'center', justifyContent:'center', padding:20, fontFamily:'var(--font)' }}>
@@ -72,10 +85,27 @@ function StreamMethodDialog({ step, url, error, loading, visibility, onVisibilit
                 Private streams do not appear in the app's public stream list or YouTube search. Anyone who receives the YouTube link can still watch.
               </p>
             </fieldset>
+            {isNativeDevice && (
+              <fieldset style={{ margin:'0 0 18px', padding:0, border:0 }}>
+                <legend style={{ fontSize:'0.75rem', fontWeight:900, marginBottom:8 }}>Camera orientation</legend>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  {[['portrait', 'Portrait'], ['landscape', 'Landscape']].map(([value, label]) => (
+                    <label key={value} style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 12px',
+                      border:`2px solid ${orientation === value ? '#0f766e' : 'var(--border)'}`,
+                      borderRadius:10, cursor:'pointer', fontSize:'0.8125rem', fontWeight:800,
+                      background:orientation === value ? '#ecfdf5' : 'var(--surface)' }}>
+                      <input type="radio" name="stream-orientation" value={value}
+                        checked={orientation === value} onChange={() => onOrientationChange(value)} />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
             <div style={{ display:'grid', gap:10 }}>
               <button onClick={onThisDevice} style={{ padding:'13px 14px', border:0, borderRadius:10,
                 background:'#0f766e', color:'white', fontWeight:900, cursor:'pointer' }}>
-                Stream from this device
+                {isNativeDevice ? 'Start Stream' : 'Stream from this device'}
               </button>
               <button onClick={onAnotherDevice} style={{ padding:'13px 14px', border:'1px solid var(--border)',
                 borderRadius:10, background:'var(--surface)', color:'var(--text)', fontWeight:900, cursor:'pointer' }}>
@@ -132,7 +162,7 @@ async function waitForYouTubeLive(sessionId, onStatus) {
       const streamStatus = lastResult?.streamStatus;
       onStatus?.(`YouTube status: ${broadcastStatus || '?'} / ${streamStatus || '?'}`);
 
-      if (broadcastStatus === 'live') return lastResult;
+      if (broadcastStatus === 'live' || streamStatus === 'active') return lastResult;
     } catch (e) {
       console.warn('[NativeStream] YouTube health check failed:', e.message);
     }
@@ -186,6 +216,9 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
   const [externalUrl, setExternalUrl] = useState('');
   const [externalError, setExternalError] = useState('');
   const [streamVisibility, setStreamVisibility] = useState('public');
+  const [streamOrientation, setStreamOrientation] = useState(() => (
+    window.innerWidth > window.innerHeight ? 'landscape' : 'portrait'
+  ));
 
   // Fix #3: if isLive flips to false (e.g. ended via the StreamCard on THIS
   // device, or by an admin elsewhere) but local `streaming` is still true,
@@ -213,6 +246,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
         ? await httpsCallable(functions, 'nativeStreamResume')({
             eventId:event.id,
             sessionId:event.liveUrl,
+            directNative: !!streamer.isNativeBridge,
           })
         : await httpsCallable(functions, 'nativeStreamStart')({
             useOAuth:true,
@@ -222,8 +256,9 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
             audioMode:streamer.audioMode,
             privacyStatus:streamVisibility,
             protocolVersion:2,
+            directNative: !!streamer.isNativeBridge,
           });
-      const { wsUrl, watchUrl, sessionId, streamToken } = startRes.data;
+      const { wsUrl, watchUrl, sessionId, streamToken, rtmpUrl } = startRes.data;
       startedSessionId = sessionId;
 
       // 2) Camera is already open (from PreCheckCard) — reuse it
@@ -232,7 +267,12 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
 
       // 3) Connect WebSocket + start recording → streaming to YouTube
       await streamer.connect(wsUrl, streamToken);
-      await streamer.startRecording('OAUTH'); // server uses session RTMPS URL; checked camera stays open
+      if (streamer.isNativeBridge) {
+        const warmupMs = resumingExisting ? 800 : 1200;
+        streamer.onStatus(`Preparing YouTube connection (${Math.round(warmupMs / 1000)}s)...`);
+        await sleep(warmupMs);
+      }
+      await streamer.startRecording(streamer.isNativeBridge ? rtmpUrl : 'OAUTH'); // browser uses relay; Android wrapper streams RTMPS directly
 
       // 4) Mark the event live and mount StreamCard immediately. YouTube can
       // take 20-30 seconds to report "live" on mobile networks; waiting here
@@ -249,6 +289,14 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
       // Health verification now runs in the background while StreamCard owns
       // the camera and reconnect UI.
       waitForYouTubeLive(sessionId, msg => console.log('[NativeStream]', msg))
+        .then(result => {
+          const isYouTubeLive = result?.broadcastStatus === 'live' || result?.streamStatus === 'active';
+          const isPrivateStream = streamVisibility === 'unlisted' || event.liveAppVisibility === 'private';
+          if (isPrivateStream && isYouTubeLive) {
+            httpsCallable(functions, 'sendPrivateStreamLinkEmail')({ sessionId })
+              .catch(e => console.warn('[NativeStream] Private stream email failed:', e.message));
+          }
+        })
         .catch(e => console.warn('[NativeStream] YouTube health check failed:', e.message));
 
       // 5) Push notification to subscribers (fire-and-forget — doesn't block going live)
@@ -278,6 +326,31 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
 
   // PreCheckCard cancelled — just close it, nothing else happened yet
   const handlePreCheckCancel = () => setShowPreCheck(false);
+
+  const startThisDeviceStream = async () => {
+    setMethodStep(null);
+    if (hasAndroidNativeBridge()) {
+      const streamer = new NativeStreamer(
+        (msg) => console.log('[NativeStream]', msg),
+        (msg) => console.error('[NativeStream] error:', msg),
+        () => {}
+      );
+      streamer.setStreamOrientation(streamOrientation);
+      streamer.setAudioMode('natural');
+      streamer.setMuted(false);
+      streamer.setFacingMode('environment');
+      streamer.eventTitle = [
+        event?.eventTypeDisplay || event?.eventType,
+        event?.hostName,
+        event?.eventSubject || ''
+      ].filter(Boolean).join(' - ');
+      await streamer.detectQuality().catch(() => null);
+      streamer.tuneQualityForStream?.();
+      startStream(streamer);
+      return;
+    }
+    setShowPreCheck(true);
+  };
 
   const startExternalStream = async (e) => {
     e.preventDefault();
@@ -326,6 +399,8 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
         <button onClick={() => {
           if (isExternal) {
             onLiveStarted?.(event, event.id, 'host', event.liveWatchUrl, { mode:'external', watchUrl:event.liveWatchUrl });
+          } else if (hasAndroidNativeBridge()) {
+            startThisDeviceStream();
           } else {
             setShowPreCheck(true);
           }
@@ -380,9 +455,12 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
           error={externalError}
           loading={loading}
           visibility={streamVisibility}
+          orientation={streamOrientation}
+          isNativeDevice={hasAndroidNativeBridge()}
           onVisibilityChange={setStreamVisibility}
+          onOrientationChange={setStreamOrientation}
           onUrlChange={value => { setExternalUrl(value); setExternalError(''); }}
-          onThisDevice={() => { setMethodStep(null); setShowPreCheck(true); }}
+          onThisDevice={startThisDeviceStream}
           onAnotherDevice={() => { setExternalError(''); setMethodStep('external'); }}
           onBack={() => { setExternalError(''); setMethodStep('method'); }}
           onCancel={() => { setExternalError(''); setMethodStep(null); }}

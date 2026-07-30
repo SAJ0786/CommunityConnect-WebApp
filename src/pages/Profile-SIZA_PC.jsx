@@ -1,14 +1,77 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/firebase';
-import { deleteMyAccountAndEvents, updateReminderPreference } from '../services/userService';
-import { APP_OPEN_LINK } from '../utils/storeLinks';
+import { deleteMyAccountAndEvents, updatePushPreference, updateReminderPreference } from '../services/userService';
+import { enablePushNotifications, getNotificationPermissionState, sendTestPushNotification, showLocalTestNotification, syncGrantedNotificationToken } from '../services/notificationService';
+import { STORE_SHARE_LINES } from '../utils/storeLinks';
+
+function formatPushDiagnostic(result = {}) {
+  const tokenSummary = Object.entries(result.tokenSummary || {})
+    .map(([key, count]) => `${key} ${count}`)
+    .join(', ');
+  const failures = (result.failures || [])
+    .map(failure => `${failure.platform || 'unknown'}:${failure.source || 'unknown'} ${failure.code || 'failed'}`)
+    .join(', ');
+  return [
+    tokenSummary ? `Tokens: ${tokenSummary}.` : '',
+    failures ? `Failed: ${failures}.` : '',
+    result.invalidRemoved ? `Removed ${result.invalidRemoved} expired token(s).` : '',
+  ].filter(Boolean).join(' ');
+}
+
+function formatLocalNotificationMessage(localResult) {
+  if (localResult?.shown) return 'A local notification preview was also triggered on this device.';
+  if (localResult?.reason === 'unsupported') return 'Local notification preview is not supported on this device.';
+  if (localResult?.reason === 'denied') return 'Local notification preview is blocked in this device settings.';
+  return `Local notification preview could not be shown (${localResult?.reason || 'unknown'}).`;
+}
 
 export default function Profile({ user, profile, setProfile }) {
+  const [pushStatus, setPushStatus] = useState(() => getNotificationPermissionState());
+  const [pushBusy, setPushBusy] = useState('');
+  const [pushMessage, setPushMessage] = useState('');
+  const emailReminderEnabled = profile?.reminderEmailEnabled !== false;
+  const pushEnabled = profile?.pushNotificationsEnabled !== undefined
+    ? profile.pushNotificationsEnabled !== false
+    : emailReminderEnabled;
+
   const toggleReminder = async () => {
-    const next = !profile?.reminderEmailEnabled;
+    const next = !emailReminderEnabled;
     await updateReminderPreference(user.uid, next);
     setProfile({ ...profile, reminderEmailEnabled: next });
+  };
+
+  const enablePush = async () => {
+    setPushBusy('enable');
+    setPushMessage('');
+    await updatePushPreference(user.uid, true);
+    const token = await enablePushNotifications(user.uid);
+    setPushStatus(getNotificationPermissionState());
+    setProfile({ ...profile, pushNotificationsEnabled: true });
+    setPushMessage(token ? 'Push notifications are enabled on this device.' : 'Notifications could not be enabled on this device.');
+    setPushBusy('');
+  };
+
+  const disablePush = async () => {
+    setPushBusy('disable');
+    setPushMessage('');
+    await updatePushPreference(user.uid, false);
+    setProfile({ ...profile, pushNotificationsEnabled: false });
+    setPushMessage('Push notifications are disabled.');
+    setPushBusy('');
+  };
+
+  const testPush = async () => {
+    setPushBusy('test');
+    setPushMessage('');
+    await syncGrantedNotificationToken(user.uid, profile);
+    const result = await sendTestPushNotification();
+    const localResult = result?.sent ? await showLocalTestNotification() : null;
+    const diagnostic = formatPushDiagnostic(result);
+    setPushMessage(result?.sent
+      ? `Test push sent to ${result.sent} of ${result.tokenCount || result.sent} token(s). ${formatLocalNotificationMessage(localResult)} ${diagnostic}`
+      : 'No active push token was found.');
+    setPushBusy('');
   };
 
   const deleteAccount = async () => {
@@ -31,12 +94,32 @@ export default function Profile({ user, profile, setProfile }) {
       <p><b>Role:</b> {profile?.role}</p>
       <p>
         <b>Email Reminders:</b>{' '}
-        {profile?.reminderEmailEnabled ? 'Enabled' : 'Disabled'}
+        {emailReminderEnabled ? 'Enabled' : 'Disabled'}
       </p>
 
       <button className="btn-light" onClick={toggleReminder}>
-        {profile?.reminderEmailEnabled ? 'Disable' : 'Enable'} Email Reminders
+        {emailReminderEnabled ? 'Disable' : 'Enable'} Email Reminders
       </button>
+
+      <div style={{ marginTop:16, padding:16, border:'1px solid var(--border)', borderRadius:10 }}>
+        <h3>Push Notifications</h3>
+        <p><b>Status:</b> {pushEnabled ? 'Enabled' : 'Disabled'} ({pushStatus.native ? 'native app' : pushStatus.permission})</p>
+        {pushEnabled ? (
+          <button className="btn-light" onClick={disablePush} disabled={!!pushBusy}>
+            {pushBusy === 'disable' ? 'Saving...' : 'Disable Push Notifications'}
+          </button>
+        ) : (
+          <button className="btn-light" onClick={enablePush} disabled={!!pushBusy}>
+            {pushBusy === 'enable' ? 'Enabling...' : 'Enable Push Notifications'}
+          </button>
+        )}
+        {pushEnabled && (
+          <button className="btn-muted" onClick={testPush} disabled={!!pushBusy}>
+            {pushBusy === 'test' ? 'Sending...' : 'Send Test Push'}
+          </button>
+        )}
+        {pushMessage && <p className="small">{pushMessage}</p>}
+      </div>
 
       <button className="btn-muted" onClick={() => signOut(auth)}>
         Logout
@@ -49,11 +132,9 @@ export default function Profile({ user, profile, setProfile }) {
         Invite your community to join Community Events Australia.
       </p>
       <button style={{ width: '100%' }} onClick={() => {
-        const url = APP_OPEN_LINK;
         const msg = [
           '🌙 *Community Events Australia*',
           '_Your free community events app_',
-          '',
           '*Features:*',
           '📅 Browse upcoming Majalis, Milads & community events',
           '🔔 Get push notifications before events',
@@ -66,7 +147,7 @@ export default function Profile({ user, profile, setProfile }) {
           '⭐ Save your favourite events',
           '➕ Add & manage your own events',
           '',
-          `👉 *${url}*`,
+          ...STORE_SHARE_LINES,
           '',
           '_Download Community Events App to keep connected with community_',
         ].join('\n');
@@ -102,3 +183,4 @@ export default function Profile({ user, profile, setProfile }) {
     </div>
   );
 }
+
