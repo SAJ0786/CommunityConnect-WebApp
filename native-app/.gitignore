@@ -1,0 +1,42 @@
+﻿node_modules/
+.expo/
+.expo-export-check-*/
+.tmp-*
+.idea/
+.jdk17-build/
+.local-jdk17/
+.tools/
+android/.gradle-codex/
+dist/
+build/
+coverage/
+*.log
+*.apk
+*.aab
+*.ipa
+*.xcarchive
+*.mobileprovision
+*.p12
+*.jks
+*.keystore
+release-artifacts/
+.DS_Store
+.env
+.env.local
+firebase-test-lab/robo/*.generated.json
+
+# Keep this standalone native project visible beneath the PWA repository,
+# whose root ignore rules otherwise exclude every directory named android.
+!/android/
+# Standard React Native development key already tracked in the source repo.
+# Production signing keys must never be committed.
+!/android/app/debug.keystore
+
+# Local signing credentials and generated iOS projects stay out of this handoff.
+credentials.json
+credentials/
+*.p8
+*.pfx
+*.pem
+*.key
+/ios/

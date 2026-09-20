@@ -1,0 +1,123 @@
+{
+  "expo": {
+    "name": "Community Connect Australia",
+    "slug": "community-events-australia-native",
+    "version": "2.0.0",
+    "newArchEnabled": true,
+    "orientation": "default",
+    "icon": "./assets/icon-store-1024.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-community-connect.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#f8faf9"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "bundleIdentifier": "info.siza.communityevents",
+      "buildNumber": "1",
+      "supportsTablet": false,
+      "icon": "./assets/icon-store-1024.png",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "entitlements": {
+        "com.apple.developer.devicecheck.appattest-environment": "production"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "UIBackgroundModes": [
+          "audio",
+          "voip",
+          "fetch",
+          "remote-notification"
+        ],
+        "NSCameraUsageDescription": "Allow Community Connect Australia to use your camera when you choose to live stream an event.",
+        "NSMicrophoneUsageDescription": "Allow Community Connect Australia to use your microphone when you choose to live stream an event."
+      }
+    },
+    "android": {
+      "package": "info.siza.communityevents.app",
+      "versionCode": 63,
+      "googleServicesFile": "./google-services.json",
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "resize",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon-adaptive-foreground-v2.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "MODIFY_AUDIO_SETTINGS",
+        "SCHEDULE_EXACT_ALARM"
+      ]
+    },
+    "extra": {
+      "firebaseProjectId": "community-event-8b639",
+      "androidCertificateSha1": "5E8F16062EA3CD2C4A0D547876BAA6F38CABF625"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36
+          },
+          "ios": {
+            "deploymentTarget": "15.1",
+            "useFrameworks": "static",
+            "extraPods": [
+              {
+                "name": "RecaptchaEnterprise",
+                "version": "18.9.1"
+              }
+            ]
+          }
+        }
+      ],
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "business-alerts",
+          "sounds": [
+            "./assets/sounds/azan_mashad.mp3",
+            "./assets/sounds/azan_mashad.wav"
+          ]
+        }
+      ],
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "PORTRAIT_UP"
+        }
+      ],
+      "./plugins/with-rnfirebase-cocoapods",
+      "@react-native-firebase/app",
+      "@react-native-firebase/app-check",
+      "@react-native-firebase/auth",
+      "@react-native-firebase/crashlytics",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow Community Connect Australia to add community events to your calendar."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Community Connect Australia to show nearby events and community businesses."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Community Connect Australia to select event posters and business images from your photos.",
+          "microphonePermission": "Allow Community Connect Australia to use your microphone when you choose to live stream an event."
+        }
+      ]
+    ]
+  }
+}

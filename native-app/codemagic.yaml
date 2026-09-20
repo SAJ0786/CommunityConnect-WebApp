@@ -1,0 +1,167 @@
+workflows:
+  ios-personal-testflight:
+    name: Community Connect iOS TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: Codemagic Community Connect
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: info.siza.communityconnect.personaltest
+
+      vars:
+        APP_STORE_APPLE_ID: "6807323350"
+        APP_RELEASE_MODE: tester
+        APP_CHECK_PROVIDER: production
+        IOS_BUNDLE_IDENTIFIER: info.siza.communityconnect.personaltest
+        IOS_GOOGLE_SERVICES_FILE: ./GoogleService-Info.personal-test.plist
+
+      groups:
+        - ios_config
+
+      xcode: 26.0
+      cocoapods: default
+      node: 22.14.0
+
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+
+      - name: Generate iOS project
+        script: npx expo prebuild --platform ios
+
+      - name: Install CocoaPods
+        script: cd ios && pod install
+
+      - name: Configure signing
+        # Limit signing to the generated app project. Dependencies such as
+        # RNDateTimePicker ship their own .xcodeproj files and must not be signed.
+        script: xcode-project use-profiles --project ios/*.xcodeproj
+
+      - name: Increment build number
+        script: |
+          set -e
+
+          LATEST_BUILD_NUMBER="$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APPLE_ID")"
+
+          if ! printf '%s' "$LATEST_BUILD_NUMBER" | grep -Eq '^[0-9]+$'; then
+            echo "Could not retrieve the latest iOS build number: $LATEST_BUILD_NUMBER"
+            exit 1
+          fi
+
+          NEXT_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+
+          echo "Latest iOS build: $LATEST_BUILD_NUMBER"
+          echo "Next iOS build: $NEXT_BUILD_NUMBER"
+
+          cd ios
+          agvtool new-version -all "$NEXT_BUILD_NUMBER"
+
+      - name: Build IPA
+        script: |
+          WORKSPACE=$(find ios -maxdepth 1 -name "*.xcworkspace" | head -n 1)
+          SCHEME=$(basename "$WORKSPACE" .xcworkspace)
+          # Keep the raw Xcode output available when archive fails. Xcode 26
+          # diagnostics can otherwise be reduced to the generic status 65 by
+          # xcpretty, which hides the actionable compiler/signing error.
+          xcode-project build-ipa \
+            --workspace "$WORKSPACE" \
+            --scheme "$SCHEME" \
+            --verbose \
+            --no-color \
+            --disable-xcpretty
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
+  android-signed-release-apk:
+    name: Community Connect Android signed release APK
+    max_build_duration: 60
+    instance_type: linux_x2
+
+    environment:
+      vars:
+        APP_RELEASE_MODE: production
+        APP_CHECK_PROVIDER: production
+        ANDROID_PACKAGE_NAME: info.siza.communityevents.app
+      groups:
+        # Create this as a protected Codemagic variable group. All values in
+        # the group are encrypted and must be supplied for this workflow.
+        - android_release
+      node: 22.14.0
+      java: 17
+
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+
+      - name: Validate Android release secrets
+        script: |
+          set -euo pipefail
+
+          required_secrets=(
+            ANDROID_RELEASE_KEYSTORE_BASE64
+            ANDROID_RELEASE_STORE_PASSWORD
+            ANDROID_RELEASE_KEY_ALIAS
+            ANDROID_RELEASE_KEY_PASSWORD
+            GOOGLE_MAPS_API_KEY
+          )
+
+          for secret_name in "${required_secrets[@]}"; do
+            if [[ -z "${!secret_name:-}" ]]; then
+              echo "Missing required protected Codemagic variable: ${secret_name}" >&2
+              exit 1
+            fi
+          done
+
+          if ! printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > /dev/null 2>&1; then
+            echo "ANDROID_RELEASE_KEYSTORE_BASE64 is not valid base64." >&2
+            exit 1
+          fi
+
+      - name: Prepare production Android signing
+        script: |
+          set -euo pipefail
+          umask 077
+
+          export ANDROID_RELEASE_STORE_FILE="$CM_BUILD_DIR/.codemagic/android-upload-key.jks"
+          mkdir -p "$(dirname "$ANDROID_RELEASE_STORE_FILE")"
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_RELEASE_STORE_FILE"
+
+          if ! keytool -list -keystore "$ANDROID_RELEASE_STORE_FILE" \
+              -storepass "$ANDROID_RELEASE_STORE_PASSWORD" > /dev/null 2>&1; then
+            echo "The Android keystore or ANDROID_RELEASE_STORE_PASSWORD is invalid." >&2
+            exit 1
+          fi
+
+          echo "ANDROID_RELEASE_STORE_FILE=$ANDROID_RELEASE_STORE_FILE" >> "$CM_ENV"
+
+      - name: Generate Android project
+        script: npx expo prebuild --platform android --non-interactive --no-install
+
+      - name: Run release checks
+        script: |
+          set -euo pipefail
+          npm run check:release
+
+      - name: Build signed release APK
+        script: |
+          set -euo pipefail
+          cd android
+          bash ./gradlew assembleRelease \
+            -PreleaseStoreFile="$ANDROID_RELEASE_STORE_FILE" \
+            -PreleaseStorePassword="$ANDROID_RELEASE_STORE_PASSWORD" \
+            -PreleaseKeyAlias="$ANDROID_RELEASE_KEY_ALIAS" \
+            -PreleaseKeyPassword="$ANDROID_RELEASE_KEY_PASSWORD"
+
+    artifacts:
+      - android/app/build/outputs/apk/release/app-release.apk

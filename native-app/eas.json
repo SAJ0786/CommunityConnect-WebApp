@@ -1,0 +1,82 @@
+{
+  "cli": {
+    "version": ">= 16.18.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "environment": "development",
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "APP_RELEASE_MODE": "tester",
+        "APP_CHECK_PROVIDER": "debug"
+      }
+    },
+    "apk": {
+      "environment": "preview",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
+      "distribution": "internal",
+      "env": {
+        "APP_RELEASE_MODE": "tester",
+        "APP_CHECK_PROVIDER": "debug"
+      }
+    },
+    "preview": {
+      "environment": "preview",
+      "distribution": "internal",
+      "env": {
+        "APP_RELEASE_MODE": "tester",
+        "APP_CHECK_PROVIDER": "debug"
+      }
+    },
+    "ios-simulator": {
+      "environment": "preview",
+      "distribution": "internal",
+      "ios": {
+        "simulator": true,
+        "image": "macos-sequoia-15.6-xcode-26.0"
+      },
+      "env": {
+        "APP_RELEASE_MODE": "tester",
+        "APP_CHECK_PROVIDER": "debug"
+      }
+    },
+    "ios-personal-testflight": {
+      "environment": "preview",
+      "distribution": "store",
+      "autoIncrement": true,
+      "ios": {
+        "image": "macos-sequoia-15.6-xcode-26.0"
+      },
+      "env": {
+        "APP_RELEASE_MODE": "tester",
+        "APP_CHECK_PROVIDER": "production",
+        "IOS_BUNDLE_IDENTIFIER": "info.siza.communityconnect.personaltest",
+        "IOS_GOOGLE_SERVICES_FILE": "./GoogleService-Info.personal-test.plist"
+      }
+    },
+    "production": {
+      "environment": "production",
+      "autoIncrement": true,
+      "ios": {
+        "image": "macos-sequoia-15.6-xcode-26.0"
+      },
+      "env": {
+        "APP_RELEASE_MODE": "production",
+        "APP_CHECK_PROVIDER": "production"
+      }
+    }
+  },
+  "submit": {
+    "ios-personal-testflight": {
+      "ios": {
+        "ascAppId": "6807323350"
+      }
+    },
+    "production": {}
+  }
+}
