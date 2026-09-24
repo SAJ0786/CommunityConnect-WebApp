@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AUDIENCE_TYPES } from '../utils/eventOptions';
+import { EVENT_BROWSE_PRESETS } from '../utils/eventBrowseOptions';
 import { colors, radius, spacing } from '../theme';
 import CompactSelect from './CompactSelect';
 
@@ -23,11 +24,14 @@ export default function HomeFilters({
   showFilters,
   onToggleFilters,
   onClear,
+  nearby = false,
+  onNearbyChange,
+  onPresetChange,
 }) {
   const eventTypes = useMemo(() => [...new Set(events
     .map(event => event.eventTypeDisplay || event.customEventType || event.eventType)
     .filter(Boolean))].sort(), [events]);
-  const activeCount = Object.values(filters).filter(Boolean).length;
+  const activeCount = Object.values(filters).filter(Boolean).length + Number(nearby);
 
   return (
     <View style={styles.wrap}>
@@ -49,30 +53,33 @@ export default function HomeFilters({
             <Text maxFontSizeMultiplier={1} style={styles.clearSearchText}>x</Text>
           </Pressable>
         ) : null}
-        <Pressable onPress={onToggleFilters} style={[styles.filterButton, showFilters && styles.filterButtonActive]}>
-          <MaterialCommunityIcons color={showFilters ? colors.surface : colors.blue} name="tune-variant" size={19} />
-          {activeCount ? <View style={styles.filterCount}><Text style={styles.filterCountText}>{activeCount}</Text></View> : null}
-        </Pressable>
       </View>
 
-      {showFilters ? (
-        <View style={styles.panel}>
+      <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Customised filters</Text>
+          <View style={styles.choiceRow}>
+            {EVENT_BROWSE_PRESETS.map(({ label, field, value }) => {
+              const selected = field === 'nearby' ? nearby : field ? filters[field] === value : !filters.period && !filters.eventType && !nearby;
+              return (
+                <Pressable key={label} accessibilityRole="button" accessibilityState={{ selected }}
+                  onPress={() => field === 'nearby' ? onNearbyChange() : onPresetChange(field, value)}
+                  style={[styles.choice, selected && styles.choiceSelected]}>
+                  <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {nearby ? <Text style={styles.nearbyHelp}>Nearest events first. Map shows matching events with available locations.</Text> : null}
           {activeCount ? (
             <Pressable accessibilityRole="button" onPress={onClear} style={styles.clearButton}>
               <Text maxFontSizeMultiplier={1.08} style={styles.clearButtonText}>Clear Filters</Text>
             </Pressable>
           ) : null}
-          <FilterChoices
-            label="Time period"
-            options={[
-              { value: '', label: 'All upcoming' },
-              { value: 'today', label: 'Today' },
-              { value: 'week', label: 'Next 7 days' },
-              { value: 'month', label: 'Next 30 days' },
-            ]}
-            value={filters.period}
-            onChange={value => onFilterChange('period', value)}
-          />
+          <Pressable accessibilityRole="button" accessibilityState={{ expanded: showFilters }} onPress={onToggleFilters} style={styles.moreFiltersButton}>
+            <MaterialCommunityIcons color={colors.blue} name="tune-variant" size={19} />
+            <Text style={styles.moreFiltersText}>{showFilters ? 'Hide extra filters' : 'More filters'}{activeCount ? ' (' + activeCount + ')' : ''}</Text>
+          </Pressable>
+          {showFilters ? <View style={styles.advancedFilters}>
           <FilterChoices
             label="Event type"
             options={[{ value: '', label: 'All event types' }, ...eventTypes.map(value => ({ value, label: value }))]}
@@ -119,8 +126,8 @@ export default function HomeFilters({
               />
             </View>
           </View>
-        </View>
-      ) : null}
+          </View> : null}
+      </View>
     </View>
   );
 }
@@ -139,9 +146,14 @@ const styles = StyleSheet.create({
   filterCount: { position: 'absolute', right: -3, top: -3, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderRadius: 8, backgroundColor: colors.rose },
   filterCountText: { color: colors.surface, fontSize: 8, fontWeight: '700' },
   panel: { gap: spacing.md, marginTop: spacing.sm, padding: spacing.md, borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, backgroundColor: colors.surface },
+  panelTitle: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  moreFiltersButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderRadius: radius.md, backgroundColor: colors.blueSoft },
+  moreFiltersText: { color: colors.blue, fontSize: 12, fontWeight: '600' },
+  advancedFilters: { gap: spacing.md },
   group: { gap: 6 },
   label: { color: colors.muted, fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
-  choiceRow: { gap: spacing.sm },
+  choiceRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  nearbyHelp: { color: colors.muted, fontSize: 12, lineHeight: 17 },
   choice: { minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: 7, borderWidth: 1, borderColor: colors.border, borderRadius: 18, backgroundColor: colors.surface },
   choiceSelected: { borderColor: colors.teal, backgroundColor: colors.teal },
   choiceText: { color: colors.text, fontSize: 11, fontWeight: '600' },
