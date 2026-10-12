@@ -14,4 +14,10 @@ Uses the web project's existing `src/styles/tokens.css`. That shared stylesheet 
 
 Working: event choices, event setup, ten question types, required flags, editing/reordering/removal, session-only drafts/templates, attendee validation, demo confirmation and immutable question/answer snapshot.
 
-Not implemented here: real identity/permissions, persisted templates, per-attendee repeated fields, closing-time enforcement, server capacity, cancellation, CSV export, actual publication, protected event details or notifications. Native has a development-only screen with the same model; no store build has been produced.
+12 October review update: added existing Add Event categories/custom category, detailed public notes, full private address plus confirmed public suburb, private poster preview, templates-first builder, required host-written consent terms (1,000 characters) pinned last, strictly earlier-day closing validation, host confirmation, attendee edit/confirmation and role-simulated event cards.
+
+`registrationClient.mjs` and `firebaseRegistration.mjs` provide a feature-disabled transport adapter. They are NOT imported by the demo. Backend candidate lives in the native checkout under `backend/functions-registration`; tested locally and against an isolated Firestore emulator, not deployed. Native/PWA model and transport files mirror one another.
+
+Still to connect: production host/attendee screens and event discovery/cards, persistent template UI, address autocomplete/dynamic event options, private poster lifecycle/Storage tests, real role/auth/App Check acceptance and confirmation delivery. Backend primitives for capacity, revisions, private access, cancellation and templates exist, but that does not make this demo a production booking system. Native entry remains development-only; no test APK or store build produced.
+
+Hosted isolated review: https://community-event-8b639--registration-prototype-20261012-k6z9852a.web.app (expires 19 October). Not the live PWA.

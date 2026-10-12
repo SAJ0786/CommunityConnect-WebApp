@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { createDraft, makeField, moveField, validateDraft, validateAnswers, snapshotBooking, FIELD_TYPES } from '../src/registration/prototypeModel.mjs';
-const valid = () => ({ ...createDraft(), date: '2026-12-01' });
+import { createDraft, makeField, moveField, validateDraft, validateAnswers, snapshotBooking, FIELD_TYPES, consentLast, TERMS_LIMIT, publicEvent, templateFields, FORM_TEMPLATES } from '../src/registration/prototypeModel.mjs';
+const valid = () => ({ ...createDraft(), date: '2026-12-01', address: '1 Fictional Street, Parramatta NSW', suburb: 'Parramatta' });
 test('native and web contracts are identical', context => {
   if (!fs.existsSync(new URL('../../sdk51-package-backup/src/registration/prototypeModel.js', import.meta.url))) { context.skip('Sibling native checkout is not present.'); return; }
   assert.equal(fs.readFileSync(new URL('../src/registration/prototypeModel.mjs', import.meta.url), 'utf8'), fs.readFileSync(new URL('../../sdk51-package-backup/src/registration/prototypeModel.js', import.meta.url), 'utf8'));
@@ -49,4 +49,30 @@ test('preview entry has no live transport or persistence', () => {
   assert.doesNotMatch(native, /from ['"].*firebase|httpsCallable|addDoc\(/);
   const app = fs.readFileSync(new URL('../../sdk51-package-backup/App.js', import.meta.url), 'utf8');
   assert.match(app, /registrationPreviewEnabled=\{__DEV__\}/);
+});
+
+test('closing date must be a valid earlier calendar day, not same-day earlier time', () => {
+  for (const closes of ['2026-12-01T00:00', '2026-12-02T00:00', '2026-02-30T12:00', '2026-11-30T25:00']) assert.ok(validateDraft({ ...valid(), closes }).some(message => message.includes('closing')));
+  assert.deepEqual(validateDraft({ ...valid(), closes: '2026-11-30T23:59' }), []);
+});
+
+test('consent requires bounded terms and stays at the end when questions are added or moved', () => {
+  const consent = makeField('consent', 'terms');
+  assert.ok(validateDraft({ ...valid(), fields: [consent] }).some(message => message.includes('terms')));
+  consent.terms = 'Agree to arrive at the scheduled time.';
+  const fields = consentLast([consent, makeField('text', 'new')]);
+  assert.equal(fields.at(-1).id, 'terms');
+  assert.equal(moveField(fields, 1, -1), fields);
+  assert.deepEqual(validateDraft({ ...valid(), fields }), []);
+  consent.terms = 'x'.repeat(TERMS_LIMIT + 1);
+  assert.ok(validateDraft({ ...valid(), fields: [consent] }).length);
+});
+
+test('public card excludes address and poster; templates remain independently editable', () => {
+  const draft = { ...valid(), poster: { data: 'private' } };
+  assert.equal(publicEvent(draft).address, undefined);
+  assert.equal(publicEvent(draft).poster, undefined);
+  assert.equal(publicEvent(draft).eventType, 'Workshop');
+  const fields = templateFields(FORM_TEMPLATES[0]); fields[0].label = 'Changed'; fields.push(makeField('text', 'extra'));
+  assert.equal(templateFields(FORM_TEMPLATES[0])[0].label, 'Full name');
 });
