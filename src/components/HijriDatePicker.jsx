@@ -5,7 +5,7 @@ import { getHijriSettings } from '../services/settingsService';
 const SEL_STYLE = {
   flex: 1, padding: '10px 8px', fontSize: '0.875rem',
   border: '1px solid var(--border)', borderRadius: 10,
-  background: 'white', color: 'var(--text)',
+  background: 'var(--cc-surface)', color: 'var(--text)',
   marginTop: 0, marginBottom: 0,
 };
 

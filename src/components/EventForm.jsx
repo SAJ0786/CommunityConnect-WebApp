@@ -309,7 +309,7 @@ export default function EventForm({
 
   return (
     <form className="card event-form" onSubmit={submit} noValidate>
-      <h2>{initialEvent?.__editSeries ? 'Edit Entire Series' : initialEvent ? 'Edit Event' : 'Add Event'}</h2>
+      <h2>{initialEvent?.__editSeries ? 'Shared Series Details' : initialEvent ? 'Edit Event' : 'Add Event'}</h2>
       {Object.keys(validationErrors).length > 0 && (
         <div className="event-validation-summary" role="alert">
           <strong>Complete the highlighted mandatory fields:</strong>
@@ -318,7 +318,7 @@ export default function EventForm({
       )}
       {initialEvent?.__editSeries && (
         <p className="small" style={{ marginTop:-8, color:'var(--muted)' }}>
-          Shared details will be updated across the series. Each event keeps its own Gregorian and Hijri date.
+          Shared details will be updated for the reviewed future occurrences. Each event keeps its own Gregorian and Hijri date.
         </p>
       )}
 
@@ -331,7 +331,7 @@ export default function EventForm({
             style={{ width: '100%', height: 180, objectFit: 'cover', display: 'block' }} />
           <button type="button" onClick={removePhoto} style={{
             position: 'absolute', top: 8, right: 8, width: 32, height: 32,
-            borderRadius: '50%', background: 'rgba(0,0,0,0.6)', color: 'white',
+            borderRadius: '50%', background: 'color-mix(in srgb, var(--cc-overlay-base) 60%, transparent)', color: 'var(--cc-on-primary)',
             border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>×</button>
@@ -339,9 +339,9 @@ export default function EventForm({
       ) : (
         <label style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
-          background: 'var(--bg,#f4f7f6)', border: '2px dashed #b9ccc8',
+          background: 'var(--bg,var(--cc-background))', border: '2px dashed var(--cc-border)',
           borderRadius: 14, padding: 22, cursor: 'pointer',
-          color: 'var(--teal,#0f766e)', marginTop: 4, marginBottom: 14,
+          color: 'var(--teal,var(--cc-accent-strong))', marginTop: 4, marginBottom: 14,
         }}>
           <span style={{ fontSize: '1.875rem' }}>📷</span>
           <span style={{ fontSize: '0.8125rem', fontWeight: 800 }}>Upload your event poster</span>
@@ -410,7 +410,7 @@ export default function EventForm({
       {!seriesMode && (
       <div style={{ marginBottom: 8 }}>
         <label style={{ display: 'block', marginBottom: 6 }}>Date *</label>
-        <div style={{ display: 'inline-flex', borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden', background: 'var(--bg,#f3f4f6)', marginBottom: 8 }}>
+        <div style={{ display: 'inline-flex', borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden', background: 'var(--bg,var(--cc-background))', marginBottom: 8 }}>
           {['gregorian', 'hijri'].map(mode => (
             <button key={mode} type="button"
               onClick={() => setCalendarMode(mode)}
@@ -418,7 +418,7 @@ export default function EventForm({
                 padding: '7px 16px', border: 'none', cursor: 'pointer',
                 fontWeight: calendarMode === mode ? 900 : 500, fontSize: '0.8125rem',
                 background: calendarMode === mode ? 'var(--teal)' : 'transparent',
-                color:      calendarMode === mode ? 'white' : 'var(--muted)',
+                color:      calendarMode === mode ? 'var(--cc-on-primary)' : 'var(--muted)',
                 transition: 'all .15s'
               }}>
               {mode === 'gregorian' ? '📅 Gregorian' : '🌙 Hijri'}
@@ -478,7 +478,7 @@ export default function EventForm({
           border: '1px solid var(--border)',
           borderRadius: 14,
           padding: 6,
-          background: 'var(--bg,#f3f4f6)',
+          background: 'var(--bg,var(--cc-background))',
         }}>
           <button type="button"
             className={form.timeMode === 'prayer' ? 'btn-light' : ''}
@@ -514,17 +514,17 @@ export default function EventForm({
 
       {/* Duplicate warning */}
       {duplicates.length > 0 && (
-        <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
-          <div style={{ fontWeight: 800, color: '#92400e', marginBottom: 6 }}>
+        <div style={{ background: 'var(--cc-warning-soft)', border: '1px solid var(--cc-warning)', borderRadius: 12, padding: '12px 14px', marginBottom: 12 }}>
+          <div style={{ fontWeight: 800, color: 'var(--cc-warning-strong)', marginBottom: 6 }}>
             ⚠️ {duplicates.length} event{duplicates.length > 1 ? 's' : ''} already exist{duplicates.length === 1 ? 's' : ''} at this date and time:
           </div>
           {duplicates.map(e => (
-            <div key={e.id} style={{ fontSize: '0.8125rem', color: '#78350f', marginBottom: 3 }}>
+            <div key={e.id} style={{ fontSize: '0.8125rem', color: 'var(--cc-warning-strong)', marginBottom: 3 }}>
               · <strong>{e.eventTypeDisplay || e.eventType}</strong> by <strong>{e.hostName}</strong>
               {e.address?.suburb ? ` · ${e.address.suburb}` : ''} · {e.audienceType}
             </div>
           ))}
-          <div style={{ fontSize: '0.75rem', color: '#92400e', marginTop: 6 }}>You can still save — this is a notice only.</div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--cc-warning-strong)', marginTop: 6 }}>You can still save — this is a notice only.</div>
         </div>
       )}
 
@@ -568,7 +568,7 @@ export default function EventForm({
               border: '1px solid var(--border)',
               borderRadius: 12,
               padding: '10px 12px',
-              background: 'white',
+              background: 'var(--cc-surface)',
               fontWeight: 900,
               color: 'var(--text)',
             }}>
@@ -582,8 +582,8 @@ export default function EventForm({
               marginTop: 10,
               padding: '10px 12px',
               borderRadius: 12,
-              background: 'rgba(15,118,110,0.08)',
-              border: '1px solid rgba(15,118,110,0.18)',
+              background: 'color-mix(in srgb, var(--cc-accent-strong) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--cc-accent-strong) 18%, transparent)',
               color: 'var(--text)',
             }}>
               <div style={{ fontWeight: 900 }}>

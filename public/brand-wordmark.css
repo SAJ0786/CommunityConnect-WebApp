@@ -1,6 +1,6 @@
 .ce-wordmark {
-  --ce-wordmark-text: #071733;
-  --ce-wordmark-accent: #0f766e;
+  --ce-wordmark-text: var(--cc-heading);
+  --ce-wordmark-accent: var(--cc-primary);
   --ce-wordmark-width: 5.6em;
   display: inline-grid;
   grid-template-columns: minmax(0, auto) auto;

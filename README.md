@@ -1,4 +1,30 @@
-# Community Events
+# CommunityConnect-WebApp
+
+The user-owned repository for the Community Connect web app and PWA:
+https://github.com/SAJ0786/CommunityConnect-WebApp (branch `main`).
+
+Live site: https://communityconnect.siza.info.
+
+The repository contains the web source, assets, backend source, tests, tooling and release documentation, including the separate registration prototype. Prototype/candidate files do not imply those features have been deployed. The native React Native app is maintained separately in `SAJ0786/CommunityEvents-Native`.
+
+## Work from another computer
+
+```powershell
+git clone https://github.com/SAJ0786/CommunityConnect-WebApp.git
+cd CommunityConnect-WebApp
+npm ci
+Copy-Item .env.example .env
+# Fill in the approved Firebase/web configuration in .env.
+npm run dev
+```
+
+Private configuration and generated QA artifacts are intentionally excluded. Some Firebase acceptance and release tools require authenticated CLI access or emulator fixtures; read their documentation before running them against live data.
+
+Run `node --test tests/*.test.mjs` and `node tools/check-unified-web.mjs` for local tests and a build without deployment. Read `AGENTS.md` for the standing test/commit/push/verify workflow. Fetch remote updates before new work and push completed changes to this repository. Never push to the former deployer's repository.
+
+The setup notes below are historical. The existing Firebase project and production services are already configured; do not recreate them or run the broad deploy command as part of Git synchronisation. See `docs/RELEASE-STATUS-2026-10-12.md` for the live Hosting release and pending device checks.
+
+## Historical project notes
 
 **Create – Share – Connect**
 

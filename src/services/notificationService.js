@@ -1,6 +1,7 @@
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions, getMessagingInstance, getToken, onMessage } from '../firebase/firebase';
+import { registerMessagingWorker } from './workerRegistration.mjs';
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
 let foregroundUnsubscribe = null;
@@ -109,7 +110,7 @@ export async function enablePushNotifications(uid) {
     }
 
     // Register service worker for FCM
-    const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    const swReg = await registerMessagingWorker(navigator.serviceWorker);
 
     // Get FCM token
     const token = await getToken(messaging, {
@@ -120,6 +121,8 @@ export async function enablePushNotifications(uid) {
     if (!token) return null;
 
     await savePushToken(uid, token, getPlatform(), 'web');
+    // Permission can be granted from Reminder after the app's initial effect.
+    await startForegroundPushNotifications().catch(() => {});
 
     console.log('FCM token saved for user:', uid);
     return token;
@@ -157,7 +160,7 @@ export async function syncGrantedNotificationToken(uid, profile = {}) {
 
   const messaging = await getMessagingInstance();
   if (!messaging) return null;
-  const swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+  const swReg = await registerMessagingWorker(navigator.serviceWorker);
   const token = await getToken(messaging, {
     vapidKey: getWebPushVapidKey(),
     serviceWorkerRegistration: swReg,
@@ -218,21 +221,25 @@ export async function startForegroundPushNotifications() {
   if (!messaging) return null;
 
   foregroundUnsubscribe = onMessage(messaging, async payload => {
-    const notification = payload.notification || {};
-    const title = notification.title || 'Community Events';
+    const notification = payload.notification || payload.data || {};
+    const title = notification.title || 'Events';
     const options = {
       body: notification.body || 'New community update',
       icon: notification.icon || '/icons/icon-192.png',
       badge: '/icons/icon-192.png',
       data: payload.data || {},
+      tag: payload.data?.tag,
     };
 
     try {
-      const registration = await navigator.serviceWorker.ready;
+      const registration = await registerMessagingWorker(navigator.serviceWorker);
       await registration.showNotification(title, options);
     } catch {
       try {
-        new Notification(title, options);
+        const notification = new Notification(title, options);
+        if (payload.data?.type === 'event-reminder') notification.onclick = () => {
+          window.location.assign('/?event=' + encodeURIComponent(payload.data.eventId || ''));
+        };
       } catch {
         // Browser denied or suppressed foreground notification display.
       }

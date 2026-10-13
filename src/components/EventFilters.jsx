@@ -1,14 +1,9 @@
 import React, { useState, useMemo } from 'react';
-import { Building2, CalendarDays, MapPin, Tag, UserRound, Users, X } from 'lucide-react';
+import { SlidersHorizontal, X } from 'lucide-react';
+import CitySelector from './CitySelector';
+import '../styles/browse.css';
+import { availableEventTypes, eventBrowseType } from '../utils/eventBrowseTypes.mjs';
 import { compareEventsByDateTime, localDateStr } from '../services/dateUtils';
-
-const FILTER_STYLE = {
-  background: 'var(--card,white)',
-  border: '1px solid var(--border,#d1d5db)',
-  borderRadius: 10, padding: '6px 10px',
-  fontSize: '0.8125rem', color: 'var(--text,#1f2937)',
-  cursor: 'pointer', outline: 'none',
-};
 
 export default function EventFilters({ events, onChange, upcomingOnlyOnEmpty = false, variant = 'panel' }) {
   const [organiser,    setOrganiser]    = useState('');
@@ -23,9 +18,7 @@ export default function EventFilters({ events, onChange, upcomingOnlyOnEmpty = f
 
   const suburbs   = useMemo(() => [...new Set(events.map(e => e.address?.suburb).filter(Boolean))].sort(), [events]);
   const hostNames = useMemo(() => [...new Set(events.map(e => e.hostName).filter(Boolean))].sort(), [events]);
-  const eventTypes = useMemo(() => [...new Set(events
-    .map(e => e.eventTypeDisplay || e.customEventType || e.eventType)
-    .filter(Boolean))].sort((a, b) => a.localeCompare(b)), [events]);
+  const eventTypes = useMemo(() => availableEventTypes(events).sort((a, b) => a.localeCompare(b)), [events]);
 
   const today    = localDateStr();
   const yesterday = localDateStr(-1);
@@ -51,7 +44,7 @@ export default function EventFilters({ events, onChange, upcomingOnlyOnEmpty = f
     if (o)   filtered = filtered.filter(e => e.organiserType === o);
     if (s)   filtered = filtered.filter(e => e.address?.suburb === s);
     if (h)   filtered = filtered.filter(e => e.hostName === h);
-    if (et)  filtered = filtered.filter(e => (e.eventTypeDisplay || e.customEventType || e.eventType) === et);
+    if (et)  filtered = filtered.filter(e => eventBrowseType(e) === et);
     if (at)  filtered = filtered.filter(e => {
       const stored = e.audienceType || '';
       // "Family Event" and legacy "Mixed Audience" are the same — match both
@@ -99,190 +92,29 @@ export default function EventFilters({ events, onChange, upcomingOnlyOnEmpty = f
 
   const activeCount = [organiser, suburb, hostName, period, audienceType, eventType].filter(Boolean).length + (liveOnly ? 1 : 0);
 
-  if (variant === 'toolbar') {
-    return (
-      <div className="desktop-filter-toolbar">
-        <div className="desktop-filter-fields">
-          <label>
-            <CalendarDays size={15} />
-            <select value={period} onChange={e => set('period', e.target.value, setPeriod)}>
-              <option value="">All upcoming</option>
-              <option value="yesterday">Yesterday</option>
-              <option value="today">Today</option>
-              <option value="week">Next 7 days</option>
-              <option value="month">Next 30 days</option>
-            </select>
-          </label>
-          <label>
-            <Tag size={15} />
-            <select value={eventType} onChange={e => set('eventType', e.target.value, setEventType)}>
-              <option value="">All event types</option>
-              {eventTypes.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
-          <label>
-            <Users size={15} />
-            <select value={audienceType} onChange={e => set('audienceType', e.target.value, setAudienceType)}>
-              <option value="">All audiences</option>
-              <option value="Gents only">Gents only</option>
-              <option value="Ladies only">Ladies only</option>
-              <option value="Kids only">Kids only</option>
-              <option value="Family Event">Family Event</option>
-            </select>
-          </label>
-          <label>
-            <MapPin size={15} />
-            <select value={suburb} onChange={e => set('suburb', e.target.value, setSuburb)}>
-              <option value="">All suburbs</option>
-              {suburbs.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
-          <label>
-            <Building2 size={15} />
-            <select value={organiser} onChange={e => set('organiser', e.target.value, setOrganiser)}>
-              <option value="">All organiser types</option>
-              <option value="centre">Centre</option>
-              <option value="private">Private</option>
-            </select>
-          </label>
-          <label className="desktop-more-filter">
-            <UserRound size={15} />
-            <select value={hostName} onChange={e => set('hostName', e.target.value, setHostName)}>
-              <option value="">All hosts</option>
-              {hostNames.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="desktop-filter-actions">
-          {liveCount > 0 && (
-            <button onClick={toggleLive} className={liveOnly ? 'active-live' : ''}>
-              <span /> Live {liveCount}
-            </button>
-          )}
-          {activeCount > 0 && <button onClick={reset} className="clear-filters"><X size={14} /> Clear</button>}
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ padding: '0 16px 8px' }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-
-        {/* Filters toggle — takes remaining space */}
-        <button onClick={() => setOpen(o => !o)}
-          className={activeCount ? '' : 'btn-light'}
-          style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            borderRadius: 10, padding: '7px 12px', fontSize: '0.8125rem', cursor: 'pointer',
-          }}>
-          <i className="ti ti-adjustments-horizontal" style={{ fontSize: '0.9375rem' }} />
-          Filters {activeCount > 0 && `(${activeCount})`}
-          <i className={`ti ti-chevron-${open ? 'up' : 'down'}`} style={{ fontSize: '0.8125rem' }} />
-        </button>
-
-        {/* Live filter — right side */}
-        {liveCount > 0 ? (
-          <button onClick={toggleLive}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              borderRadius: 10, padding: '7px 12px', fontSize: '0.8125rem',
-              cursor: 'pointer', border: 'none', fontWeight: liveOnly ? 900 : 600,
-              background: liveOnly ? '#fee2e2' : 'var(--card,white)',
-              color: liveOnly ? '#dc2626' : 'var(--text)',
-              boxShadow: liveOnly ? '0 0 0 2px #dc2626' : '0 0 0 1px var(--border)',
-              whiteSpace: 'nowrap',
-            }}>
-            <span style={{ animation: 'liveBlink 1s infinite', fontSize: '0.625rem' }}>🔴</span>
-            Live ({liveCount})
-          </button>
-        ) : (
-          activeCount > 0 && (
-            <button onClick={reset} style={{ ...FILTER_STYLE, color: '#dc2626', borderColor: '#fecaca' }}>
-              ✕
-            </button>
-          )
-        )}
-
-        {/* Clear — only shows when live button is also showing */}
-        {liveCount > 0 && activeCount > 0 && (
-          <button onClick={reset} style={{ ...FILTER_STYLE, color: '#dc2626', borderColor: '#fecaca', padding: '6px 8px' }}>
-            ✕
-          </button>
-        )}
-      </div>
-
-      {/* Filter panel */}
-      {open && (
-        <div style={{
-          marginTop: 8, padding: 12, background: 'var(--card,white)',
-          border: '1px solid var(--border,#d1d5db)', borderRadius: 12,
-          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8,
-        }}>
-          {/* Organiser type */}
-          <div>
-            <label style={{ fontSize: '0.6875rem', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Organiser type</label>
-            <select value={organiser} onChange={e => set('organiser', e.target.value, setOrganiser)} style={{ ...FILTER_STYLE, width: '100%' }}>
-              <option value="">All</option>
-              <option value="centre">Centre</option>
-              <option value="private">Private</option>
-            </select>
-          </div>
-
-          {/* Event type, including user-entered custom types */}
-          <div>
-            <label style={{ fontSize: '0.6875rem', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Event type</label>
-            <select value={eventType} onChange={e => set('eventType', e.target.value, setEventType)} style={{ ...FILTER_STYLE, width: '100%' }}>
-              <option value="">All event types</option>
-              {eventTypes.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </div>
-
-          {/* Audience type */}
-          <div>
-            <label style={{ fontSize: '0.6875rem', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Audience type</label>
-            <select value={audienceType} onChange={e => set('audienceType', e.target.value, setAudienceType)} style={{ ...FILTER_STYLE, width: '100%' }}>
-              <option value="">All audiences</option>
-              <option value="Gents only">Gents only</option>
-              <option value="Ladies only">Ladies only</option>
-              <option value="Kids only">Kids only</option>
-              <option value="Family Event">Family Event</option>
-            </select>
-          </div>
-
-          {/* Period */}
-          <div>
-            <label style={{ fontSize: '0.6875rem', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Time period</label>
-            <select value={period} onChange={e => set('period', e.target.value, setPeriod)} style={{ ...FILTER_STYLE, width: '100%' }}>
-              <option value="">All upcoming</option>
-              <option value="yesterday">Yesterday</option>
-              <option value="today">Today</option>
-              <option value="week">Next 7 days</option>
-              <option value="month">Next 30 days</option>
-            </select>
-          </div>
-
-          {/* Host name */}
-          <div>
-            <label style={{ fontSize: '0.6875rem', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Host name</label>
-            <select value={hostName} onChange={e => set('hostName', e.target.value, setHostName)} style={{ ...FILTER_STYLE, width: '100%' }}>
-              <option value="">All hosts</option>
-              {hostNames.map(h => <option key={h} value={h}>{h}</option>)}
-            </select>
-          </div>
-
-          {/* Suburb */}
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label style={{ fontSize: '0.6875rem', color: 'var(--muted)', display: 'block', marginBottom: 4 }}>Suburb</label>
-            <select value={suburb} onChange={e => set('suburb', e.target.value, setSuburb)} style={{ ...FILTER_STYLE, width: '100%' }}>
-              <option value="">All suburbs</option>
-              {suburbs.map(s => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
-        </div>
-      )}
-
-      <style>{`@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
+  const choices = (label, value, setter, key, options) => <label className="native-filter-field">
+    <span>{label}</span>
+    <CitySelector label={label} value={value} onChange={next => set(key, next, setter)} showPin={false} options={options} />
+  </label>;
+  const option = (value, label = value) => ({ value, label });
+  const panel = <section className="native-filter-panel" aria-label="Customised filters">
+    <div className="native-filter-heading"><h3>Customised filters</h3>
+      <button type="button" onClick={reset} disabled={!activeCount} aria-label="Clear Filters"><X size={15} /> Clear Filters</button>
     </div>
-  );
+    <div className="native-filter-grid">
+      {choices('Event type', eventType, setEventType, 'eventType', [option('', 'All event types'), ...eventTypes.map(value => option(value))])}
+      {choices('Audience type', audienceType, setAudienceType, 'audienceType', [option('', 'All audiences'), ...['Gents only', 'Ladies only', 'Kids only', 'Family Event'].map(value => option(value))])}
+      {choices('Organiser type', organiser, setOrganiser, 'organiser', [option('', 'All'), option('centre', 'Centre'), option('private', 'Private')])}
+      {choices('Host name', hostName, setHostName, 'hostName', [option('', 'All hosts'), ...hostNames.map(value => option(value))])}
+      {choices('Suburb', suburb, setSuburb, 'suburb', [option('', 'All suburbs'), ...suburbs.map(value => option(value))])}
+      {choices('Time period', period, setPeriod, 'period', [option('', 'All upcoming'), option('yesterday', 'Yesterday'), option('today', 'Today'), option('week', 'Next 7 days'), option('month', 'Next 30 days')])}
+    </div>
+    {liveCount > 0 && <button type="button" className="native-live-filter" onClick={toggleLive} aria-pressed={liveOnly}>Live ({liveCount})</button>}
+  </section>;
+  return <div className={variant === 'toolbar' ? 'native-filter-desktop' : 'native-filter-mobile'}>
+    {variant === 'toolbar' && <button type="button" className="native-filter-toggle" onClick={() => setOpen(value => !value)} aria-expanded={open}>
+      <SlidersHorizontal size={18} /> Filters{activeCount > 0 ? ' (' + activeCount + ')' : ''}
+    </button>}
+    {(variant !== 'toolbar' || open) && panel}
+  </div>;
 }

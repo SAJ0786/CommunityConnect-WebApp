@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>User Guide | Community Events Australia</title>
+  <title>User Guide | Community Connect Australia</title>
   <style>
-    :root{--teal:#0f766e;--teal-dark:#0b5d57;--bg:#f4f7f7;--card:#fff;--text:#1f2933;--muted:#6b7280;--border:#e5e7eb;--red:#0f766e}
+    :root{--teal:var(--cc-primary);--teal-dark:var(--cc-primary-strong);--bg:var(--cc-background);--card:#fff;--text:var(--cc-text);--muted:var(--cc-muted);--border:var(--cc-border);--red:var(--cc-primary)}
     *{box-sizing:border-box}
     body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.7}
     .hero{background:linear-gradient(135deg,var(--teal),var(--teal-dark));color:white;padding:56px 20px 80px;text-align:center}
@@ -13,10 +13,10 @@
     .hero h1{margin:0;font-size:36px}
     .hero p{margin:8px 0 0;opacity:.9}
     .container{max-width:860px;margin:-48px auto 48px;padding:0 20px;position:relative;z-index:2}
-    .card{background:var(--card);border-radius:20px;padding:36px;box-shadow:0 18px 48px rgba(15,118,110,.12);border:1px solid var(--border)}
+    .card{background:var(--card);border-radius:20px;padding:36px;box-shadow:0 18px 48px var(--cc-shadow-color);border:1px solid var(--border)}
     h2{color:var(--teal);border-left:4px solid var(--teal);padding-left:12px;margin-top:36px}
     h3{margin:0 0 8px;color:var(--teal)}
-    .toc{background:#ecfeff;border-radius:14px;padding:18px 22px;margin:18px 0}
+    .toc{background:var(--cc-primary-soft);border-radius:14px;padding:18px 22px;margin:18px 0}
     .toc h3{margin-top:0}
     .toc ol{margin:0;padding-left:22px}
     .toc li{margin:4px 0}
@@ -40,19 +40,22 @@
 <body>
   <a class="static-back-link" href="/" onclick="if (history.length > 1) { event.preventDefault(); history.back(); }">&larr; Back to Home</a>
 <header class="hero">
-  <img src="/logo.png" alt="Community Events Australia"/>
+  <img src="/logo.png" alt="Community Connect Australia"/>
   <h1>User Guide</h1>
-  <p>Community Events Australia – Create · Share · Connect</p>
+  <p>Community Connect Australia – Create · Share · Connect</p>
 </header>
 <main class="container">
   <section class="card">
 
-    <h2 style="margin-top:0">What is Community Events Australia?</h2>
-    <p>Community Events Australia helps you discover, share and manage local community events, including Majlis, Milad, lectures, prayers, duas, programs and more, with Hijri calendar support, recurring events, map view, private event sharing, calendar sync and live streaming to YouTube.</p>
+    <h2 style="margin-top:0">What is Community Connect Australia?</h2>
+    <p>Community Connect Australia brings Community Events and the Business Directory together. Browse local programs or discover businesses and current offers in your city.</p>
+    <p>Start at <a href="/">communityconnect.siza.info</a>. Account features and menu choices depend on your role and the version available to you. The detailed Events instructions below retain existing links and screenshots; the appearance may differ between releases.</p>
 
     <div class="toc">
       <h3>On this page</h3>
       <ol>
+        <li><a href="#directory">Business Directory</a></li>
+        <li><a href="#install-offline">Installation, updates and offline use</a></li>
         <li><a href="#home">Home Screen</a></li>
         <li><a href="#cards">Event Cards</a></li>
         <li><a href="#add">Adding an Event</a></li>
@@ -67,6 +70,17 @@
         <li><a href="#notes">Important Notes</a></li>
       </ol>
     </div>
+
+    <h2 id="directory">Business Directory</h2>
+    <p>Open <a href="/businesses">Businesses</a>, choose your city and search by business name or service. Use the category filter to narrow the results. Open a business to see its public contact details, opening hours and available offers. A suburb-only address is intentional when an owner has chosen that display option.</p>
+    <p>Use <a href="/businesses/promotions">Current promotions</a> to explore offers, then check the dates, conditions and business details before contacting the owner. A listing or offer may disappear when it expires or is withdrawn.</p>
+    <p>Member, owner and staff tools appear only when available for your account.</p>
+    <p>For a problem with a business, use its report action when available. App feedback can be sent to <a href="mailto:support@siza.info">support@siza.info</a>. Include the page or business name and a short description; do not send passwords, verification codes or payment details.</p>
+
+    <h2 id="install-offline">Installation, updates and offline use</h2>
+    <p>You can keep using the website or follow the <a href="/install.html">installation guide</a> to add it to your device. Existing store apps use their own release schedule.</p>
+    <p>While connected, the web app checks for updates. Finish your current work before closing or refreshing a page. Existing home-screen icons can continue to be used; the browser may offer an app-name update.</p>
+    <p>Some previously visited screens can open without a connection. Cached information may be out of date. Sign-in, new data, messages, submissions and live streams require the internet. Reconnect before making changes; if a page cannot load, use Try again after connectivity returns.</p>
 
     <!-- ───────────────────────── HOME ───────────────────────── -->
     <h2 id="home">🏠 Home Screen</h2>
@@ -85,7 +99,7 @@
     </div>
     <div class="step">
       <h3>Navigation</h3>
-      <p>The bottom bar gives you: <strong>Home</strong>, <strong>My Events</strong>, the green <strong>+</strong> button to add a new event, <strong>Favourites</strong>, and your <strong>Profile</strong>.</p>
+      <p>The bottom bar gives you: <strong>Home</strong>, <strong>My Events</strong>, the <strong>+</strong> button to add a new event, <strong>Favourites</strong>, and your <strong>Profile</strong>.</p>
     </div>
 
     <!-- ───────────────────────── EVENT CARDS ───────────────────────── -->
@@ -109,7 +123,7 @@
     <h2 id="add">➕ Adding an Event</h2>
     <div class="step">
       <h3>Step 1 — Choose event mode</h3>
-      <p>Tap the green <strong>+</strong> button in the bottom navigation. Choose <strong>Single Event</strong>. Admins and Super Admins can also choose <strong>Recurring Event</strong>; normal users can see recurring events but the option is disabled.</p>
+      <p>Tap the <strong>+</strong> button in the bottom navigation. Choose <strong>Single Event</strong>. Admins and Super Admins can also choose <strong>Recurring Event</strong>; normal users can see recurring events but the option is disabled.</p>
     </div>
     <div class="step">
       <h3>Step 2 — Basic details</h3>
@@ -183,7 +197,7 @@
     </div>
     <div class="step">
       <h3>Marker colours</h3>
-      <p>Markers use audience colours where available: ladies-only events are pink, gents-only events are blue, family events are teal, and kids or other events use the default marker style. Tap a marker to see the event and open directions.</p>
+      <p>Markers use audience colours where available: family events are blue, gents-only events are green, ladies-only events are pink, kids events are amber, and other events are grey. Tap a marker to see the event and open directions.</p>
     </div>
     <div class="step amber">
       <h3>Guest access</h3>
@@ -218,7 +232,7 @@
     <img class="shot" src="/docs/screenshots/stream-ended.png" alt="Stream Ended confirmation screen"/>
     <div class="step red">
       <h3>Streamed videos archive</h3>
-      <p>The streamed-videos screen lists public broadcasts from the Community Events Australia YouTube channel that are available for viewing. Deleted or unavailable YouTube videos are not intended to remain visible in the app.</p>
+      <p>The streamed-videos screen lists public broadcasts from the Community Connect Australia YouTube channel that are available for viewing. Deleted or unavailable YouTube videos are not intended to remain visible in the app.</p>
     </div>
     <img class="shot" src="/docs/screenshots/streamed-videos-current.jpg" alt="Streamed videos archive with YouTube thumbnail and Watch on YouTube button"/>
 
@@ -228,7 +242,7 @@
     <div class="step">
       <h3>Sharing multiple events at once</h3>
       <p>Bulk Share lets organisers select several upcoming events and generate one formatted message ready for WhatsApp, SMS or other sharing apps. The detailed format includes full event details where permitted. The brief format lists host, date, time and suburb only.</p>
-      <p>Generated messages group events under <strong>Centre Programs</strong> and <strong>Private Programs</strong>, include notes where entered, and finish with the app download link so recipients can install Community Events Australia.</p>
+      <p>Generated messages group events under <strong>Centre Programs</strong> and <strong>Private Programs</strong>, include notes where entered, and finish with the app download link so recipients can install Community Connect Australia.</p>
     </div>
 
     <!-- ───────────────────────── CALENDAR ───────────────────────── -->
@@ -295,7 +309,7 @@
     <p>Contact us at: <a href="/support.html">Support Page</a> or <strong>communityeventssydney@gmail.com</strong></p>
 
     <div class="footer">
-      © <span id="yr"></span> Community Events Australia. All rights reserved.<br/>
+      © <span id="yr"></span> Community Connect Australia. All rights reserved.<br/>
       <a href="/" onclick="if (history.length > 1) { event.preventDefault(); history.back(); }">← Back to App</a> &nbsp;|&nbsp;
       <a href="/privacy.html">Privacy Policy</a> &nbsp;|&nbsp;
       <a href="/terms.html">Terms of Use</a> &nbsp;|&nbsp;

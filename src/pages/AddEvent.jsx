@@ -45,7 +45,7 @@ export default function AddEvent({ user, profile, onSaved, setPage, events = [],
           <button type="button" onClick={() => setMode('single')}
             style={{
               textAlign: 'left',
-              background: 'white',
+              background: 'var(--cc-surface)',
               color: 'var(--text)',
               border: '1px solid var(--border)',
               borderRadius: 14,
@@ -61,8 +61,8 @@ export default function AddEvent({ user, profile, onSaved, setPage, events = [],
             title={canCreateRecurring ? 'Create repeating events' : 'Recurring events are available to admins only'}
             style={{
               textAlign: 'left',
-              background: canCreateRecurring ? 'white' : '#f3f4f6',
-              color: canCreateRecurring ? 'var(--text)' : '#9ca3af',
+              background: canCreateRecurring ? 'var(--cc-surface)' : 'var(--cc-background)',
+              color: canCreateRecurring ? 'var(--text)' : 'var(--cc-muted)',
               border: '1px solid var(--border)',
               borderRadius: 14,
               padding: 16,
@@ -72,7 +72,7 @@ export default function AddEvent({ user, profile, onSaved, setPage, events = [],
             }}>
             <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>🔁</div>
             <div style={{ fontWeight: 900, marginBottom: 4 }}>Recurring Event</div>
-            <div className="small" style={{ color: canCreateRecurring ? 'var(--muted)' : '#9ca3af' }}>
+            <div className="small" style={{ color: canCreateRecurring ? 'var(--muted)' : 'var(--cc-muted)' }}>
               Repeat by day, week, month or year with a preview before saving.
             </div>
             {!canCreateRecurring && (

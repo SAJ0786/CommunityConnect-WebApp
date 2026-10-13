@@ -3,25 +3,26 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Install Community Events Australia</title>
+  <title>Install Community Connect Australia</title>
+  <link rel="canonical" href="https://communityconnect.siza.info/install.html"/>
   <link rel="stylesheet" href="/brand-wordmark.css"/>
   <style>
     :root {
-      --teal: #0f766e;
-      --teal-dark: #0b5d57;
-      --bg: #f4f8f7;
+      --teal: var(--cc-primary);
+      --teal-dark: var(--cc-primary-strong);
+      --bg: var(--cc-background);
       --card: #ffffff;
-      --text: #071733;
-      --muted: #667085;
-      --border: #d8e5e3;
-      --red: #c9362a;
+      --text: var(--cc-heading);
+      --muted: var(--cc-muted);
+      --border: var(--cc-border);
+      --red: var(--cc-primary);
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      background: radial-gradient(circle at 50% 0, #e6f4f1 0, var(--bg) 42%, #ffffff 100%);
+      background: radial-gradient(circle at 50% 0, var(--cc-primary-soft) 0, var(--bg) 42%, #ffffff 100%);
       color: var(--text);
     }
     .hero {
@@ -62,7 +63,7 @@
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 20px;
-      box-shadow: 0 18px 45px rgba(15,118,110,.14);
+      box-shadow: 0 18px 45px var(--cc-shadow-color);
       padding: clamp(20px, 4vw, 34px);
       margin-bottom: 18px;
     }
@@ -89,7 +90,7 @@
       align-items: center;
       justify-content: center;
       min-height: 74px;
-      border: 2px solid #16a34a;
+      border: 2px solid var(--cc-primary-border);
       border-radius: 12px;
       background: #ffffff;
       padding: 10px;
@@ -98,7 +99,7 @@
     }
     .store:hover {
       transform: translateY(-1px);
-      box-shadow: 0 8px 20px rgba(15,118,110,.13);
+      box-shadow: 0 8px 20px var(--cc-shadow-color);
     }
     .store img {
       display: block;
@@ -117,7 +118,7 @@
       text-align: center;
       font-weight: 900;
       text-decoration: none;
-      box-shadow: 0 10px 24px rgba(15,118,110,.22);
+      box-shadow: 0 10px 24px var(--cc-shadow-color);
     }
     .info-grid {
       display: grid;
@@ -129,7 +130,7 @@
       border: 1px solid var(--border);
       border-radius: 14px;
       padding: 14px;
-      background: #fbfefd;
+      background: var(--cc-background);
     }
     .info strong {
       display: block;
@@ -150,7 +151,7 @@
       padding: 16px;
       border: 1px solid var(--border);
       border-radius: 14px;
-      background: #f8faf9;
+      background: var(--cc-background);
       margin-top: 18px;
     }
     .web-box a {
@@ -176,20 +177,34 @@
 <body>
   <a class="static-back-link" href="/">&larr; Back to Home</a>
   <header class="hero">
-    <img class="logo" src="/logo-transparent.png" alt="Community Events Australia logo"/>
-    <div class="ce-wordmark ce-wordmark--hero" aria-label="Community Events Australia">
+    <img class="logo" src="/logo-transparent.png" alt="Community Connect Australia logo"/>
+    <div class="ce-wordmark ce-wordmark--hero" aria-label="Community Connect Australia">
       <span class="ce-wordmark__line ce-wordmark__community" aria-hidden="true"><span>C</span><span>o</span><span>m</span><span>m</span><span>u</span><span>n</span><span>i</span><span>t</span><span>y</span></span>
-      <span class="ce-wordmark__line ce-wordmark__events" aria-hidden="true"><span>E</span><span>v</span><span>e</span><span>n</span><span>t</span><span>s</span></span>
+      <span class="ce-wordmark__line ce-wordmark__events" aria-hidden="true"><span>C</span><span>o</span><span>n</span><span>n</span><span>e</span><span>c</span><span>t</span></span>
       <span class="ce-wordmark__line ce-wordmark__australia" aria-hidden="true"><span>A</span><span>u</span><span>s</span><span>t</span><span>r</span><span>a</span><span>l</span><span>i</span><span>a</span></span>
       <span class="ce-wordmark__rule" aria-hidden="true"></span>
     </div>
-    <p>Install the official app to browse, share and manage community programs with reminders, calendar sync, directions and live streams.</p>
+    <h1>Keep your community close</h1>
+    <p>Open Community Connect in your browser, add the web app to your device, or choose an existing store app.</p>
   </header>
 
   <main class="wrap">
+    <section class="card" aria-labelledby="install-web">
+      <h2 class="section-title" id="install-web">Add the web app to your device</h2>
+      <p class="lead">Start at <a href="/">communityconnect.siza.info</a>. Browser menus vary by version; installation is optional.</p>
+      <div class="info-grid">
+        <div class="info"><strong>iPhone or iPad</strong><p>Open the site in Safari. Open Share (sometimes inside the page menu), choose <b>Add to Home Screen</b>, then Add. If shown, leave <b>Open as Web App</b> enabled.</p></div>
+        <div class="info"><strong>Android</strong><p>In Chrome, open the menu beside the address bar. Choose <b>Install and create shortcut</b>, then Install. Some versions show <b>Add to Home screen</b>. Follow the device prompts.</p></div>
+        <div class="info"><strong>Computer</strong><p>In Chrome, use the install icon when shown, or the menu's <b>Cast, save, and share → Install page as app</b> option. Other browsers may offer their own install command.</p></div>
+      </div>
+      <p>Already installed? Keep your existing icon. Updates are downloaded when you are connected; your browser may ask you to review a changed app name. You do not need to clear your browser data to update.</p>
+      <p>Previously visited screens may be available offline. Fresh listings, sign-in, messages, submissions and live streams need an internet connection.</p>
+      <p><a href="https://support.apple.com/guide/iphone/open-as-web-app-iphea86e5236/ios" target="_blank" rel="noopener noreferrer">Apple installation help</a> · <a href="https://support.google.com/chrome/answer/9658361" target="_blank" rel="noopener noreferrer">Chrome installation help</a></p>
+      <div class="web-box"><a href="/">Open Community Connect</a> · <a href="/docs/user-guide.html">Read the user guide</a></div>
+    </section>
     <section class="card">
-      <h2 class="section-title">Install From Your App Store</h2>
-      <p class="lead">Choose the correct store for your device. The app is free.</p>
+      <h2 class="section-title">Existing store apps</h2>
+      <p class="lead">Choose the store for your device. Store listings may still use the Community Events name. Store releases and web updates are separate.</p>
 
       <div class="stores" aria-label="App store links">
         <a class="store" href="https://apps.apple.com/au/app/community-events-australia/id6782770347" target="_blank" rel="noreferrer" aria-label="Download on the Apple App Store">
@@ -203,14 +218,15 @@
         </a>
       </div>
 
-      <a class="smart-link" href="https://download.communityevents.siza.info">Open Store</a>
+      <a class="smart-link" href="/download">View download options</a>
     </section>
 
     <section class="card">
       <h2 class="section-title">What The App Includes</h2>
-      <p class="lead">The store app gives users the current Community Events Australia experience without relying on old browser home-screen install steps.</p>
+      <p class="lead">Explore community events and public business information. Available account features depend on the version you are using.</p>
 
       <div class="info-grid">
+        <div class="info"><strong>Business Directory</strong><span>Find businesses by city and service, read public details and explore current offers.</span></div>
         <div class="info">
           <strong>Events and Directions</strong>
           <span>Browse community programs, view eligible addresses and open directions from event cards.</span>
@@ -231,7 +247,7 @@
       </div>
     </section>
 
-    <p class="footer">Community Events Australia - Create, Share, Connect</p>
+    <p class="footer">Community Connect Australia · Events and Business Directory</p>
   </main>
 </body>
 </html>

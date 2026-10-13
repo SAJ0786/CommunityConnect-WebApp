@@ -9,62 +9,62 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-      background: #0a0a0a; min-height: 100vh;
+      background: var(--cc-background); min-height: 100vh;
       display: flex; flex-direction: column; align-items: center;
       justify-content: center; padding: 24px;
     }
     .card {
-      background: #111; border: 1px solid #2a2a1a;
+      background: var(--cc-surface); border: 1px solid var(--cc-border);
       border-radius: 24px; width: 100%; max-width: 420px;
       overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,0.6);
     }
     .slide-header {
       padding: 36px 28px 24px; text-align: center;
-      border-bottom: 3px solid #c9a84c;
+      border-bottom: 3px solid var(--cc-primary);
       transition: background 0.3s;
     }
     .slide-icon { font-size: 58px; line-height: 1; margin-bottom: 16px; }
     .slide-title { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
-    .slide-subtitle { font-size: 14px; line-height: 1.65; color: #c8b89a; }
+    .slide-subtitle { font-size: 14px; line-height: 1.65; color: var(--cc-text); }
     .tip-box {
       margin: 16px 0 0; padding: 11px 14px;
       border-radius: 10px; font-size: 12px; line-height: 1.5;
-      border-left: 3px solid #c9a84c;
-      background: #1a1a06; color: #c9a84c;
+      border-left: 3px solid var(--cc-primary);
+      background: var(--cc-primary-soft); color: var(--cc-primary);
       display: none;
     }
     .tip-area { min-height: 68px; padding: 0 24px; }
     .dots { display: flex; justify-content: center; gap: 8px; padding: 16px 24px 0; }
     .dot {
       height: 8px; border-radius: 4px; cursor: pointer;
-      background: #3a3020; border: none;
+      background: var(--cc-border); border: none;
       transition: all 0.3s; padding: 0;
     }
-    .dot.active { background: #c9a84c; }
+    .dot.active { background: var(--cc-primary); }
     .actions { display: flex; gap: 8px; padding: 16px 24px 20px; }
     .btn-skip {
       flex: 1; font-size: 13px; padding: 11px;
-      border-radius: 10px; border: 1px solid #3a3020;
-      background: transparent; color: #9a8a6a; cursor: pointer;
+      border-radius: 10px; border: 1px solid var(--cc-border);
+      background: transparent; color: var(--cc-muted); cursor: pointer;
     }
     .btn-next {
       flex: 2; font-size: 14px; font-weight: 700; padding: 11px;
       border-radius: 10px; border: none;
-      background: #c9a84c; color: #0a0a0a; cursor: pointer;
+      background: var(--cc-primary); color: var(--cc-on-primary); cursor: pointer;
     }
-    .btn-next:hover { background: #b8973b; }
-    .counter { text-align: center; font-size: 11px; color: #5a5040; padding-bottom: 16px; }
+    .btn-next:hover { background: var(--cc-primary-strong); }
+    .counter { text-align: center; font-size: 11px; color: var(--cc-muted); padding-bottom: 16px; }
     .footer { margin-top: 24px; text-align: center; }
     .footer a {
       display: inline-block; padding: 13px 28px;
-      background: #c9a84c; color: #0a0a0a;
+      background: var(--cc-primary); color: var(--cc-on-primary);
       border-radius: 12px; font-weight: 700; font-size: 15px;
       text-decoration: none;
     }
-    .footer a:hover { background: #b8973b; }
-    .footer p { color: #5a5040; font-size: 12px; margin-top: 12px; }
+    .footer a:hover { background: var(--cc-primary-strong); }
+    .footer p { color: var(--cc-muted); font-size: 12px; margin-top: 12px; }
     .done-screen { padding: 40px; text-align: center; }
-    .done-screen p { color: #9a8a6a; font-size: 14px; margin-top: 8px; }
+    .done-screen p { color: var(--cc-muted); font-size: 14px; margin-top: 8px; }
   </style>
   <link rel="stylesheet" href="/static-pages.css"/>
 </head>

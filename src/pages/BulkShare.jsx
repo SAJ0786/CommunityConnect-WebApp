@@ -175,7 +175,7 @@ export default function BulkShare({ events, profile, user }) {
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gap: 6,
-            background: '#eef7f5',
+            background: 'var(--cc-accent-soft)',
             border: '1px solid var(--border)',
             borderRadius: 12,
             padding: 4,
@@ -188,7 +188,7 @@ export default function BulkShare({ events, profile, user }) {
                 borderRadius: 9,
                 padding: '10px 8px',
                 background: messageMode === 'detail' ? 'var(--teal)' : 'transparent',
-                color: messageMode === 'detail' ? 'white' : 'var(--text)',
+                color: messageMode === 'detail' ? 'var(--cc-on-primary)' : 'var(--text)',
                 fontWeight: 900,
                 cursor: 'pointer',
               }}
@@ -203,7 +203,7 @@ export default function BulkShare({ events, profile, user }) {
                 borderRadius: 9,
                 padding: '10px 8px',
                 background: messageMode === 'brief' ? 'var(--teal)' : 'transparent',
-                color: messageMode === 'brief' ? 'white' : 'var(--text)',
+                color: messageMode === 'brief' ? 'var(--cc-on-primary)' : 'var(--text)',
                 fontWeight: 900,
                 cursor: 'pointer',
               }}
@@ -246,7 +246,7 @@ export default function BulkShare({ events, profile, user }) {
               margin: '0 16px 8px',
               cursor: 'pointer',
               border: `2px solid ${isSelected ? 'var(--teal)' : 'var(--border)'}`,
-              background: isSelected ? 'var(--teal-l,#e6f4f1)' : 'var(--card,white)',
+              background: isSelected ? 'var(--teal-l,var(--cc-accent-soft))' : 'var(--card,var(--cc-surface))',
             }}
           >
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
@@ -262,18 +262,18 @@ export default function BulkShare({ events, profile, user }) {
                 alignItems: 'center',
                 justifyContent: 'center',
               }}>
-                {isSelected && <span style={{ color: 'white', fontSize: '0.875rem', lineHeight: 1 }}>{ICON_CHECK}</span>}
+                {isSelected && <span style={{ color: 'var(--cc-on-primary)', fontSize: '0.875rem', lineHeight: 1 }}>{ICON_CHECK}</span>}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 5 }}>
-                  <span style={{ background: 'var(--teal-l,#e6f4f1)', color: 'var(--teal)', fontSize: '0.6875rem', padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}>
+                  <span style={{ background: 'var(--teal-l,var(--cc-accent-soft))', color: 'var(--teal)', fontSize: '0.6875rem', padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}>
                     {event.eventType}
                   </span>
-                  <span style={{ background: 'var(--fef3c7,#fef3c7)', color: '#92400e', fontSize: '0.6875rem', padding: '2px 8px', borderRadius: 99 }}>
+                  <span style={{ background: 'var(--fef3c7,var(--cc-warning-soft))', color: 'var(--cc-warning-strong)', fontSize: '0.6875rem', padding: '2px 8px', borderRadius: 99 }}>
                     {event.organiserType === 'centre' ? `${ICON_BUILDING} Centre` : `${ICON_LOCK} Private`}
                   </span>
                   {event.hijriDate && (
-                    <span style={{ background: '#fef3c7', color: '#92400e', fontSize: '0.6875rem', padding: '2px 8px', borderRadius: 99 }}>
+                    <span style={{ background: 'var(--cc-warning-soft)', color: 'var(--cc-warning-strong)', fontSize: '0.6875rem', padding: '2px 8px', borderRadius: 99 }}>
                       {event.hijriDate}
                     </span>
                   )}
@@ -301,7 +301,7 @@ export default function BulkShare({ events, profile, user }) {
             Message preview ({selected.size} event{selected.size !== 1 ? 's' : ''})
           </p>
           <pre style={{
-            background: '#f9fafb',
+            background: 'var(--cc-background)',
             borderRadius: 8,
             padding: 12,
             fontSize: '0.75rem',

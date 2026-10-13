@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
+import { useDialogFocus } from '../utils/useDialogFocus';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getApp } from 'firebase/app';
 
@@ -21,6 +22,8 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
   const [token,   setToken]   = useState('');
   const [error,   setError]   = useState('');
   const [busy,    setBusy]    = useState(false);
+  const dialogRef = useRef(null);
+  useDialogFocus(dialogRef, true, onClose);
 
   const fns = getFunctions(getApp(), 'australia-southeast1');
 
@@ -31,9 +34,9 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
   if (!hasPhone && !hasEmail) {
     return (
       <>
-        <div onClick={onClose} style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:300 }} />
-        <div style={modalStyle}>
-          <h3 style={{ margin:'0 0 12px', color:'#dc2626' }}>Cannot Edit</h3>
+        <div onClick={onClose} style={{ position:'fixed',inset:0,background:'color-mix(in srgb, var(--cc-overlay-base) 50%, transparent)',zIndex:300 }} />
+        <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Edit your event" tabIndex={-1} style={modalStyle}>
+          <h3 style={{ margin:'0 0 12px', color:'var(--cc-danger)' }}>Cannot Edit</h3>
           <p style={{ fontSize:'0.875rem', color:'var(--muted)', margin:'0 0 16px' }}>
             No contact information is stored for this event. Please contact an admin to make changes.
           </p>
@@ -78,8 +81,8 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position:'fixed',inset:0,background:'rgba(0,0,0,.5)',zIndex:300 }} />
-      <div style={modalStyle}>
+      <div onClick={onClose} style={{ position:'fixed',inset:0,background:'color-mix(in srgb, var(--cc-overlay-base) 50%, transparent)',zIndex:300 }} />
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label="Edit your event" tabIndex={-1} style={modalStyle}>
         {step === 'input' && (
           <>
             <h3 style={{ margin:'0 0 8px' }}>Edit Your Event</h3>
@@ -95,7 +98,7 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
               onKeyDown={e => e.key === 'Enter' && sendOtp()}
               autoFocus
             />
-            {error && <p style={{ color:'#dc2626', fontSize:'0.8125rem', margin:'4px 0' }}>{error}</p>}
+            {error && <p style={{ color:'var(--cc-danger)', fontSize:'0.8125rem', margin:'4px 0' }}>{error}</p>}
             <div style={{ display:'flex', gap:8, marginTop:12 }}>
               <button className="btn-muted" onClick={onClose} style={{ flex:1 }}>Cancel</button>
               <button onClick={sendOtp} disabled={busy} style={{ flex:2 }}>
@@ -121,7 +124,7 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
               inputMode="numeric"
               autoFocus
             />
-            {error && <p style={{ color:'#dc2626', fontSize:'0.8125rem', margin:'4px 0' }}>{error}</p>}
+            {error && <p style={{ color:'var(--cc-danger)', fontSize:'0.8125rem', margin:'4px 0' }}>{error}</p>}
             <div style={{ display:'flex', gap:8, marginTop:12 }}>
               <button className="btn-muted" onClick={() => setStep('input')} style={{ flex:1 }}>Back</button>
               <button onClick={verifyOtp} disabled={busy || otp.length !== 6} style={{ flex:2 }}>
@@ -148,7 +151,8 @@ export default function GuestEditModal({ event, onClose, onVerified }) {
 const modalStyle = {
   position: 'fixed', top:'50%', left:'50%',
   transform: 'translate(-50%,-50%)',
-  background: 'white', borderRadius: 20, padding: 24,
+  background: 'var(--cc-surface)', borderRadius: 20, padding: 24,
   width: 'min(400px, calc(100vw - 32px))',
-  zIndex: 301, boxShadow: '0 24px 64px rgba(0,0,0,.2)'
+  maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto',
+  zIndex: 301, boxShadow: '0 24px 64px color-mix(in srgb, var(--cc-shadow-base) 20%, transparent)'
 };

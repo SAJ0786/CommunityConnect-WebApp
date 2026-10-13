@@ -19,10 +19,10 @@ if (typeof window !== 'undefined') {
 }
 
 const COLORS = {
-  success: { bg: '#f0fdf4', border: '#86efac', color: '#166534', icon: '✓' },
-  error:   { bg: '#fee2e2', border: '#fca5a5', color: '#991b1b', icon: '✕' },
-  warning: { bg: '#fffbeb', border: '#fcd34d', color: '#92400e', icon: '⚠' },
-  info:    { bg: '#eff6ff', border: '#93c5fd', color: '#1e40af', icon: 'ℹ' },
+  success: { bg: 'var(--cc-success-soft)', border: 'var(--cc-accent-border)', color: 'var(--cc-success)', icon: '✓' },
+  error:   { bg: 'var(--cc-danger-soft)', border: 'var(--cc-danger-border)', color: 'var(--cc-danger)', icon: '✕' },
+  warning: { bg: 'var(--cc-warning-soft)', border: 'var(--cc-warning-border)', color: 'var(--cc-warning-strong)', icon: '⚠' },
+  info:    { bg: 'var(--cc-primary-soft)', border: 'var(--cc-primary-border)', color: 'var(--cc-primary-strong)', icon: 'ℹ' },
 };
 
 export default function ToastContainer() {
@@ -43,7 +43,7 @@ export default function ToastContainer() {
             background: c.bg, border: `1px solid ${c.border}`,
             borderRadius: 14, padding: '13px 16px',
             display: 'flex', alignItems: 'flex-start', gap: 10,
-            boxShadow: '0 8px 24px rgba(0,0,0,.12)',
+            boxShadow: '0 8px 24px color-mix(in srgb, var(--cc-shadow-base) 12%, transparent)',
             animation: 'slideUp .2s ease',
             pointerEvents: 'auto'
           }}>

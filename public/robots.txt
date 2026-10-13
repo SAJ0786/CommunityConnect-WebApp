@@ -6,4 +6,4 @@ Disallow: /unsubscribe.html
 Disallow: /demo.html
 Disallow: /.well-known/
 
-Sitemap: https://communityevents.siza.info/sitemap.txt
+Sitemap: https://communityconnect.siza.info/sitemap.txt

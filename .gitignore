@@ -49,6 +49,11 @@ node_modules/
 
 # Build output
 dist/
+.qa-web-preview/
+.qa-web-live/
+.qa-member-preview/
+.qa-ui-preview/
+.local-vite-cache/
 
 # Optional npm cache directory
 .npm
@@ -104,6 +109,20 @@ android-native-wrapper/release-signing.properties
 Thumbs.db
 
 # Build artifacts
+/.qa-*
+.config/
+.qa-public-preview/
+.qa-workspace-preview/
+.qa-pwa-rehearsal/
+.qa-site-preview/
+.qa-firebase-preview/
+.qa-firebase-evidence/
+.qa-release-inventory.json
+.qa-web-release/
+.qa-live-rules/
+.qa-live-functions/
+.qa-phone-preview.firebase.json
+.qa-hosting-domain-*.json
 .cache/
 .local/
 .npm-global/

@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import { useDialogFocus } from '../utils/useDialogFocus';
 
 export default function ShareSheet() {
   const [msg,       setMsg]       = useState('');
@@ -8,6 +9,8 @@ export default function ShareSheet() {
   const [open,      setOpen]      = useState(false);
   const [copied,    setCopied]    = useState(false);
   const [sharing,   setSharing]   = useState(false);
+  const dialogRef = useRef(null);
+  useDialogFocus(dialogRef, open, () => setOpen(false));
 
   useEffect(() => {
     // Accept either a plain string (legacy) or { text, imageUrl }
@@ -102,20 +105,21 @@ export default function ShareSheet() {
       {/* Backdrop */}
       <div onClick={close} style={{
         position: 'fixed', inset: 0,
-        background: 'rgba(0,0,0,.45)', zIndex: 1000,
+        background: 'color-mix(in srgb, var(--cc-overlay-base) 45%, transparent)', zIndex: 1000,
       }} />
 
       {/* Sheet */}
-      <div style={{
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="share-sheet-title" tabIndex={-1} style={{
         position: 'fixed', bottom: 0, left: 0, right: 0,
-        background: 'white', borderRadius: '20px 20px 0 0',
+        width: '100%', maxWidth: 560, margin: '0 auto', maxHeight: '90dvh', overflowY: 'auto',
+        background: 'var(--cc-surface)', borderRadius: '20px 20px 0 0',
         padding: '20px 20px 36px', zIndex: 1001,
-        boxShadow: '0 -8px 32px rgba(0,0,0,.15)',
+        boxShadow: '0 -8px 32px color-mix(in srgb, var(--cc-shadow-base) 15%, transparent)',
       }}>
         {/* Handle */}
-        <div style={{ width: 40, height: 4, borderRadius: 2, background: '#e5e7eb', margin: '0 auto 18px' }} />
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--cc-border)', margin: '0 auto 18px' }} />
 
-        <h3 style={{ margin: '0 0 16px', fontSize: '1rem', textAlign: 'center' }}>{shareTitle}</h3>
+        <h3 id="share-sheet-title" style={{ margin: '0 0 16px', fontSize: '1rem', textAlign: 'center' }}>{shareTitle}</h3>
 
         {/* Poster preview */}
         {hasPoster && (
@@ -124,7 +128,7 @@ export default function ShareSheet() {
             <img src={imageUrl} alt={`${shareTitle} poster`}
               style={{ width: '100%', maxHeight: 160, objectFit: 'cover', display: 'block' }} />
             <div style={{ position: 'absolute', bottom: 6, right: 8,
-              background: 'rgba(15,118,110,0.9)', color: 'white', fontSize: '0.625rem',
+              background: 'color-mix(in srgb, var(--cc-accent-strong) 90%, transparent)', color: 'var(--cc-on-primary)', fontSize: '0.625rem',
               fontWeight: 700, padding: '3px 9px', borderRadius: 20 }}>
               🖼 Poster will be shared
             </div>
@@ -142,11 +146,11 @@ export default function ShareSheet() {
               style={{
                 display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
                 padding: '12px 6px', borderRadius: 14,
-                background: 'linear-gradient(135deg,#0f766e,#16a34a)',
+                background: 'linear-gradient(135deg,var(--cc-accent-strong),var(--cc-success))',
                 border: 'none', cursor: 'pointer',
               }}>
               <span style={{ fontSize: '1.625rem' }}>{sharing ? '⏳' : '🖼'}</span>
-              <span style={{ fontSize: '0.625rem', fontWeight: 800, color: 'white', textAlign: 'center', lineHeight: 1.2 }}>
+              <span style={{ fontSize: '0.625rem', fontWeight: 800, color: 'var(--cc-on-primary)', textAlign: 'center', lineHeight: 1.2 }}>
                 {sharing ? 'Sharing…' : 'Share with\nPoster'}
               </span>
             </button>
@@ -156,11 +160,11 @@ export default function ShareSheet() {
           <button type="button" onClick={openWhatsApp}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-              padding: '12px 6px', borderRadius: 14, background: '#f0fdf4',
-              border: '1px solid #bbf7d0', textDecoration: 'none', cursor: 'pointer',
+              padding: '12px 6px', borderRadius: 14, background: 'var(--cc-success-soft)',
+              border: '1px solid var(--cc-accent-border)', textDecoration: 'none', cursor: 'pointer',
             }}>
             <span style={{ fontSize: '1.625rem' }}>💬</span>
-            <span style={{ fontSize: '0.625rem', fontWeight: 800, color: '#166534', textAlign: 'center', lineHeight: 1.2 }}>
+            <span style={{ fontSize: '0.625rem', fontWeight: 800, color: 'var(--cc-success)', textAlign: 'center', lineHeight: 1.2 }}>
               WhatsApp{hasPoster ? '\n(text only)' : ''}
             </span>
           </button>
@@ -169,11 +173,11 @@ export default function ShareSheet() {
           <button type="button" onClick={openSms}
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
-              padding: '12px 6px', borderRadius: 14, background: '#eff6ff',
-              border: '1px solid #bfdbfe', textDecoration: 'none', cursor: 'pointer',
+              padding: '12px 6px', borderRadius: 14, background: 'var(--cc-primary-soft)',
+              border: '1px solid var(--cc-primary-border)', textDecoration: 'none', cursor: 'pointer',
             }}>
             <span style={{ fontSize: '1.625rem' }}>📤</span>
-            <span style={{ fontSize: '0.625rem', fontWeight: 800, color: '#1e40af', textAlign: 'center', lineHeight: 1.2 }}>
+            <span style={{ fontSize: '0.625rem', fontWeight: 800, color: 'var(--cc-primary-strong)', textAlign: 'center', lineHeight: 1.2 }}>
               Share via Apps{hasPoster ? '\n(text only)' : ''}
             </span>
           </button>
@@ -183,13 +187,13 @@ export default function ShareSheet() {
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5,
               padding: '12px 6px', borderRadius: 14,
-              background: copied ? '#f0fdf4' : '#f9fafb',
-              border: `1px solid ${copied ? '#86efac' : '#e5e7eb'}`,
+              background: copied ? 'var(--cc-success-soft)' : 'var(--cc-background)',
+              border: `1px solid ${copied ? 'var(--cc-accent-border)' : 'var(--cc-border)'}`,
               cursor: 'pointer', outline: 'none',
             }}>
             <span style={{ fontSize: '1.625rem' }}>{copied ? '✅' : '📋'}</span>
             <span style={{ fontSize: '0.625rem', fontWeight: 800, textAlign: 'center', lineHeight: 1.2,
-              color: copied ? '#166534' : '#374151' }}>
+              color: copied ? 'var(--cc-success)' : 'var(--cc-text)' }}>
               {copied ? 'Copied!' : 'Copy Text'}
             </span>
           </button>
@@ -205,7 +209,7 @@ export default function ShareSheet() {
 
         <button onClick={close} style={{
           width: '100%', padding: '13px', borderRadius: 14, border: 'none',
-          background: '#f3f4f6', color: '#374151', fontWeight: 800,
+          background: 'var(--cc-background)', color: 'var(--cc-text)', fontWeight: 800,
           fontSize: '0.875rem', cursor: 'pointer',
         }}>
           Cancel

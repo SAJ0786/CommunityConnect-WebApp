@@ -22,11 +22,11 @@ function hasAndroidNativeBridge() {
 // ── Popup helper ──────────────────────────────────────────────────────────────
 function Popup({ icon, title, message, confirmLabel, cancelLabel, onConfirm, onCancel, onClose, infoOnly }) {
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)',
+    <div style={{ position:'fixed', inset:0, background:'color-mix(in srgb, var(--cc-overlay-base) 70%, transparent)',
       zIndex:10000, display:'flex', alignItems:'center', justifyContent:'center',
       padding:24, fontFamily:'var(--font)' }}>
       <div style={{ background:'var(--card)', borderRadius:20, padding:28,
-        maxWidth:340, width:'100%', textAlign:'center', boxShadow:'0 8px 40px rgba(0,0,0,0.4)' }}>
+        maxWidth:340, width:'100%', maxHeight:'calc(100dvh - 48px)', overflowY:'auto', textAlign:'center', boxShadow:'0 8px 40px color-mix(in srgb, var(--cc-shadow-base) 40%, transparent)' }}>
         <div style={{ fontSize:'2.5rem', marginBottom:12 }}>{icon}</div>
         <h3 style={{ margin:'0 0 10px', fontWeight:900, fontSize:'1.125rem', color:'var(--text)' }}>{title}</h3>
         <p style={{ margin:'0 0 20px', fontSize:'0.875rem', color:'var(--muted)', lineHeight:1.5 }}>{message}</p>
@@ -41,7 +41,7 @@ function Popup({ icon, title, message, confirmLabel, cancelLabel, onConfirm, onC
           )}
           <button onClick={infoOnly ? onClose : onConfirm}
             style={{ flex:1, padding:'12px', borderRadius:12, border:'none',
-              background:'#0f766e', color:'white', fontWeight:900,
+              background:'var(--cc-accent-strong)', color:'var(--cc-on-primary)', fontWeight:900,
               fontSize:'0.875rem', cursor:'pointer' }}>
             {confirmLabel}
           </button>
@@ -57,10 +57,11 @@ function StreamMethodDialog({
   onAnotherDevice, onBack, onCancel, onExternalStart
 }) {
   return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.72)', zIndex:10000,
+    <div style={{ position:'fixed', inset:0, background:'color-mix(in srgb, var(--cc-overlay-base) 72%, transparent)', zIndex:10000,
       display:'flex', alignItems:'center', justifyContent:'center', padding:20, fontFamily:'var(--font)' }}>
       <div style={{ background:'var(--card)', borderRadius:16, padding:24, maxWidth:390, width:'100%',
-        boxShadow:'0 12px 48px rgba(0,0,0,0.45)', color:'var(--text)' }}>
+        maxHeight:'calc(100dvh - 40px)', overflowY:'auto',
+        boxShadow:'0 12px 48px color-mix(in srgb, var(--cc-shadow-base) 45%, transparent)', color:'var(--text)' }}>
         {step === 'method' ? (
           <>
             <h3 style={{ margin:'0 0 8px', fontSize:'1.125rem' }}>How do you want to stream?</h3>
@@ -72,9 +73,9 @@ function StreamMethodDialog({
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                 {[['public', 'Public'], ['unlisted', 'Private']].map(([value, label]) => (
                   <label key={value} style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 12px',
-                    border:`2px solid ${visibility === value ? '#0f766e' : 'var(--border)'}`,
+                    border:`2px solid ${visibility === value ? 'var(--cc-accent-strong)' : 'var(--border)'}`,
                     borderRadius:10, cursor:'pointer', fontSize:'0.8125rem', fontWeight:800,
-                    background:visibility === value ? '#ecfdf5' : 'var(--surface)' }}>
+                    background:visibility === value ? 'var(--cc-success-soft)' : 'var(--surface)' }}>
                     <input type="radio" name="stream-visibility" value={value}
                       checked={visibility === value} onChange={() => onVisibilityChange(value)} />
                     {label}
@@ -91,9 +92,9 @@ function StreamMethodDialog({
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                   {[['portrait', 'Portrait'], ['landscape', 'Landscape']].map(([value, label]) => (
                     <label key={value} style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 12px',
-                      border:`2px solid ${orientation === value ? '#0f766e' : 'var(--border)'}`,
+                      border:`2px solid ${orientation === value ? 'var(--cc-accent-strong)' : 'var(--border)'}`,
                       borderRadius:10, cursor:'pointer', fontSize:'0.8125rem', fontWeight:800,
-                      background:orientation === value ? '#ecfdf5' : 'var(--surface)' }}>
+                      background:orientation === value ? 'var(--cc-success-soft)' : 'var(--surface)' }}>
                       <input type="radio" name="stream-orientation" value={value}
                         checked={orientation === value} onChange={() => onOrientationChange(value)} />
                       {label}
@@ -104,7 +105,7 @@ function StreamMethodDialog({
             )}
             <div style={{ display:'grid', gap:10 }}>
               <button onClick={onThisDevice} style={{ padding:'13px 14px', border:0, borderRadius:10,
-                background:'#0f766e', color:'white', fontWeight:900, cursor:'pointer' }}>
+                background:'var(--cc-accent-strong)', color:'var(--cc-on-primary)', fontWeight:900, cursor:'pointer' }}>
                 {isNativeDevice ? 'Start Stream' : 'Stream from this device'}
               </button>
               <button onClick={onAnotherDevice} style={{ padding:'13px 14px', border:'1px solid var(--border)',
@@ -128,13 +129,13 @@ function StreamMethodDialog({
               placeholder="https://www.youtube.com/watch?v=..." autoFocus required
               style={{ width:'100%', boxSizing:'border-box', border:'1px solid var(--border)', borderRadius:9,
                 background:'var(--surface)', color:'var(--text)', padding:'11px 12px', fontSize:'0.875rem' }} />
-            {error && <div style={{ color:'#b91c1c', fontSize:'0.75rem', marginTop:8, lineHeight:1.4 }}>{error}</div>}
+            {error && <div style={{ color:'var(--cc-danger)', fontSize:'0.75rem', marginTop:8, lineHeight:1.4 }}>{error}</div>}
             <div style={{ display:'flex', gap:10, marginTop:18 }}>
               <button type="button" onClick={onBack} disabled={loading} style={{ flex:1, padding:11,
                 border:'1px solid var(--border)', borderRadius:9, background:'transparent', color:'var(--text)',
                 fontWeight:800, cursor:'pointer' }}>Back</button>
               <button type="submit" disabled={loading || !url.trim()} style={{ flex:2, padding:11, border:0,
-                borderRadius:9, background:'#0f766e', color:'white', fontWeight:900,
+                borderRadius:9, background:'var(--cc-accent-strong)', color:'var(--cc-on-primary)', fontWeight:900,
                 opacity:loading || !url.trim() ? 0.65 : 1, cursor:'pointer' }}>
                 {loading ? 'Testing URL...' : 'Mark Event Live'}
               </button>
@@ -182,21 +183,21 @@ export function YouTubeWatchButton({ event, compact }) {
   return (
     <a href={ytUrl} target="_blank" rel="noreferrer"
       style={{
-        background:'#FF0000', color:'white',
+        background:'var(--cc-brand-youtube)', color:'var(--cc-on-primary)',
         fontSize: compact ? '0.65625rem' : '0.75rem', padding: compact ? '5px 10px' : '8px 14px',
         borderRadius:10,
         display:'inline-flex', alignItems:'center', gap:6,
         fontWeight:900, textDecoration:'none',
-        boxShadow:'0 2px 8px rgba(255,0,0,0.4)',
+        boxShadow:'0 2px 8px color-mix(in srgb, var(--cc-danger) 40%, transparent)',
         animation:'ytPulse 2s infinite',
       }}>
       <span style={{ animation:'liveBlink 1s infinite', fontSize:'0.625rem' }}>{LIVE_DOT_ICON}</span>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--cc-on-primary)">
         <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
       </svg>
       Watch on YouTube
       <style>{`
-        @keyframes ytPulse{0%,100%{box-shadow:0 2px 8px rgba(255,0,0,0.4)}50%{box-shadow:0 2px 20px rgba(255,0,0,0.8)}}
+        @keyframes ytPulse{0%,100%{box-shadow:0 2px 8px color-mix(in srgb, var(--cc-danger) 40%, transparent)}50%{box-shadow:0 2px 20px color-mix(in srgb, var(--cc-danger) 80%, transparent)}}
         @keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.3}}
       `}</style>
     </a>
@@ -392,7 +393,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
     const isExternal = event.liveSource === 'external-youtube';
     return (
       <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-        <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'#0f766e',
+        <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'var(--cc-accent-strong)',
           display:'flex', alignItems:'center', gap:5 }}>
           <span style={{ animation:'liveBlink 1s infinite' }}>{LIVE_DOT_ICON}</span> LIVE NOW
         </span>
@@ -406,7 +407,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
           }
         }} disabled={loading}
           style={{ fontSize:'0.6875rem', padding:'5px 9px', borderRadius:8,
-            background:'#fef3c7', color:'#92400e', border:'1px solid #f59e0b',
+            background:'var(--cc-warning-soft)', color:'var(--cc-warning-strong)', border:'1px solid var(--cc-warning)',
             fontWeight:900, cursor:'pointer' }}>
           {isExternal ? 'Manage Live' : (loading ? 'Resuming...' : 'Resume Stream')}
         </button>
@@ -423,7 +424,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
     return (
       <>
         <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-          <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'#0f766e',
+          <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'var(--cc-accent-strong)',
             display:'flex', alignItems:'center', gap:5 }}>
             <span style={{ animation:'liveBlink 1s infinite' }}>{LIVE_DOT_ICON}</span> LIVE NOW
           </span>
@@ -440,10 +441,10 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
   return (
     <>
       <button onClick={() => setMethodStep('method')} disabled={loading}
-        style={{ background:'#dc2626', fontSize:'0.75rem', padding:'8px 14px',
+        style={{ background:'var(--cc-danger)', fontSize:'0.75rem', padding:'8px 14px',
           borderRadius:10, display:'flex', alignItems:'center', gap:6,
-          boxShadow:'0 2px 8px rgba(220,38,38,0.35)', cursor:'pointer',
-          fontWeight:900, color:'white', border:'none' }}>
+          boxShadow:'0 2px 8px color-mix(in srgb, var(--cc-danger) 35%, transparent)', cursor:'pointer',
+          fontWeight:900, color:'var(--cc-on-primary)', border:'none' }}>
         <span>{LIVE_DOT_ICON}</span>
         {loading ? 'Starting...' : 'Go Live'}
       </button>

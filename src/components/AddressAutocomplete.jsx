@@ -92,7 +92,7 @@ export default function AddressAutocomplete({ value = {}, onChange, required, in
         }}
         placeholder={ready ? 'Start typing address…' : 'Loading address search…'}
         disabled={!ready}
-        style={{ ...inputStyle, borderColor: invalid ? '#b42318' : '#0f766e' }}
+        style={{ ...inputStyle, borderColor: invalid ? 'var(--cc-danger)' : 'var(--cc-accent-strong)' }}
       />
       {status && (
         <p style={{ fontSize: '0.75rem', color: 'var(--teal)', margin: '2px 0 8px 2px' }}>
@@ -110,8 +110,8 @@ export default function AddressAutocomplete({ value = {}, onChange, required, in
 
 const inputStyle = {
   width: '100%', padding: 13, fontSize: '0.9375rem',
-  border: '1px solid #0f766e', borderRadius: 12,
-  background: 'white', marginTop: 6, marginBottom: 4,
+  border: '1px solid var(--cc-accent-strong)', borderRadius: 12,
+  background: 'var(--cc-surface)', marginTop: 6, marginBottom: 4,
   boxSizing: 'border-box', color: 'var(--text)'
 };
 

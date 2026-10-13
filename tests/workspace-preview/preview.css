@@ -1,0 +1,2 @@
+.workspace-preview-bar { background: var(--cc-warning-soft); color: var(--cc-warning-strong); padding: 12px 20px; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; font-size: .8rem; }
+.workspace-preview-bar label { display: flex; gap: 6px; align-items: center; }.workspace-preview-bar select { max-width: 130px; padding: 7px; }.workspace-preview-bar a { color: var(--cc-primary-strong); }.workspace-preview-bar button { padding: 8px 12px; }

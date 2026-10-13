@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles/theme.css';
-import App from './App.jsx';
+import AppRouter from './AppRouter.jsx';
 import { registerSW } from './services/swService.js';
 
 // Recover once when an open app references a chunk replaced by a new release.
@@ -15,7 +15,7 @@ window.addEventListener('vite:preloadError', event => {
 
 window.setTimeout(() => sessionStorage.removeItem('community-events-chunk-recovery'), 10000);
 
-createRoot(document.getElementById('root')).render(<App />);
+createRoot(document.getElementById('root')).render(<AppRouter />);
 
 // Register service worker for PWA + auto-updates
-registerSW();
+if (import.meta.env.VITE_LOCAL_PREVIEW !== 'true') registerSW();

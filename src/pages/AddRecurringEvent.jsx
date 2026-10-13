@@ -41,7 +41,7 @@ function DatePreview({ occurrences, calendarType }) {
   if (!occurrences.length) return null;
   const firstTen = occurrences.slice(0, 10);
   return (
-    <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 12, background: '#e6f4f1', border: '1px solid #b7ded7' }}>
+    <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 12, background: 'var(--cc-accent-soft)', border: '1px solid var(--cc-accent-border)' }}>
       <div style={{ fontWeight: 900, color: 'var(--teal)', marginBottom: 8 }}>
         Preview: {occurrences.length} event{occurrences.length === 1 ? '' : 's'} will be created
       </div>
@@ -52,7 +52,7 @@ function DatePreview({ occurrences, calendarType }) {
             fontWeight: 800,
             padding: '5px 8px',
             borderRadius: 999,
-            background: 'white',
+            background: 'var(--cc-surface)',
             color: 'var(--text)',
             border: '1px solid var(--border)',
           }}>
@@ -300,7 +300,7 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
           <div style={{ display: 'grid', gap: 12 }}>
             <div>
               <label>First event Hijri date *</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 92px', gap: 8 }}>
+              <div className="cc-hijri-fields">
                 <input type="number" min="1" max="30" value={hijriStart.day} onChange={e => setHijriStart(p => ({ ...p, day: e.target.value }))} />
                 <select value={hijriStart.month} onChange={e => setHijriStart(p => ({ ...p, month: e.target.value }))}>
                   <option value="">Month</option>
@@ -312,7 +312,7 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
             {endMode === 'date' && (
               <div>
                 <label>End Hijri date *</label>
-                <div style={{ display: 'grid', gridTemplateColumns: '72px 1fr 92px', gap: 8 }}>
+                <div className="cc-hijri-fields">
                   <input type="number" min="1" max="30" value={hijriEnd.day} onChange={e => setHijriEnd(p => ({ ...p, day: e.target.value }))} />
                   <select value={hijriEnd.month} onChange={e => setHijriEnd(p => ({ ...p, month: e.target.value }))}>
                     <option value="">Month</option>

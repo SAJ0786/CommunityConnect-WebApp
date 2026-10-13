@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "Community Events Australia",
-  "short_name": "Comm Events",
-  "description": "Discover, share and manage community events for the Australian Shia Muslim community",
+  "name": "Community Connect Australia",
+  "short_name": "Comm Connect",
+  "description": "Discover community events and connect with local businesses across Australia.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -11,11 +11,14 @@
     "client_mode": "navigate-existing"
   },
   "prefer_related_applications": false,
-  "background_color": "#f8faf9",
-  "theme_color": "#0f766e",
+  "background_color": "#f5f7fb",
+  "theme_color": "#2563eb",
   "lang": "en-AU",
   "dir": "ltr",
-  "categories": ["lifestyle", "social"],
+  "categories": [
+    "lifestyle",
+    "social"
+  ],
   "icons": [
     {
       "src": "/icons/icon-48.png",
@@ -65,20 +68,19 @@
       "form_factor": "narrow",
       "label": "Home screen showing upcoming community events"
     },
-	{
+    {
       "src": "/screenshots/screenshot-addevent.png",
       "sizes": "1290x2796",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Add Event screen showing adding events process"
     },
-{
+    {
       "src": "/screenshots/screenshot-profilepage.png",
       "sizes": "1290x2796",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Profile Page showing your profile options"
     }
-
   ]
 }

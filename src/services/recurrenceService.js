@@ -1,4 +1,4 @@
-import { getHijriDisplay, hijriDisplayFromParts, hijriToGregorian } from './hijriService';
+import { getHijriDisplay, hijriDisplayFromParts, hijriToGregorian } from './hijriService.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const RECURRENCE_FREQUENCIES = ['day', 'week', 'month', 'year'];
@@ -12,10 +12,11 @@ export function formatLocalDate(date) {
 }
 
 export function parseLocalDate(value) {
-  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return null;
   const [year, month, day] = String(value).split('-').map(Number);
   if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day);
+  const result = new Date(year, month - 1, day);
+  return formatLocalDate(result) === value ? result : null;
 }
 
 export function addDays(date, days) {

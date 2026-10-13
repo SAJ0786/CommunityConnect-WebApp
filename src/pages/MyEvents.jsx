@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import EventCard from '../components/EventCard';
 import { getMyEvents, toggleEventVisibility } from '../services/eventService';
 
-export default function MyEvents({ user, profile, setPage, setEditingEvent, handleDelete, handleCopy, onStreamStart }) {
+export default function MyEvents({ user, profile, setPage, setEditingEvent, handleDelete, handleCopy, onStreamStart, savedIds = [], onSaveToggle }) {
   const [myEvents,  setMyEvents]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [expandedId, setExpandedId] = useState(null);
@@ -69,7 +69,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
           }}>
             <span style={{
               fontSize: '0.6875rem', fontWeight: 600,
-              color: e.hidden ? '#0f766e' : '#27ae60',
+              color: e.hidden ? 'var(--cc-accent-strong)' : 'var(--cc-success)',
             }}>
               {e.hidden ? '🙈 Hidden from home screen' : '👁 Visible on home screen'}
             </span>
@@ -78,8 +78,8 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
               style={{
                 fontSize: '0.6875rem', padding: '3px 10px', borderRadius: 6,
                 border: 'none', cursor: 'pointer', fontWeight: 600,
-                background: e.hidden ? '#0f766e' : '#f3f4f6',
-                color: e.hidden ? 'white' : '#7f8c8d',
+                background: e.hidden ? 'var(--cc-accent-strong)' : 'var(--cc-background)',
+                color: e.hidden ? 'var(--cc-on-primary)' : 'var(--cc-muted)',
               }}>
               {e.hidden ? '👁 Make Visible' : '🙈 Hide Event'}
             </button>
@@ -97,6 +97,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
               isExpanded={expandedId === e.id}
               onExpand={setExpandedId}
               onStreamStart={onStreamStart}
+              savedIds={savedIds} onSaveToggle={onSaveToggle} onCalendar={() => setPage('calendar')}
             />
           </div>
         </div>

@@ -3,6 +3,7 @@ import {
   CalendarDays, CalendarOff, CalendarRange, ChevronLeft, ChevronRight,
   Grid2X2, LayoutDashboard, Plus, Search, X,
 } from 'lucide-react';
+import EventQuickAccess from './EventQuickAccess';
 import EventCard from './EventCard';
 import EventFilters from './EventFilters';
 import EventMapView from './EventMapView';
@@ -130,11 +131,11 @@ function MonthPanel({ events, selected, onSelect }) {
 }
 
 export default function DesktopHome({
-  events, displayed, totalCount, hasMore, onLoadMore, filterableEvents, filtered, setFiltered, query, setQuery,
+  events, mapEvents = events, displayed, totalCount, hasMore, onLoadMore, filterableEvents, filtered, setFiltered, query, setQuery,
   expandedId, setExpandedId, user, profile, setPage,
   setEditingEvent, handleDelete, handleCopy, isGuest, savedIds, onSaveToggle,
   onStreamStart, selectedCity, onCityChange, viewMode = 'list', setViewMode,
-  onSelectMapEvent,
+  onSelectMapEvent, browseControls, browseRevision = 0,
 }) {
   const [layout, setLayout] = useState(() => {
     try { return localStorage.getItem('communityEventsDesktopLayout') || 'grid'; }
@@ -171,7 +172,7 @@ export default function DesktopHome({
         onDelete={handleDelete} onCopy={handleCopy} isGuest={isGuest}
         isExpanded={expandedId === event.id || (expandedId === '__first__' && index === 0)}
         onExpand={id => setExpandedId(id)} savedIds={savedIds}
-        onSaveToggle={isGuest ? null : onSaveToggle} onStreamStart={onStreamStart}
+        onSaveToggle={isGuest ? null : onSaveToggle} onStreamStart={onStreamStart} onCalendar={() => setPage('calendar')}
         imagePriority={event.id === displayed[0]?.id} />
     </div>
   );
@@ -182,16 +183,7 @@ export default function DesktopHome({
         <div data-walkthrough-target="city-and-view">
           <CitySelector value={selectedCity} onChange={onCityChange} compact />
         </div>
-        {!isGuest && (
-          <div className="home-view-toggle desktop-view-toggle" role="group" aria-label="Choose list or map view">
-            <button type="button" onClick={() => setViewMode?.('list')} className={viewMode === 'list' ? 'active' : ''}>
-              List
-            </button>
-            <button type="button" onClick={() => setViewMode?.('map')} className={viewMode === 'map' ? 'active' : ''}>
-              Map
-            </button>
-          </div>
-        )}
+
         <div className="desktop-search" data-walkthrough-target="bottom-search">
           <Search size={19} />
           <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search events..." />
@@ -202,12 +194,15 @@ export default function DesktopHome({
 
       <div className="desktop-title-row">
         <div>
-          <h1>Upcoming Events</h1>
+          <h1>Events</h1>
           <p>{totalCount} event{totalCount === 1 ? '' : 's'} available</p>
         </div>
       </div>
 
-      <EventFilters key={selectedCity} events={filterableEvents} onChange={setFiltered}
+      <EventQuickAccess viewMode={viewMode} setViewMode={setViewMode} setPage={setPage} isGuest={isGuest}/>
+      {browseControls}
+
+      <EventFilters key={selectedCity + browseRevision} events={filterableEvents} onChange={setFiltered}
         upcomingOnlyOnEmpty variant="toolbar" filtered={filtered} />
 
       <div className="desktop-notice">
@@ -216,7 +211,7 @@ export default function DesktopHome({
       </div>
 
       {viewMode === 'map' && !isGuest ? (
-        <EventMapView events={events} onSelectEvent={onSelectMapEvent} />
+        <EventMapView events={mapEvents} onSelectEvent={onSelectMapEvent} />
       ) : displayed.length === 0 ? (
         <div className="desktop-empty">
           <CalendarOff size={42} />

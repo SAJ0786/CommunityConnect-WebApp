@@ -1,3 +1,4 @@
+import NotificationPreferences from '../components/NotificationPreferences';
 import React, { useEffect, useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/firebase';
@@ -227,11 +228,11 @@ export default function Profile({ user, profile, setProfile }) {
 
   return (
     <div className="card profile-page">
-      <h2>Profile &amp; Settings</h2>
+      <h2>Profile &amp; Settings</h2><p className="small">Your account and app preferences</p><a className="cc-feedback-card" href="/support.html">Feedback &amp; Report a Problem<span>App feedback, technical issues, account help and other enquiries.</span></a>
 
-      <div style={{ padding:16, border:'1px solid var(--border)', borderRadius:8, background:'var(--card-alt, #f8fafc)', marginBottom:16 }}>
+      <div style={{ padding:16, border:'1px solid var(--border)', borderRadius:8, background:'var(--card-alt, var(--cc-background))', marginBottom:16 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:editingDetails ? 14 : 0 }}>
-          <h3 style={{ margin:0, fontSize:'1rem' }}>Personal Details</h3>
+          <h3 style={{ margin:0, fontSize:'1rem' }}>My Profile</h3>
           {!editingDetails && (
             <button className="btn-light" style={{ padding:'7px 12px', margin:0 }} onClick={() => {
               setProfileName(profile?.fullName || '');
@@ -263,6 +264,7 @@ export default function Profile({ user, profile, setProfile }) {
           <div style={{ marginTop:12 }}>
             <p style={{ margin:'0 0 6px' }}><b>Name:</b> {profile?.fullName || 'Not provided'}</p>
             <p style={{ margin:0 }}><b>Email:</b> {profile?.email || 'Not provided'}</p>
+            <p><b>Mobile:</b> {user?.phoneNumber || profile?.phone || 'Not provided'}</p>
           </div>
         )}
         {detailsMessage.text && (
@@ -273,7 +275,7 @@ export default function Profile({ user, profile, setProfile }) {
       </div>
 
       <div style={{ padding:16, border:'1px solid var(--border)', borderRadius:8,
-        background:'var(--card-alt, #f8fafc)', marginBottom:16 }}>
+        background:'var(--card-alt, var(--cc-background))', marginBottom:16 }}>
         <h3 style={{ margin:'0 0 6px', fontSize:'1rem' }}>Default City</h3>
         <p className="small" style={{ margin:'0 0 12px', color:'var(--muted)', lineHeight:1.5 }}>
           Home will open with events from this city. You can temporarily view another city from Home.
@@ -285,32 +287,21 @@ export default function Profile({ user, profile, setProfile }) {
         </button>
       </div>
 
-      <p><b>Role:</b> {profile?.role}</p>
-      <p>
-        <b>Email Reminders:</b>{' '}
-        {emailReminderEnabled ? 'Enabled' : 'Disabled'}
-      </p>
-
-      <button className="btn-light" onClick={toggleReminder} disabled={!!savingPreference}>
-        {savingPreference === 'reminders'
-          ? 'Saving...'
-          : `${emailReminderEnabled ? 'Disable' : 'Enable'} Email Reminders`}
-      </button>
-
+      <NotificationPreferences key={user.uid + ':' + String(profile?.pushNotificationsEnabled)} user={user} profile={profile} setProfile={setProfile}/>
       <div style={{ marginTop:16, padding:16, border:'1px solid var(--border)',
-        borderRadius:10, background:'var(--card-alt, #f8fafc)' }}>
-        <h3 style={{ margin:'0 0 6px', fontSize:'1rem' }}>Push Notifications</h3>
+        borderRadius:10, background:'var(--card-alt, var(--cc-background))' }}>
+        <h3 style={{ margin:'0 0 6px', fontSize:'1rem' }}>Notifications on this browser</h3>
         <p className="small" style={{ margin:'0 0 12px', lineHeight:1.55 }}>
-          App alerts for daily reminders and live streams. You can keep email reminders and push notifications separate.
+          Enable this browser to receive push alerts and event reminders. Your account preferences apply across devices.
         </p>
         <p style={{ margin:'0 0 10px', fontSize:'0.875rem' }}>
-          <b>Status:</b> {pushEnabled ? 'Enabled' : 'Disabled'}
+          <b>Status:</b> {!pushEnabled ? 'Disabled for this account' : pushStatus.permission === 'granted' ? 'Allowed on this browser' : 'Browser setup needed'}
           {' '}<span style={{ color:'var(--muted)' }}>
             ({pushStatus.native ? 'native app' : pushStatus.permission === 'granted' ? 'device allowed' : pushStatus.permission === 'denied' ? 'device blocked' : pushStatus.supported ? 'permission needed' : 'not supported'})
           </span>
         </p>
         <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-          {pushEnabled ? (
+          {pushEnabled && pushStatus.permission === 'granted' ? (
             <button className="btn-light" onClick={disablePush} disabled={!!pushBusy}>
               {pushBusy === 'disable' ? 'Saving...' : 'Disable Push Notifications'}
             </button>
@@ -319,7 +310,7 @@ export default function Profile({ user, profile, setProfile }) {
               {pushBusy === 'enable' ? 'Enabling...' : 'Enable Push Notifications'}
             </button>
           )}
-          {pushEnabled && (
+          {pushEnabled && pushStatus.permission === 'granted' && (
             <button className="btn-muted" onClick={testPush} disabled={!!pushBusy}>
               {pushBusy === 'test' ? 'Sending...' : 'Send Test Push'}
             </button>
@@ -332,7 +323,7 @@ export default function Profile({ user, profile, setProfile }) {
 
       {isAdmin && (
         <div style={{ marginTop:16, padding:16, border:'1px solid var(--border)',
-          borderRadius:10, background:'var(--card-alt, #f8fafc)' }}>
+          borderRadius:10, background:'var(--card-alt, var(--cc-background))' }}>
           <h3 style={{ margin:'0 0 6px', fontSize:'1rem' }}>Admin Email Alerts</h3>
           <p className="small" style={{ margin:'0 0 12px', lineHeight:1.55 }}>
             Operational alerts for new users and events added or deleted. This setting is separate from your event reminders.
@@ -358,11 +349,11 @@ export default function Profile({ user, profile, setProfile }) {
 
       <h3>Share the App</h3>
       <p className="small" style={{ marginBottom: 12 }}>
-        Invite your community to join Community Events Australia.
+        Invite your community to join Community Connect Australia.
       </p>
       <button style={{ width: '100%' }} onClick={() => {
         const msg = [
-          '🌙 *Community Events Australia*',
+          '🌙 *Community Connect Australia*',
           '_Your free community events app_',
           '*Features:*',
           '📅 Browse upcoming Majalis, Milads & community events',
@@ -393,7 +384,7 @@ export default function Profile({ user, profile, setProfile }) {
           navigator.clipboard.writeText(msg).then(() => alert('Message copied! Paste it in WhatsApp.'));
         }
       }}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="white" style={{ flexShrink: 0 }}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--cc-on-primary)" style={{ flexShrink: 0 }}>
           <path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.37 5.07L2 22l5.09-1.34A9.94 9.94 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.66 0-3.22-.46-4.55-1.26l-.32-.19-3.03.8.81-2.96-.21-.34A7.96 7.96 0 014 12c0-4.42 3.58-8 8-8s8 3.58 8 8-3.58 8-8 8zm4.45-5.95c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.39-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.69 2.58 4.1 3.62.57.25 1.02.39 1.37.5.57.18 1.09.16 1.5.1.46-.07 1.43-.58 1.63-1.15.2-.57.2-1.06.14-1.15-.06-.1-.22-.16-.46-.28z"/>
         </svg>
         Share the App
@@ -417,23 +408,23 @@ export default function Profile({ user, profile, setProfile }) {
 
       {/* Step 1: Ask about events */}
       {deleteStep === 'askEvents' && (
-        <div style={{ marginTop:16, background:'#fff7ed', border:'1px solid #fed7aa',
+        <div style={{ marginTop:16, background:'var(--cc-warning-soft)', border:'1px solid var(--cc-warning-border)',
           borderRadius:14, padding:18 }}>
-          <p style={{ fontWeight:800, fontSize:'0.875rem', margin:'0 0 8px', color:'#9a3412' }}>
+          <p style={{ fontWeight:800, fontSize:'0.875rem', margin:'0 0 8px', color:'var(--cc-warning-strong)' }}>
             What should happen to your events?
           </p>
-          <p style={{ fontSize:'0.8125rem', color:'#92400e', margin:'0 0 14px', lineHeight:1.5 }}>
+          <p style={{ fontSize:'0.8125rem', color:'var(--cc-warning-strong)', margin:'0 0 14px', lineHeight:1.5 }}>
              Your events will not be deleted. Choose when your currently active events should become inactive.
           </p>
           <div style={{ display:'flex', gap:10 }}>
             <button onClick={() => { setArchiveEventsNow(false); setDeleteStep('confirm'); }}
               style={{ flex:1, padding:'11px', borderRadius:11, fontWeight:800, fontSize:'0.8125rem',
-                background:'var(--teal,#0f766e)', color:'white', border:'none', cursor:'pointer' }}>
+                background:'var(--teal,var(--cc-accent-strong))', color:'var(--cc-on-primary)', border:'none', cursor:'pointer' }}>
               Keep Active Until Expiry
             </button>
             <button onClick={() => { setArchiveEventsNow(true); setDeleteStep('confirm'); }}
               style={{ flex:1, padding:'11px', borderRadius:11, fontWeight:800, fontSize:'0.8125rem',
-                background:'#dc2626', color:'white', border:'none', cursor:'pointer' }}>
+                background:'var(--cc-danger)', color:'var(--cc-on-primary)', border:'none', cursor:'pointer' }}>
               Make Inactive Now
             </button>
           </div>
@@ -448,12 +439,12 @@ export default function Profile({ user, profile, setProfile }) {
 
       {/* Step 2: Confirm deletion */}
       {deleteStep === 'confirm' && (
-        <div style={{ marginTop:16, background:'#fef2f2', border:'1px solid #fecaca',
+        <div style={{ marginTop:16, background:'var(--cc-danger-soft)', border:'1px solid var(--cc-danger-border)',
           borderRadius:14, padding:18 }}>
-          <p style={{ fontWeight:800, fontSize:'0.875rem', margin:'0 0 8px', color:'#991b1b' }}>
+          <p style={{ fontWeight:800, fontSize:'0.875rem', margin:'0 0 8px', color:'var(--cc-danger)' }}>
             ⚠️ This cannot be undone
           </p>
-          <p style={{ fontSize:'0.8125rem', color:'#7f1d1d', margin:'0 0 14px', lineHeight:1.5 }}>
+          <p style={{ fontSize:'0.8125rem', color:'var(--cc-danger)', margin:'0 0 14px', lineHeight:1.5 }}>
             Your account will be permanently deleted.{' '}
             {archiveEventsNow
               ? 'Your active events will be moved to the inactive archive now. Event, host and submission details will be retained.'
@@ -462,7 +453,7 @@ export default function Profile({ user, profile, setProfile }) {
           <div style={{ display:'flex', gap:10 }}>
             <button onClick={confirmDelete}
               style={{ flex:1, padding:'11px', borderRadius:11, fontWeight:800, fontSize:'0.8125rem',
-                background:'#dc2626', color:'white', border:'none', cursor:'pointer' }}>
+                background:'var(--cc-danger)', color:'var(--cc-on-primary)', border:'none', cursor:'pointer' }}>
               Yes, Delete My Account
             </button>
             <button onClick={cancelDelete}
@@ -478,15 +469,15 @@ export default function Profile({ user, profile, setProfile }) {
 
       <h3>About</h3>
       <div style={{
-        background: 'var(--card-alt, #f8fafc)', border: '1px solid var(--border)',
+        background: 'var(--card-alt, var(--cc-background))', border: '1px solid var(--border)',
         borderRadius: 14, padding: 18, textAlign: 'center',
       }}>
         {/* SIZA brand mark — lightbulb/arrow icon + wordmark */}
         <svg width="56" height="56" viewBox="0 0 100 100" style={{ marginBottom: 6 }}>
           <defs>
             <linearGradient id="sizaGold" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#d4a857" />
-              <stop offset="100%" stopColor="#6b4f1f" />
+              <stop offset="0%" stopColor="var(--cc-warning)" />
+              <stop offset="100%" stopColor="var(--cc-warning-strong)" />
             </linearGradient>
           </defs>
           {/* bulb outline */}
@@ -501,7 +492,7 @@ export default function Profile({ user, profile, setProfile }) {
         </svg>
         <div style={{
           fontWeight: 900, fontSize: '1.5rem', letterSpacing: 2,
-          backgroundImage: 'linear-gradient(135deg,#1e3a8a,#3b82f6)',
+          backgroundImage: 'linear-gradient(135deg,var(--cc-primary-strong),var(--cc-primary))',
           WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent',
           marginBottom: 2, fontFamily: 'Georgia, serif',
         }}>
@@ -514,7 +505,7 @@ export default function Profile({ user, profile, setProfile }) {
           CREATE · SHARE · CONNECT
         </div>
         <p style={{ margin: '0 0 6px', fontWeight: 800, fontSize: '0.875rem', color: 'var(--text)' }}>
-          Community Events Australia
+          Community Connect Australia
         </p>
         <p style={{ margin: '0 0 12px', fontSize: '0.78125rem', color: 'var(--muted)', lineHeight: 1.6 }}>
           An initiative by <b>SIZA Apps</b>, offered as a service to the
@@ -522,7 +513,7 @@ export default function Profile({ user, profile, setProfile }) {
           sharing to help build stronger, more connected communities.
         </p>
         <div style={{
-          display: 'inline-block', background: 'var(--card,white)',
+          display: 'inline-block', background: 'var(--card,var(--cc-surface))',
           border: '1px solid var(--border)', borderRadius: 10,
           padding: '6px 14px', fontSize: '0.71875rem', color: 'var(--muted)',
           fontFamily: 'monospace',

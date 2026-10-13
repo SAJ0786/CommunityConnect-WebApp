@@ -214,8 +214,8 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
 
   const typeColor = t => {
     if (t === 'Majlis')   return 'var(--teal)';
-    if (t === 'Milad')    return '#059669';
-    if (t === 'Birthday') return '#d97706';
+    if (t === 'Milad')    return 'var(--cc-success)';
+    if (t === 'Birthday') return 'var(--cc-warning)';
     return 'var(--muted)';
   };
 
@@ -229,9 +229,9 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
   return (
     <div className="ai-search-page" style={{ margin: '0 16px 16px' }}>
       <div style={{
-        background: 'var(--card,white)', border: '1px solid var(--border)',
+        background: 'var(--card,var(--cc-surface))', border: '1px solid var(--border)',
         borderRadius: 20, overflow: 'hidden',
-        boxShadow: '0 8px 22px rgba(15,118,110,.08)'
+        boxShadow: '0 8px 22px color-mix(in srgb, var(--cc-accent-strong) 8%, transparent)'
       }}>
 
         {/* Header */}
@@ -241,13 +241,13 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
         }}>
           <div style={{
             width: 40, height: 40, borderRadius: '50%',
-            background: 'rgba(255,255,255,.18)',
+            background: 'color-mix(in srgb, var(--cc-surface) 18%, transparent)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.25rem', color: 'white', flexShrink: 0
+            fontSize: '1.25rem', color: 'var(--cc-on-primary)', flexShrink: 0
           }}>✦</div>
           <div>
-            <div style={{ color: 'white', fontWeight: 800, fontSize: '0.9375rem' }}>Event AI Agent</div>
-            <div style={{ color: 'rgba(255,255,255,.8)', fontSize: '0.75rem' }}>Ask me anything about community events</div>
+            <div style={{ color: 'var(--cc-on-primary)', fontWeight: 800, fontSize: '0.9375rem' }}>Event AI Agent</div>
+            <div style={{ color: 'color-mix(in srgb, var(--cc-surface) 80%, transparent)', fontSize: '0.75rem' }}>Ask me anything about community events</div>
           </div>
         </div>
 
@@ -261,14 +261,14 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
             }}>
               <div style={{
                 width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-                background: m.role === 'agent' ? 'var(--teal)' : 'var(--border,#e5e7eb)',
+                background: m.role === 'agent' ? 'var(--teal)' : 'var(--border,var(--cc-border))',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.75rem', color: m.role === 'agent' ? 'white' : 'var(--text,#374151)', fontWeight: 700
+                fontSize: '0.75rem', color: m.role === 'agent' ? 'var(--cc-on-primary)' : 'var(--text,var(--cc-text))', fontWeight: 700
               }}>{m.role === 'agent' ? '✦' : 'U'}</div>
 
               <div style={{
                 maxWidth: '82%',
-                background: m.role === 'user' ? 'var(--teal-l,#e6f4f1)' : 'var(--bg,#f9fafb)',
+                background: m.role === 'user' ? 'var(--teal-l,var(--cc-accent-soft))' : 'var(--bg,var(--cc-background))',
                 color: m.role === 'user' ? 'var(--teal-dark)' : 'var(--text)',
                 borderRadius: m.role === 'agent' ? '4px 16px 16px 16px' : '16px 4px 16px 16px',
                 padding: '10px 14px', fontSize: '0.875rem', lineHeight: 1.6
@@ -300,7 +300,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
                 {/* Moon sighting notice on results */}
                 {m.matched && m.matched.length > 0 && (
                   <div style={{
-                    background: 'var(--teal-l,#fef3c7)', border: '1px solid var(--teal,#f59e0b)',
+                    background: 'var(--teal-l,var(--cc-warning-soft))', border: '1px solid var(--teal,var(--cc-warning))',
                     borderRadius: 10, padding: '8px 12px',
                     display: 'flex', gap: 8, alignItems: 'flex-start',
                     marginTop: 8
@@ -321,10 +321,10 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
                       const reciters = (e.reciters || []).filter(r => r.name).map(r => `${r.type}: ${r.name}`).join(' · ');
                       const showReligious = RELIGIOUS_EVENT_TYPES.includes(e.eventType);
                       return (
-                        <div key={e.id} style={{ background: 'var(--card,white)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px' }}>
+                        <div key={e.id} style={{ background: 'var(--card,var(--cc-surface))', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px' }}>
                           <div style={{ marginBottom: 6 }}>
                             <span style={{ background: typeColor(e.eventType) + '20', color: typeColor(e.eventType), fontSize: '0.6875rem', fontWeight: 800, padding: '3px 8px', borderRadius: 99 }}>{e.eventType}</span>
-                            {e.audienceType && <span style={{ background: 'var(--teal-l,#f3f4f6)', color: 'var(--muted)', fontSize: '0.6875rem', fontWeight: 700, padding: '3px 8px', borderRadius: 99, marginLeft: 5 }}>{e.audienceType}</span>}
+                            {e.audienceType && <span style={{ background: 'var(--teal-l,var(--cc-background))', color: 'var(--muted)', fontSize: '0.6875rem', fontWeight: 700, padding: '3px 8px', borderRadius: 99, marginLeft: 5 }}>{e.audienceType}</span>}
                           </div>
                           <div style={{ fontWeight: 800, fontSize: '0.875rem', marginBottom: 3 }}>{e.hostName}</div>
                           <div style={{ color: 'var(--muted)', fontSize: '0.8125rem' }}>{fmtDate(e.eventDate)} · {e.startTime}</div>
@@ -340,7 +340,7 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
                           {showReligious && reciters && <div style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{reciters}</div>}
                           {/* Guest masked fields */}
                           {isGuest && e.address?.suburb && (
-                            <div style={{ fontSize: '0.75rem', color: 'var(--teal)', background: 'var(--teal-l,#fffbeb)', padding: '5px 8px', borderRadius: 8, marginTop: 4 }}>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--teal)', background: 'var(--teal-l,var(--cc-warning-soft))', padding: '5px 8px', borderRadius: 8, marginTop: 4 }}>
                               🔒 Login to see full address & phone
                             </div>
                           )}
@@ -383,10 +383,10 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
         </div>
 
         {/* Suggestions */}
-        <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--bg,#f9fafb)', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border)', background: 'var(--bg,var(--cc-background))', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {suggestions.map(s => (
             <button key={s}
-              style={{ fontSize: '0.75rem', padding: '5px 10px', border: '1px solid var(--border)', borderRadius: 99, background: 'var(--card,white)', color: 'var(--text)', cursor: 'pointer' }}
+              style={{ fontSize: '0.75rem', padding: '5px 10px', border: '1px solid var(--border)', borderRadius: 99, background: 'var(--card,var(--cc-surface))', color: 'var(--text)', cursor: 'pointer' }}
               onClick={() => setInput(s)}>{s}</button>
           ))}
         </div>
@@ -396,8 +396,8 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
           <input
             style={{
               flex: 1, padding: '10px 14px', fontSize: '0.875rem',
-              border: listening ? '1.5px solid #dc2626' : '1px solid var(--border)',
-              borderRadius: 12, background: 'var(--card,white)',
+              border: listening ? '1.5px solid var(--cc-danger)' : '1px solid var(--border)',
+              borderRadius: 12, background: 'var(--card,var(--cc-surface))',
               color: 'var(--text)'
             }}
             placeholder={listening ? '🎤 Listening… speak now' : 'e.g. "Majlis this Friday in Auburn"'}
@@ -411,9 +411,9 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
             title={listening ? 'Stop listening' : 'Voice search'}
             style={{
               padding: '10px 12px', fontSize: '1.25rem',
-              borderRadius: 12, border: '1px solid var(--border,#e5e7eb)',
-              background: listening ? '#fee2e2' : '#fff0ee',
-              color: listening ? '#dc2626' : '#0f766e',
+              borderRadius: 12, border: '1px solid var(--border,var(--cc-border))',
+              background: listening ? 'var(--cc-danger-soft)' : 'var(--cc-danger-soft)',
+              color: listening ? 'var(--cc-danger)' : 'var(--cc-accent-strong)',
               cursor: 'pointer', flexShrink: 0,
               boxShadow: 'none',
               animation: listening ? 'pulse-mic 1s infinite' : 'none',
@@ -430,19 +430,19 @@ export default function AISearch({ events, user, profile, setPage, setEditingEve
           </button>
 
           <button onClick={send} disabled={busy || !input.trim()}
-            style={{ padding: '10px 18px', fontWeight: 800, fontSize: '0.8125rem', borderRadius: 12, border: 'none', background: busy || !input.trim() ? 'var(--border,#e5e7eb)' : 'var(--teal)', color: busy || !input.trim() ? 'var(--muted)' : 'white', cursor: busy || !input.trim() ? 'not-allowed' : 'pointer' }}>
+            style={{ padding: '10px 18px', fontWeight: 800, fontSize: '0.8125rem', borderRadius: 12, border: 'none', background: busy || !input.trim() ? 'var(--border,var(--cc-border))' : 'var(--teal)', color: busy || !input.trim() ? 'var(--muted)' : 'var(--cc-on-primary)', cursor: busy || !input.trim() ? 'not-allowed' : 'pointer' }}>
             {busy ? '...' : 'Ask ↗'}
           </button>
         </div>
       </div>
       {reportTarget && (
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.55)',
+          position: 'fixed', inset: 0, zIndex: 99999, background: 'color-mix(in srgb, var(--cc-overlay-base) 55%, transparent)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
         }}>
           <div style={{
-            background: 'var(--card,white)', borderRadius: 18, border: '1px solid var(--border)',
-            width: '100%', maxWidth: 420, padding: 20, boxShadow: '0 20px 60px rgba(0,0,0,.3)',
+            background: 'var(--card,var(--cc-surface))', borderRadius: 18, border: '1px solid var(--border)',
+            width: '100%', maxWidth: 420, padding: 20, boxShadow: '0 20px 60px color-mix(in srgb, var(--cc-shadow-base) 30%, transparent)',
           }}>
             <h3 style={{ margin: '0 0 6px', color: 'var(--text)' }}>Report AI Response</h3>
             <p style={{ margin: '0 0 14px', color: 'var(--muted)', fontSize: '0.8125rem', lineHeight: 1.5 }}>

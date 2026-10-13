@@ -8,15 +8,15 @@
   <meta name="description" content="Download Community Events App to keep connected with community.">
   <meta property="og:title" content="Community Events Australia">
   <meta property="og:description" content="Download Community Events App to keep connected with community.">
-  <meta property="og:image" content="https://communityevents.siza.info/icons/icon-512.png">
+  <meta property="og:image" content="https://communityconnect.siza.info/icons/icon-512.png">
   <meta property="og:image:width" content="512">
   <meta property="og:image:height" content="512">
-  <meta property="og:url" content="https://communityevents.siza.info/app">
+  <meta property="og:url" content="https://communityconnect.siza.info/app">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary">
   <meta name="twitter:title" content="Community Events Australia">
   <meta name="twitter:description" content="Download Community Events App to keep connected with community.">
-  <meta name="twitter:image" content="https://communityevents.siza.info/icons/icon-512.png">
+  <meta name="twitter:image" content="https://communityconnect.siza.info/icons/icon-512.png">
   <style>
     html,
     body {
@@ -27,7 +27,7 @@
 
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: #0f172a;
+      color: var(--cc-text);
     }
 
     .fallback {
@@ -63,7 +63,7 @@
 
     p {
       margin: 0 0 18px;
-      color: #475569;
+      color: var(--cc-muted);
       font-size: 0.98rem;
       line-height: 1.45;
     }
@@ -78,21 +78,22 @@
       padding: 13px 16px;
       border-radius: 12px;
       text-decoration: none;
-      border: 1px solid #0f766e;
-      color: #0f766e;
+      border: 1px solid var(--cc-primary);
+      color: var(--cc-primary);
       font-weight: 800;
     }
 
     a.button.primary {
-      background: #0f766e;
+      background: var(--cc-primary);
       color: #ffffff;
     }
 
     a {
-      color: #0f766e;
+      color: var(--cc-primary);
       font-weight: 800;
     }
   </style>
+<link rel="stylesheet" href="/static-pages.css"/>
 </head>
 <body>
   <main class="fallback" id="fallback">
@@ -114,7 +115,7 @@
       var iosStore = "https://apps.apple.com/au/app/community-events-australia/id6782770347";
       var androidStore = "https://play.google.com/store/apps/details?id=info.siza.communityevents.app";
       var microsoftStore = "https://apps.microsoft.com/detail/9NDGJZHL86KJ";
-      var webApp = "https://communityevents.siza.info/";
+      var webApp = "https://communityconnect.siza.info/";
       var fallback = document.getElementById("fallback");
       var fallbackText = document.getElementById("fallbackText");
       var storeLink = document.getElementById("storeLink");

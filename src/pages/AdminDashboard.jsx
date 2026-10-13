@@ -1,8 +1,13 @@
+import { EVENT_ADMIN_GROUPS } from '../utils/adminNavigation.mjs';
+import { upcomingEventsCsv } from '../utils/adminEventExport.mjs';
+import DiagnosticsRegister from '../components/DiagnosticsRegister';
+import AdminActionPanels from '../components/AdminActionPanels';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import EventCard from '../components/EventCard';
 import EventFilters from '../components/EventFilters';
 import { saveHijriSettings, getHijriSettings, saveMonthOverride } from '../services/settingsService';
 import { listUsers, updateUserContactProfile, updateUserRole } from '../services/userService';
+import { memberJoinedMillis, memberJoinedLabel, newestMembersFirst } from '../utils/memberProfile.mjs';
 import {
   canAdminAccessEvent,
   canAdminAccessUser,
@@ -29,9 +34,9 @@ import { hasGoogleMapsKey, loadGoogleMapsScript, waitForGoogleMaps } from '../se
 import { localDateStr } from '../services/dateUtils';
 
 const ROLE_LABELS = {
-  [ROLES.USER]:        { label: 'User',        color: '#6b7280', bg: '#f3f4f6' },
-  [ROLES.ADMIN]:       { label: 'Admin',       color: '#0f766e', bg: '#e6f4f1' },
-  [ROLES.SUPER_ADMIN]: { label: 'Super Admin', color: '#7c3aed', bg: '#ede9fe' },
+  [ROLES.USER]:        { label: 'User',        color: 'var(--cc-muted)', bg: 'var(--cc-background)' },
+  [ROLES.ADMIN]:       { label: 'Admin',       color: 'var(--cc-accent-strong)', bg: 'var(--cc-accent-soft)' },
+  [ROLES.SUPER_ADMIN]: { label: 'Super Admin', color: 'var(--cc-purple)', bg: 'var(--cc-purple-soft)' },
 };
 
 const HIJRI_OBSERVANCE_CATEGORIES = ['Wiladat', 'Shahadat', 'Wafat', 'Eid', 'Ayyam-e-Aza', 'Amaal', 'Season', 'Event'];
@@ -140,7 +145,7 @@ function YouTubeConnectCard({ isSuperAdmin = false }) {
   return (
     <div className="card">
       <h3 style={{ margin:'0 0 6px', display:'flex', alignItems:'center', gap:8 }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF0000">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--cc-brand-youtube)">
           <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
         </svg>
         YouTube Live Connection
@@ -151,7 +156,7 @@ function YouTubeConnectCard({ isSuperAdmin = false }) {
       {status === 'checking' && <p className="small">Checking connection…</p>}
       {status === 'connected' && (
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <span style={{ color:'#27ae60', fontWeight:700, fontSize:'0.875rem' }}>✅ Connected to YouTube</span>
+          <span style={{ color:'var(--cc-success)', fontWeight:700, fontSize:'0.875rem' }}>✅ Connected to YouTube</span>
           <button className="btn-light" style={{ fontSize:'0.75rem' }} onClick={handleConnect}>
             Reconnect
           </button>
@@ -159,7 +164,7 @@ function YouTubeConnectCard({ isSuperAdmin = false }) {
       )}
       {status === 'disconnected' && (
         <button onClick={handleConnect} disabled={loading}
-          style={{ background:'#FF0000', color:'white', border:'none',
+          style={{ background:'var(--cc-brand-youtube)', color:'var(--cc-on-primary)', border:'none',
             borderRadius:10, padding:'10px 20px', fontSize:'0.875rem',
             fontWeight:900, cursor:'pointer', display:'flex',
             alignItems:'center', gap:8 }}>
@@ -173,7 +178,7 @@ function YouTubeConnectCard({ isSuperAdmin = false }) {
             Once back, click below to confirm the connection.
           </p>
           <button onClick={checkConnection}
-            style={{ background:'#27ae60', color:'white', border:'none',
+            style={{ background:'var(--cc-success)', color:'var(--cc-on-primary)', border:'none',
               borderRadius:10, padding:'10px 20px', fontSize:'0.875rem',
               fontWeight:900, cursor:'pointer' }}>
             Check Connection Status
@@ -303,7 +308,7 @@ async function geocodeImportRows(rows) {
 }
 
 export default function AdminDashboard({ events, user, profile, setPage, setEditingEvent, handleDelete, handleCopy }) {
-  const [tab,            setTab]            = useState('users');
+  const [tab,            setTab]            = useState('overview');
   const [hijriSettings,  setHijriSettings]  = useState({ adjustmentDays: 0, anchorDate: '', overrides: [] });
   const [anchorDate,     setAnchorDate]     = useState('');
   const [anchorMonth,    setAnchorMonth]    = useState('');
@@ -442,7 +447,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
   // Auto-load admin events when events tab opens
   useEffect(() => {
-    if (tab === 'events' && adminEvents === null) loadAdminEvents();
+    if (['events','import'].includes(tab) && adminEvents === null) loadAdminEvents();
     if (tab === 'orgs'   && orgs === null)        loadOrgs();
   }, [tab]);
 
@@ -1227,19 +1232,20 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     if (!isSuperAdmin) return;
     const rows = filteredUsers
       .slice()
-      .sort((a, b) => String(a.fullName || a.email || '').localeCompare(String(b.fullName || b.email || '')))
+      .sort(newestMembersFirst)
       .map(u => ({
         name: u.fullName || u.displayName || '',
         email: u.email || '',
         phone: u.phone || u.phoneNumber || u.mobile || u.mobileNumber || '',
         role: ROLE_LABELS[u.role]?.label || u.role || 'User',
-        city: cityLabel(normalizeCity(u.defaultCity || DEFAULT_CITY)),
+        city: u.defaultCity ? cityLabel(normalizeCity(u.defaultCity)) : 'No default city',
+        joined: memberJoinedMillis(u) ? new Date(memberJoinedMillis(u)).toISOString() : '',
         reminderEmailEnabled: u.reminderEmailEnabled === false ? 'No' : 'Yes',
         adminAlertsEnabled: u.adminAlertsEnabled === false ? 'No' : 'Yes',
         calendarSynced: calSyncUids.has(u.id) ? 'Yes' : 'No',
         uid: u.id || '',
       }));
-    const headers = ['Name', 'Email', 'Phone', 'Role', 'City', 'Reminder Emails', 'Admin Alerts', 'Calendar Synced', 'UID'];
+    const headers = ['Name', 'Email', 'Phone', 'Role', 'City', 'Joined', 'Reminder Emails', 'Admin Alerts', 'Calendar Synced', 'UID'];
     const csv = [
       headers.map(csvCell).join(','),
       ...rows.map(row => [
@@ -1248,6 +1254,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         row.phone,
         row.role,
         row.city,
+        row.joined,
         row.reminderEmailEnabled,
         row.adminAlertsEnabled,
         row.calendarSynced,
@@ -1357,16 +1364,16 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         return (
           <button key={panel.key} type="button" onClick={() => onClick(panel.key)}
             style={{
-              background: active ? '#e6f4f1' : 'white',
+              background: active ? 'var(--cc-accent-soft)' : 'var(--cc-surface)',
               padding: '14px 12px',
               textAlign: 'center',
               border: 'none',
-              borderBottom: active ? '3px solid #0f766e' : '3px solid transparent',
+              borderBottom: active ? '3px solid var(--cc-accent-strong)' : '3px solid transparent',
               cursor: 'pointer',
               boxShadow: 'none',
             }}>
-            <div style={{ fontSize: '1.375rem', fontWeight: 900, color: '#0f766e' }}>{panel.value}</div>
-            <div style={{ fontSize: '0.6875rem', color: active ? '#0f766e' : 'var(--muted)', marginTop: 2, fontWeight: active ? 900 : 700 }}>
+            <div style={{ fontSize: '1.375rem', fontWeight: 900, color: 'var(--cc-accent-strong)' }}>{panel.value}</div>
+            <div style={{ fontSize: '0.6875rem', color: active ? 'var(--cc-accent-strong)' : 'var(--muted)', marginTop: 2, fontWeight: active ? 900 : 700 }}>
               {panel.label}
             </div>
           </button>
@@ -1375,42 +1382,20 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
     </div>
   );
 
-  const TABS = [
-    { key: 'users',    label: 'Users'         },
-    { key: 'import',   label: 'Import'        },
-    { key: 'events',   label: 'Events'        },
-    { key: 'repair',   label: '🛠 Repair'     },
-    { key: 'orgs',     label: '🏛 Orgs'       },
-    { key: 'settings', label: 'Settings'      },
-  ].filter(t => isSuperAdmin || t.key !== 'repair');
-
+  const adminGroups = EVENT_ADMIN_GROUPS;
+  const exportUpcoming = () => {
+    const csv = upcomingEventsCsv((adminEvents || []).filter(event => canAdminAccessEvent(profile,event)), localDateStr());
+    const url = URL.createObjectURL(new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'}));
+    const link = document.createElement('a'); link.href=url; link.download='Community_Events_Upcoming.csv'; link.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  };
   return (
-    <>
-      {/* Header */}
-      <div className="card" style={{
-        background: 'linear-gradient(135deg,#0f766e,#0b5d57)',
-        color: 'white', border: 'none', marginBottom: 0, borderRadius: '20px 20px 0 0'
-      }}>
-        <h2 style={{ color: 'white', margin: '0 0 4px' }}>Admin Dashboard</h2>
-        <p style={{ color: 'rgba(255,255,255,.85)', margin: 0, fontSize: '0.8125rem' }}>
-          {profile?.fullName || user?.email} · <RoleBadge role={profile?.role} />
-        </p>
-      </div>
+    <div className="cc-events-admin">
+      <header className="cc-admin-header"><h1>Admin Dashboard</h1><p>{profile?.fullName || user?.email} · <RoleBadge role={profile?.role}/></p><p>{isSuperAdmin ? 'All locations' : adminCity} · Events</p></header>
+      {tab === 'overview' ? <AdminActionPanels groups={adminGroups} onSelect={setTab}/> : <nav className="cc-admin-tool-nav" aria-label="Admin tools"><button className="btn-light" onClick={() => setTab('overview')}>← Admin Dashboard</button><span>{adminGroups.flatMap(group => group.items).find(item => item[0] === tab)?.[1]}</span></nav>}
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)',
-        background: 'white', marginBottom: 16, borderRadius: '0 0 20px 20px', overflow: 'hidden' }}>
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)} style={{
-            flex: 1, padding: '12px 0', fontWeight: tab === t.key ? 900 : 600,
-            fontSize: '0.8125rem', border: 'none',
-            borderBottom: tab === t.key ? '3px solid #0f766e' : '3px solid transparent',
-            background: 'white', color: tab === t.key ? '#0f766e' : 'var(--muted)',
-            cursor: 'pointer', boxShadow: 'none',
-          }}>{t.label}</button>
-        ))}
-      </div>
-
+      {tab === 'troubleshooting' && <DiagnosticsRegister user={user} profile={profile}/>}
+      {tab === 'tools' && <><YouTubeConnectCard isSuperAdmin={isSuperAdmin}/><div className="card"><h3>Utilities</h3><button className="btn-light" onClick={() => setTab('import')}>Event Import &amp; Export</button>{isSuperAdmin && <button className="btn-light" onClick={() => setTab('repair')}>Data Repair</button>}</div></>}
+      {tab === 'import' && <section className="card"><h3>Export Upcoming Events</h3><p>Download upcoming events within your administrator access.</p><button disabled={adminEvents === null} onClick={exportUpcoming}>Download upcoming events CSV</button></section>}
       {tab === 'users' && renderSummaryPanels(userSummaryPanels, userPanelFilter, applyUserSummaryFilter)}
       {tab === 'events' && adminEvents !== null && renderSummaryPanels(eventSummaryPanels, adminEventPanelFilter, applyEventSummaryFilter)}
 
@@ -1430,16 +1415,16 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
               <button onClick={() => { setUserPanelFilter('all'); setCalFilter(f => !f); }}
                 style={{ fontSize:'0.75rem', padding:'8px 12px', borderRadius:10,
-                  border: calFilter ? '1px solid #0f766e' : '1px solid var(--border)',
-                  background: calFilter ? '#e6f4f1' : 'white',
-                  color: calFilter ? '#0f766e' : 'var(--text)',
+                  border: calFilter ? '1px solid var(--cc-accent-strong)' : '1px solid var(--border)',
+                  background: calFilter ? 'var(--cc-accent-soft)' : 'var(--cc-surface)',
+                  color: calFilter ? 'var(--cc-accent-strong)' : 'var(--text)',
                   fontWeight:800, cursor:'pointer', whiteSpace:'nowrap' }}>
                 📅 {calFilter ? 'Showing Synced Only' : `Calendar Synced (${calSyncUids.size})`}
               </button>
               {isSuperAdmin && (
                 <button onClick={exportUsersCsv}
                   style={{ fontSize:'0.75rem', padding:'8px 12px', borderRadius:10,
-                    border:'1px solid #0f766e', background:'#0f766e', color:'white',
+                    border:'1px solid var(--cc-accent-strong)', background:'var(--cc-accent-strong)', color:'var(--cc-on-primary)',
                     fontWeight:800, cursor:'pointer', whiteSpace:'nowrap' }}>
                   Export CSV ({filteredUsers.length})
                 </button>
@@ -1486,7 +1471,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             </div>
           )}
           {editingUser && (
-            <div style={{ marginBottom:14, padding:14, border:'1px solid #acd9d5', borderRadius:8, background:'#f3fbfa' }}>
+            <div style={{ marginBottom:14, padding:14, border:'1px solid var(--cc-accent-border)', borderRadius:8, background:'var(--cc-background)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, marginBottom:12 }}>
                 <h4 style={{ margin:0 }}>Edit User Details</h4>
                 <span className="small">{editingUser.phone || 'No phone recorded'}</span>
@@ -1512,68 +1497,60 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             </div>
           )}
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {/* Sort by join date (createdAt asc) */}
-            {[...filteredUsers].sort((a,b) => {
-              const ta = a.createdAt?.seconds || 0;
-              const tb = b.createdAt?.seconds || 0;
-              return ta - tb;
-            }).map(u => (
+            {/* Same newest-first/unknown-last contract as both native dashboards. */}
+            {[...filteredUsers].sort(newestMembersFirst).map(u => (
               <div key={u.id} style={{ display:'flex', alignItems:'flex-start',
                 justifyContent:'space-between', padding:'12px 14px',
                 borderRadius:12, border:'1px solid var(--border)',
-                background: u.id === user?.uid ? '#e6f4f1' : 'white',
+                background: u.id === user?.uid ? 'var(--cc-accent-soft)' : 'var(--cc-surface)',
                 flexWrap:'wrap', gap:8 }}>
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontWeight:800, fontSize:'0.875rem' }}>
-                    {u.fullName || '—'}
-                    {u.id === user?.uid && <span style={{ fontSize:'0.6875rem', color:'#0f766e', marginLeft:6 }}>(you)</span>}
+                    {u.fullName || 'Unnamed user'}
+                    {u.id === user?.uid && <span style={{ fontSize:'0.6875rem', color:'var(--cc-accent-strong)', marginLeft:6 }}>(you)</span>}
                   </div>
-                  <div style={{ fontSize:'0.75rem', color:'var(--muted)' }}>{u.email}</div>
-                  {u.phone && <div style={{ fontSize:'0.75rem', color:'var(--muted)' }}>{u.phone}</div>}
-                  {u.createdAt?.seconds && (
-                    <div style={{ fontSize:'0.6875rem', color:'var(--muted)' }}>
-                      Joined {new Date(u.createdAt.seconds*1000).toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'})}
-                    </div>
-                  )}
+                  <div style={{ fontSize:'0.75rem', color:'var(--cc-muted)' }}>{u.email || 'No email'}</div>
+                  <div style={{ fontSize:'0.75rem', color:'var(--cc-muted)' }}>{u.phone || u.phoneNumber || u.mobile || u.mobileNumber || 'No phone'}</div>
+                  <div style={{ fontSize:'0.6875rem', color:'var(--cc-muted)' }}>Joined {memberJoinedLabel(u)}</div>
                   <div style={{ marginTop:4, display:'flex', gap:6, flexWrap:'wrap', alignItems:'center' }}>
                     <RoleBadge role={u.role} />
                     {isOldMigratedProfile(u) && (
-                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#92400e',
-                        background:'#fef3c7', border:'1px solid #fde68a',
+                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'var(--cc-warning-strong)',
+                        background:'var(--cc-warning-soft)', border:'1px solid var(--cc-warning-border)',
                         borderRadius:20, padding:'2px 9px' }}>
                         Old Migrated
                       </span>
                     )}
                     {!isOldMigratedProfile(u) && isNotMigratedPhoneProfile(u) && (
-                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#1d4ed8',
-                        background:'#dbeafe', border:'1px solid #bfdbfe',
+                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'var(--cc-primary-strong)',
+                        background:'var(--cc-primary-soft)', border:'1px solid var(--cc-primary-border)',
                         borderRadius:20, padding:'2px 9px' }}>
                         Not Migrated
                       </span>
                     )}
                     {!isOldMigratedProfile(u) && isDuplicateEmailProfile(u) && (
-                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#7c2d12',
-                        background:'#ffedd5', border:'1px solid #fed7aa',
+                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'var(--cc-warning-strong)',
+                        background:'var(--cc-warning-soft)', border:'1px solid var(--cc-warning-border)',
                         borderRadius:20, padding:'2px 9px' }}>
                         Duplicate Email
                       </span>
                     )}
                     {!isOldMigratedProfile(u) && u.isActive === false && (
-                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#991b1b',
-                        background:'#fee2e2', border:'1px solid #fecaca',
+                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'var(--cc-danger)',
+                        background:'var(--cc-danger-soft)', border:'1px solid var(--cc-danger-border)',
                         borderRadius:20, padding:'2px 9px' }}>
                         Inactive
                       </span>
                     )}
-                    <span title={cityLabel(normalizeCity(u.defaultCity || DEFAULT_CITY))}
-                      style={{ fontSize:'0.6875rem', fontWeight:900, color:'#0f5f59',
-                        background:'#ecfdf9', border:'1px solid #99d8d1',
+                    <span title={u.defaultCity ? cityLabel(normalizeCity(u.defaultCity)) : 'No default city'}
+                      style={{ fontSize:'0.6875rem', fontWeight:900, color:'var(--cc-accent-strong)',
+                        background:'var(--cc-accent-soft)', border:'1px solid var(--cc-accent-border)',
                         borderRadius:6, padding:'2px 7px', letterSpacing:0 }}>
-                      {cityCode(u.defaultCity || DEFAULT_CITY)}
+                      {u.defaultCity ? cityCode(u.defaultCity) : 'No default city'}
                     </span>
                     {calSyncUids.has(u.id) && (
-                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#0f766e',
-                        background:'#e6f4f1', border:'1px solid #b8e0db',
+                      <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'var(--cc-accent-strong)',
+                        background:'var(--cc-accent-soft)', border:'1px solid var(--cc-accent-border)',
                         borderRadius:20, padding:'2px 9px', display:'inline-flex',
                         alignItems:'center', gap:4 }}>
                         📅 Calendar Synced
@@ -1603,7 +1580,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                         .then(() => { showMsg(`User deleted${doBan ? ' and banned' : ''}.`); setUsers(prev => prev.filter(x => x.id !== u.id)); })
                         .catch(e => showMsg('Delete failed: ' + e.message, 'error'));
                     }} style={{ fontSize:'0.75rem', padding:'5px 10px', borderRadius:8,
-                      background:'#e6f4f1', color:'#0f766e', border:'1px solid #b7d8d4',
+                      background:'var(--cc-danger-soft)', color:'var(--cc-danger)', border:'1px solid var(--cc-danger-border)',
                       fontWeight:700, cursor:'pointer' }}>
                       🗑 Delete{isSuperAdmin ? '/Ban' : ''}
                     </button>
@@ -1635,8 +1612,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             </>
           )}].map(step => (
             <div key={step.n} style={{ display:'flex', gap:12, alignItems:'flex-start', marginBottom:16 }}>
-              <div style={{ width:28, height:28, borderRadius:'50%', background:'#0f766e',
-                color:'white', display:'flex', alignItems:'center', justifyContent:'center',
+              <div style={{ width:28, height:28, borderRadius:'50%', background:'var(--cc-accent-strong)',
+                color:'var(--cc-on-primary)', display:'flex', alignItems:'center', justifyContent:'center',
                 fontWeight:900, fontSize:'0.8125rem', flexShrink:0 }}>{step.n}</div>
               <div style={{flex:1}}>
                 <div style={{ fontWeight:800, marginBottom:6 }}>{step.title}</div>
@@ -1674,7 +1651,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                 <h3 style={{ margin:0 }}>
                   {adminEvents.length} Event(s)
                   {adminEvents.filter(e => e.isLive).length > 0 && (
-                    <span style={{ fontSize:'0.75rem', color:'#0f766e', marginLeft:8 }}>
+                    <span style={{ fontSize:'0.75rem', color:'var(--cc-accent-strong)', marginLeft:8 }}>
                       · {adminEvents.filter(e => e.isLive).length} 🔴 LIVE
                     </span>
                   )}
@@ -1714,7 +1691,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                 </select>
               </div>
               {showTransferPanel && (
-                <div className="card" style={{ border:'1px solid #b2d8d0' }}>
+                <div className="card" style={{ border:'1px solid var(--cc-accent-border)' }}>
                   <h3 style={{ margin:'0 0 6px' }}>
                     Transfer {selectedEventIds.size} selected event{selectedEventIds.size === 1 ? '' : 's'}
                   </h3>
@@ -1764,20 +1741,22 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                     </label>
                     {isAnySeries && (
                       <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                        <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'#7c3aed',
-                          background:'#ede9fe', padding:'4px 8px', borderRadius:6 }}>
+                        <span style={{ fontSize:'0.6875rem', fontWeight:800, color:'var(--cc-purple)',
+                          background:'var(--cc-purple-soft)', padding:'4px 8px', borderRadius:6 }}>
                           <i className="ti ti-calendar-repeat" /> {isRecurringSeries ? 'Recurring' : 'Series'} · {seriesCount} events
                         </span>
-                        <button className="btn-light" disabled={!e.seriesId} onClick={() => {
-                          setEditingEvent({ ...e, __editSeries:true });
-                          setPage('edit');
-                        }} title={!e.seriesId ? 'Use Identify Older Series first' : 'Edit every event in this series'}
+                        <button className="btn-light" disabled={!(e.seriesId || e.recurringSeriesId) || import.meta.env.VITE_READ_ONLY_PREVIEW === 'true'} onClick={async () => {
+                          try {
+                            const { prepareFutureSeriesEdit } = await import('../services/eventSeriesEditService');
+                            setEditingEvent(await prepareFutureSeriesEdit(e)); setPage('edit');
+                          } catch (error) { window.showToast?.(error.message, 'error'); }
+                        }} title={!(e.seriesId || e.recurringSeriesId) ? 'Use Identify Older Series first' : 'Edit future occurrences'}
                           style={{ fontSize:'0.6875rem', padding:'5px 9px', margin:0, opacity:e.seriesId ? 1 : 0.5 }}>
-                          <i className="ti ti-edit" /> {e.seriesId ? 'Edit entire series' : 'Identify series first'}
+                          <i className="ti ti-edit" /> {(e.seriesId || e.recurringSeriesId) ? 'Edit Series' : 'Identify series first'}
                         </button>
                         <button className="btn-light" disabled={!e.seriesId} onClick={() => deleteEntireSeries(e)}
                           title={!e.seriesId ? 'Use Identify Older Series first' : 'Mark every event in this series inactive'}
-                          style={{ fontSize:'0.6875rem', padding:'5px 9px', margin:0, opacity:e.seriesId ? 1 : 0.5, color:'#b91c1c' }}>
+                          style={{ fontSize:'0.6875rem', padding:'5px 9px', margin:0, opacity:e.seriesId ? 1 : 0.5, color:'var(--cc-danger)' }}>
                           <i className="ti ti-trash" /> Delete entire series
                         </button>
                       </div>
@@ -1786,12 +1765,12 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   {e.isLive && (
                     <div style={{ padding:'4px 20px 2px', display:'flex',
                       alignItems:'center', gap:8 }}>
-                      <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'#0f766e',
+                      <span style={{ fontSize:'0.6875rem', fontWeight:900, color:'var(--cc-accent-strong)',
                         animation:'liveBlink 1s infinite' }}>🔴 LIVE</span>
                       <button onClick={() => clearLiveStatus(e.id)}
                         style={{ fontSize:'0.6875rem', padding:'3px 12px', borderRadius:6,
                           border:'none', cursor:'pointer', fontWeight:800,
-                          background:'#fef9e7', color:'#b7950b' }}>
+                          background:'var(--cc-warning-soft)', color:'var(--cc-warning-strong)' }}>
                         Clear Live Status
                       </button>
                     </div>
@@ -1825,7 +1804,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               {repairLoading ? '⏳ Loading…' : repairEvents === null ? '🔍 Load Hijri Events' : '🔄 Refresh'}
             </button>
             {repairMsg && (
-              <p style={{ fontSize: '0.8125rem', color: repairMsg.startsWith('❌') ? 'var(--danger,#dc2626)' : 'var(--teal)',
+              <p style={{ fontSize: '0.8125rem', color: repairMsg.startsWith('❌') ? 'var(--danger,var(--cc-danger))' : 'var(--teal)',
                 fontWeight: 600, margin: '8px 0 0' }}>{repairMsg}</p>
             )}
           </div>
@@ -1853,7 +1832,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   <div key={ev.id} style={{
                     borderBottom: idx < repairEvents.length - 1 ? '1px solid var(--border)' : 'none',
                     padding: '12px 16px',
-                    background: mismatch ? '#fff9f9' : 'white'
+                    background: mismatch ? 'var(--cc-danger-soft)' : 'var(--cc-surface)'
                   }}>
                     {/* Event header */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -1868,7 +1847,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           📅 Gregorian: <strong>{ev.eventDate}</strong>
                         </p>
                         <p style={{ margin: '0 0 2px', fontSize: '0.75rem',
-                          color: mismatch ? '#0f766e' : 'var(--muted)' }}>
+                          color: mismatch ? 'var(--cc-accent-strong)' : 'var(--muted)' }}>
                           🌙 Stored components: <strong>{storedHijriStr}</strong>
                           {mismatch && <span style={{ marginLeft: 6 }}>⚠️ mismatch</span>}
                         </p>
@@ -1879,8 +1858,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                       {!isFixing && (
                         <button onClick={() => startFix(ev)}
                           style={{ fontSize: '0.75rem', padding: '6px 14px', whiteSpace: 'nowrap',
-                            background: mismatch ? '#0f766e' : 'var(--teal)',
-                            color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer',
+                            background: mismatch ? 'var(--cc-accent-strong)' : 'var(--teal)',
+                            color: 'var(--cc-on-primary)', border: 'none', borderRadius: 8, cursor: 'pointer',
                             fontWeight: 700, flexShrink: 0 }}>
                           ✏️ Fix
                         </button>
@@ -1889,7 +1868,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
                     {/* Fix form */}
                     {isFixing && (
-                      <div style={{ marginTop: 12, background: '#f8f9fa',
+                      <div style={{ marginTop: 12, background: 'var(--cc-background)',
                         borderRadius: 10, padding: 12 }}>
                         <p style={{ margin: '0 0 8px', fontSize: '0.8125rem', fontWeight: 700 }}>
                           Enter correct Hijri date:
@@ -1936,14 +1915,14 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button onClick={() => applyFix(ev)} disabled={repairLoading}
-                            style={{ flex: 1, background: 'var(--teal)', color: 'white',
+                            style={{ flex: 1, background: 'var(--teal)', color: 'var(--cc-on-primary)',
                               border: 'none', borderRadius: 8, padding: '9px',
                               fontWeight: 700, cursor: 'pointer', fontSize: '0.8125rem' }}>
                             {repairLoading ? '⏳ Fixing…' : '✅ Apply Fix'}
                           </button>
                           <button onClick={() => setFixingId(null)}
                             style={{ padding: '9px 18px', borderRadius: 8, fontSize: '0.8125rem',
-                              border: '1px solid var(--border)', background: 'white',
+                              border: '1px solid var(--border)', background: 'var(--cc-surface)',
                               cursor: 'pointer', fontWeight: 600 }}>
                             Cancel
                           </button>
@@ -1973,19 +1952,19 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             {newOrgLogo ? (
               <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:14 }}>
                 <img src={newOrgLogo} alt="preview" style={{ width:72, height:72, objectFit:'contain',
-                  borderRadius:12, border:'1px solid var(--border)', background:'#f4f9f8', padding:6 }} />
+                  borderRadius:12, border:'1px solid var(--border)', background:'var(--cc-background)', padding:6 }} />
                 <div>
                   <div style={{ fontSize:'0.75rem', color:'var(--teal)', fontWeight:700, marginBottom:4 }}>Logo ready</div>
                   <button type="button" onClick={() => { setNewOrgLogo(''); setNewOrgLogoFile(null); }}
-                    style={{ fontSize:'0.75rem', padding:'4px 12px', borderRadius:8, background:'#fee2e2',
-                      color:'#dc2626', border:'1px solid #fecaca', cursor:'pointer' }}>
+                    style={{ fontSize:'0.75rem', padding:'4px 12px', borderRadius:8, background:'var(--cc-danger-soft)',
+                      color:'var(--cc-danger)', border:'1px solid var(--cc-danger-border)', cursor:'pointer' }}>
                     Remove
                   </button>
                 </div>
               </div>
             ) : (
               <label style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6,
-                background:'var(--bg)', border:'2px dashed #b9ccc8', borderRadius:14,
+                background:'var(--bg)', border:'2px dashed var(--cc-border)', borderRadius:14,
                 padding:18, cursor:'pointer', color:'var(--teal)', marginBottom:14 }}>
                 <span style={{ fontSize:'1.75rem' }}>Logo</span>
                 <span style={{ fontSize:'0.8125rem', fontWeight:800 }}>Upload logo</span>
@@ -2026,8 +2005,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
             <button onClick={handleAddOrg} disabled={orgsLoading || !newOrgName.trim()}
               style={{
-                background: (orgsLoading || !newOrgName.trim()) ? '#94a3b8' : 'var(--teal,#0f766e)',
-                color:'white', border:'none', borderRadius:11,
+                background: (orgsLoading || !newOrgName.trim()) ? 'var(--cc-muted)' : 'var(--teal,var(--cc-accent-strong))',
+                color:'var(--cc-on-primary)', border:'none', borderRadius:11,
                 padding:'12px 24px', fontWeight:800, fontSize:'0.875rem',
                 cursor: (orgsLoading || !newOrgName.trim()) ? 'not-allowed' : 'pointer',
                 width:'100%', transition:'background 0.2s',
@@ -2036,7 +2015,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             </button>
 
             {orgMsg && (
-              <p style={{ fontSize:'0.8125rem', color: orgMsg.startsWith('Error') ? '#dc2626' : 'var(--teal)',
+              <p style={{ fontSize:'0.8125rem', color: orgMsg.startsWith('Error') ? 'var(--cc-danger)' : 'var(--teal)',
                 fontWeight:700, margin:'10px 0 0' }}>{orgMsg}</p>
             )}
           </div>
@@ -2046,8 +2025,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               <h3 style={{ margin:0 }}>Existing Organisations</h3>
               <button onClick={loadOrgs} disabled={orgsLoading}
                 style={{ fontSize:'0.75rem', padding:'7px 16px', borderRadius:8,
-                  background:'white', border:'1.5px solid var(--teal,#0f766e)',
-                  color:'var(--teal,#0f766e)', cursor:'pointer', fontWeight:800 }}>
+                  background:'var(--cc-surface)', border:'1.5px solid var(--teal,var(--cc-accent-strong))',
+                  color:'var(--teal,var(--cc-accent-strong))', cursor:'pointer', fontWeight:800 }}>
                 {orgsLoading ? 'Loading...' : 'Refresh'}
               </button>
             </div>
@@ -2070,9 +2049,9 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   <React.Fragment key={org.id}>
                     <div style={{ display:'flex', alignItems:'center', gap:12,
                       padding:'12px 14px', borderRadius:12, border:'1px solid var(--border)',
-                      background:'white' }}>
+                      background:'var(--cc-surface)' }}>
                       <div style={{ width:52, height:52, borderRadius:10, overflow:'hidden',
-                        flexShrink:0, background:'#f4f9f8', border:'1px solid var(--border)',
+                        flexShrink:0, background:'var(--cc-background)', border:'1px solid var(--border)',
                         display:'flex', alignItems:'center', justifyContent:'center' }}>
                         {org.logoBase64
                           ? <img src={org.logoBase64} alt={org.name}
@@ -2085,7 +2064,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           {org.name}
                           {org.builtIn && (
                             <span style={{ fontSize:'0.625rem', fontWeight:700, padding:'2px 7px', borderRadius:20,
-                              background:'#e6f4f1', color:'var(--teal,#0f766e)', border:'1px solid #b2d8d0' }}>
+                              background:'var(--cc-accent-soft)', color:'var(--teal,var(--cc-accent-strong))', border:'1px solid var(--cc-accent-border)' }}>
                               built-in
                             </span>
                           )}
@@ -2098,21 +2077,21 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                       <div style={{ display:'flex', gap:6, flexShrink:0 }}>
                         <button onClick={() => editingOrgId === org.id ? setEditingOrgId(null) : startEditOrg(org)}
                           style={{ fontSize:'0.75rem', padding:'6px 12px', borderRadius:8,
-                            background: editingOrgId === org.id ? 'var(--teal)' : '#e6f4f1',
-                            color: editingOrgId === org.id ? 'white' : 'var(--teal)',
-                            border:'1px solid #b2d8d0', fontWeight:700, cursor:'pointer' }}>
+                            background: editingOrgId === org.id ? 'var(--teal)' : 'var(--cc-accent-soft)',
+                            color: editingOrgId === org.id ? 'var(--cc-on-primary)' : 'var(--teal)',
+                            border:'1px solid var(--cc-accent-border)', fontWeight:700, cursor:'pointer' }}>
                           {editingOrgId === org.id ? 'Cancel' : 'Edit'}
                         </button>
                         <button onClick={() => handleDeleteOrg(org)}
-                          style={{ fontSize:'0.75rem', padding:'6px 12px', borderRadius:8, background:'#e6f4f1',
-                            color:'#0f766e', border:'1px solid #b7d8d4', fontWeight:700, cursor:'pointer' }}>
+                          style={{ fontSize:'0.75rem', padding:'6px 12px', borderRadius:8, background:'var(--cc-accent-soft)',
+                            color:'var(--cc-accent-strong)', border:'1px solid var(--cc-accent-border)', fontWeight:700, cursor:'pointer' }}>
                           Delete
                         </button>
                       </div>
                     </div>
 
                     {editingOrgId === org.id && (
-                      <div style={{ background:'#f4f9f8', border:'1px solid #b2d8d0',
+                      <div style={{ background:'var(--cc-background)', border:'1px solid var(--cc-accent-border)',
                         borderRadius:12, padding:14, marginTop:-4 }}>
                         <p style={{ fontWeight:800, fontSize:'0.8125rem', color:'var(--teal)', margin:'0 0 10px' }}>
                           Edit Organisation
@@ -2123,7 +2102,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           {editOrgLogo ? (
                             <img src={editOrgLogo} alt="logo"
                               style={{ width:50, height:50, objectFit:'contain', borderRadius:8,
-                                border:'1px solid var(--border)', background:'#f4f9f8', padding:4 }} />
+                                border:'1px solid var(--border)', background:'var(--cc-background)', padding:4 }} />
                           ) : null}
                           <label style={{ fontSize:'0.75rem', padding:'6px 14px', borderRadius:8,
                             background:'var(--bg)', border:'1px solid var(--border)',
@@ -2135,7 +2114,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                           {editOrgLogo ? (
                             <button type="button" onClick={() => setEditOrgLogo('')}
                               style={{ fontSize:'0.6875rem', padding:'4px 10px', borderRadius:7,
-                                background:'#fee2e2', color:'#dc2626', border:'none', cursor:'pointer' }}>
+                                background:'var(--cc-danger-soft)', color:'var(--cc-danger)', border:'none', cursor:'pointer' }}>
                               Remove
                             </button>
                           ) : null}
@@ -2156,13 +2135,13 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                         <div style={{ display:'flex', gap:8 }}>
                           <button onClick={saveEditOrg} disabled={editOrgSaving || !editOrgName.trim()}
                             style={{ flex:1, padding:'10px', borderRadius:10, border:'none',
-                              background:'var(--teal)', color:'white', fontWeight:800,
+                              background:'var(--teal)', color:'var(--cc-on-primary)', fontWeight:800,
                               fontSize:'0.8125rem', cursor:'pointer', opacity: !editOrgName.trim() ? 0.5 : 1 }}>
                             {editOrgSaving ? 'Saving...' : 'Save Changes'}
                           </button>
                           <button onClick={() => setEditingOrgId(null)}
                             style={{ padding:'10px 16px', borderRadius:10,
-                              border:'1px solid var(--border)', background:'white',
+                              border:'1px solid var(--border)', background:'var(--cc-surface)',
                               fontWeight:700, fontSize:'0.8125rem', cursor:'pointer' }}>
                             Cancel
                           </button>
@@ -2259,7 +2238,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
 
             <form onSubmit={saveHijriObservance} style={{
               display:'grid', gap:10, padding:12, border:'1px solid var(--border)',
-              borderRadius:12, background:'#fbfffe', marginBottom:16,
+              borderRadius:12, background:'var(--cc-surface)', marginBottom:16,
             }}>
               <label>Important date</label>
               <select
@@ -2372,7 +2351,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                             const item = hijriObservances.find(entry => entry.id === editingHijriObsId);
                             if (item) deleteHijriObservance(item);
                           }}
-                          style={{ background:'#fff5f5', color:'#b91c1c', border:'1.5px solid #fecaca' }}
+                          style={{ background:'var(--cc-danger-soft)', color:'var(--cc-danger)', border:'1.5px solid var(--cc-danger-border)' }}
                         >
                           Delete Selected
                         </button>
@@ -2386,6 +2365,10 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
           </>
           )}
 
+        </>
+      )}
+      {tab === 'settings' && !isSuperAdmin && <p className="notice">Calendar adjustments require Super Admin access.</p>}
+      {tab === 'messaging' && (<>
           {/* Email Reminders */}
           <div className="card">
             <h3 style={{ margin:'0 0 6px' }}>Email Reminders</h3>
@@ -2436,8 +2419,6 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             )}
           </div>
 
-          {/* YouTube Connection */}
-          <YouTubeConnectCard isSuperAdmin={isSuperAdmin} />
 
           {/* Community Update Message */}
           <div className="card">
@@ -2461,12 +2442,12 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
               Send the formatted Google Play, Apple App Store and Microsoft Store announcement.
             </p>
             <button onClick={sendStoreAnnouncement} disabled={sendingReminder}
-              style={{ background:'#0f766e', color:'white' }}>
+              style={{ background:'var(--cc-accent-strong)', color:'var(--cc-on-primary)' }}>
               {sendingReminder ? 'Sending…' : 'Send Store Announcement'}
             </button>
           </div>
         </>
       )}
-    </>
+    </div>
   );
 }

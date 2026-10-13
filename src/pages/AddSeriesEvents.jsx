@@ -312,7 +312,7 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
             <button key={t} type="button" onClick={() => setCalType(t)} style={{
               flex: 1, padding: '8px',
               background: calType === t ? 'var(--teal)' : 'transparent',
-              color:      calType === t ? 'white'       : 'var(--text)',
+              color:      calType === t ? 'var(--cc-on-primary)'       : 'var(--text)',
               border: `1.5px solid ${calType === t ? 'var(--teal)' : 'var(--border)'}`,
               borderRadius: 10, fontWeight: 600, fontSize: '0.8125rem', cursor: 'pointer',
             }}>
@@ -323,7 +323,7 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
 
         {/* Gregorian date range */}
         {calType === 'gregorian' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="row">
             <div>
               <label>Start date *</label>
               <input type="date" value={startDate}
@@ -358,7 +358,7 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
               <label style={{ fontWeight: 600, fontSize: '0.8125rem', display: 'block', marginBottom: 6 }}>
                 Start date (Hijri) *
               </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr 90px', gap: 8 }}>
+              <div className="cc-hijri-fields">
                 <input placeholder="Day" type="number" min="1" max="30" value={hStartDay}
                   onChange={handleStartDayChange}
                   style={{ padding: '10px 8px', fontSize: '0.875rem', border: '1px solid var(--border)', borderRadius: 10 }} />
@@ -379,7 +379,7 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
               <label style={{ fontWeight: 600, fontSize: '0.8125rem', display: 'block', marginBottom: 6 }}>
                 End date (Hijri) *
               </label>
-              <div style={{ display: 'grid', gridTemplateColumns: '70px 1fr 90px', gap: 8 }}>
+              <div className="cc-hijri-fields">
                 <input placeholder="Day" type="number" min="1" max="30" value={hEndDay}
                   onChange={handleEndDayChange}
                   style={{ padding: '10px 8px', fontSize: '0.875rem', border: '1px solid var(--border)', borderRadius: 10 }} />
@@ -400,7 +400,7 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
 
         {/* Preview */}
         {preview.length > 0 && (
-          <div style={{ background: 'var(--teal-l,#e6f4f1)', borderRadius: 10, padding: '8px 12px', marginTop: 12 }}>
+          <div style={{ background: 'var(--teal-l,var(--cc-accent-soft))', borderRadius: 10, padding: '8px 12px', marginTop: 12 }}>
             <p style={{ margin: 0, fontSize: '0.8125rem', color: 'var(--teal)', fontWeight: 600 }}>
               ✅ {preview.length} event{preview.length !== 1 ? 's' : ''} will be created
               {preview.length === 60 && ' (maximum 60 days)'}
@@ -419,9 +419,9 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
           </div>
         )}
         {effEnd && effStart && effEnd < effStart && (
-          <p style={{ color: 'var(--danger,#dc2626)', fontSize: '0.8125rem', marginTop: 8 }}>End date must be after start date.</p>
+          <p style={{ color: 'var(--danger,var(--cc-danger))', fontSize: '0.8125rem', marginTop: 8 }}>End date must be after start date.</p>
         )}
-        {error && <p style={{ color: 'var(--danger,#dc2626)', fontSize: '0.8125rem', marginTop: 8 }}>{error}</p>}
+        {error && <p style={{ color: 'var(--danger,var(--cc-danger))', fontSize: '0.8125rem', marginTop: 8 }}>{error}</p>}
       </div>
 
       {preview.length > 0 && (

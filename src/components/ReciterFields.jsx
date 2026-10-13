@@ -25,7 +25,7 @@ export default function ReciterFields({ reciters, setReciters }) {
       <label>Reciters</label>
       {reciters.map((r, i) => (
         <div key={i} style={{
-          background: 'var(--teal-l,#f0fdf4)',
+          background: 'var(--teal-l,var(--cc-success-soft))',
           border: '1px solid var(--border)',
           borderRadius: 12,
           padding: '12px 14px',

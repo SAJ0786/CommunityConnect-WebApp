@@ -1,60 +1,30 @@
+import { useRef, useState } from 'react';
 import EventForm from '../components/EventForm';
+import EventSeriesSchedule from '../components/EventSeriesSchedule';
 import { updateEvent } from '../services/eventService';
-import { collection, getDocs, query, serverTimestamp, where, writeBatch } from 'firebase/firestore';
-import { db } from '../firebase/firebase';
-import { classifyMetroArea } from '../utils/cities';
-
-async function updateEventSeries(sourceEvent, event) {
-  if (!sourceEvent.seriesId) throw new Error('Identify this older series before editing it.');
-  const protectedFields = new Set([
-    'id', '__editSeries', 'eventDate', 'hijriDate', 'hijriDay', 'hijriMonth',
-    'hijriYear', 'enteredAsHijri', 'seriesId', 'recurringSeriesId', 'isRecurring',
-    'recurrenceIndex', 'recurrenceTotal', 'recurrenceRuleSnapshot',
-    'seriesStartDate', 'seriesEndDate',
-    'createdAt', 'createdByUserId', 'createdByUserEmail', 'createdByName',
-    'isLive', 'liveUrl', 'liveWatchUrl', 'liveRoomCode', 'liveStartedAt', 'liveEndedAt'
-  ]);
-  const updates = {
-    ...Object.fromEntries(Object.entries(event).filter(([key]) => !protectedFields.has(key))),
-    metroArea: classifyMetroArea(event.address),
-  };
-  const snap = await getDocs(query(collection(db, 'events'), where('seriesId', '==', sourceEvent.seriesId)));
-  if (snap.empty) throw new Error('No matching series events were found.');
-  for (let offset = 0; offset < snap.docs.length; offset += 450) {
-    const batch = writeBatch(db);
-    snap.docs.slice(offset, offset + 450).forEach(item => {
-      batch.update(item.ref, { ...updates, updatedAt: serverTimestamp() });
-    });
-    await batch.commit();
-  }
-  return snap.docs.length;
-}
-
+import { saveFutureSeriesEdit } from '../services/eventSeriesEditService';
 export default function EditEvent({ editingEvent, onSaved, user, profile, events = [] }) {
+  const [saving, setSaving] = useState(false), [error, setError] = useState(''), pending = useRef(false);
+  const [schedule, setSchedule] = useState({schedule:null,error:''});
   if (!editingEvent) return <div className="card">No event selected.</div>;
-  const submit = async event => {
+  async function submit(event) {
+    if (pending.current) return; pending.current = true; setSaving(true); setError('');
     try {
-      if (editingEvent.__editSeries) {
-        const count = await updateEventSeries(editingEvent, event);
-        window.showToast(`${count} events in the series updated successfully.`, 'success');
-      } else {
-        await updateEvent(editingEvent.id, event);
-        window.showToast('Event updated successfully.', 'success');
-      }
+      if (import.meta.env.VITE_READ_ONLY_PREVIEW === 'true') throw new Error('Disabled in the read-only preview.');
+      if (editingEvent.__editSeries && schedule.error) throw new Error(schedule.error);
+      const count = editingEvent.__editSeries ? await saveFutureSeriesEdit(editingEvent, event, schedule.schedule) : (await updateEvent(editingEvent.id, event), 1);
+      window.showToast?.(editingEvent.__editSeries ? count + ' future occurrences updated.' : 'Event updated.', 'success');
       onSaved();
-    } catch (e) {
-      window.showToast('Error updating event: ' + e.message, 'error');
-    }
-  };
-  return (
-    <EventForm
-      initialEvent={editingEvent}
-      onSubmit={submit}
-      user={user}
-      profile={profile}
-      existingEvents={events}
-      seriesMode={!!editingEvent.__editSeries}
-      submitLabel={editingEvent.__editSeries ? 'Update Entire Series' : 'Update Event'}
-    />
-  );
+    } catch (problem) { setError(problem.message); }
+    finally { pending.current = false; setSaving(false); }
+  }
+  return <>
+    {editingEvent.__editSeries && <section className="card"><h2>Edit Series</h2><p>Update shared details for {editingEvent.__futureIds?.length || 0} future occurrences. Keep the dates or review a new schedule below.</p>
+      <details><summary>Review affected occurrences</summary><ul>{editingEvent.__futureOccurrences?.map(row => <li key={row.id}>{row.eventDate} · {row.startTime} · {row.hostName}</li>)}</ul></details></section>}
+    {editingEvent.__editSeries && <EventSeriesSchedule key={editingEvent.id} source={editingEvent} onChange={setSchedule} disabled={saving}/>}
+    {error && <p className="card" role="alert">{error}</p>}
+    <EventForm key={editingEvent.id + '-' + Boolean(editingEvent.__editSeries)} initialEvent={editingEvent}
+      onSubmit={submit} user={user} profile={profile} existingEvents={events} saving={saving}
+      seriesMode={!!editingEvent.__editSeries} submitLabel={editingEvent.__editSeries ? 'Update Future Occurrences' : 'Update Event'} />
+  </>;
 }

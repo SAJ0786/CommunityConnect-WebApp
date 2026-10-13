@@ -4,34 +4,38 @@ import { httpsCallable } from 'firebase/functions';
 import { functions, db } from '../firebase/firebase';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { YouTubeWatchButton } from '../components/LiveStream';
+import { useDialogFocus } from '../utils/useDialogFocus';
 
 function EndStreamConfirmation({ ending, external, onConfirm, onCancel }) {
+  const dialogRef = useRef(null);
+  useDialogFocus(dialogRef, true, ending ? undefined : onCancel);
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="end-stream-title" style={{
-      position:'fixed', inset:0, zIndex:10002, background:'rgba(0,0,0,.78)',
+    <div ref={dialogRef} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="end-stream-title" style={{
+      position:'fixed', inset:0, zIndex:10002, background:'color-mix(in srgb, var(--cc-media-bg) 78%, transparent)',
       display:'grid', placeItems:'center', padding:24,
     }}>
-      <div style={{ width:'min(100%, 390px)', background:'white', color:'#111827',
-        borderRadius:16, padding:24, textAlign:'center', boxShadow:'0 18px 60px rgba(0,0,0,.5)' }}>
+      <div style={{ width:'min(100%, 390px)', background:'var(--cc-surface)', color:'var(--cc-heading)',
+        maxHeight:'calc(100dvh - 48px)', overflowY:'auto',
+        borderRadius:16, padding:24, textAlign:'center', boxShadow:'0 18px 60px color-mix(in srgb, var(--cc-shadow-base) 50%, transparent)' }}>
         <div style={{ width:58, height:58, margin:'0 auto 14px', borderRadius:'50%',
-          display:'grid', placeItems:'center', background:'#fee2e2', color:'#b91c1c',
+          display:'grid', placeItems:'center', background:'var(--cc-danger-soft)', color:'var(--cc-danger)',
           fontSize:'1.625rem', fontWeight:900 }}>■</div>
         <h2 id="end-stream-title" style={{ margin:'0 0 10px', fontSize:'1.25rem' }}>End this live stream?</h2>
-        <p style={{ margin:'0 0 20px', color:'#4b5563', fontSize:'0.875rem', lineHeight:1.55 }}>
+        <p style={{ margin:'0 0 20px', color:'var(--cc-muted)', fontSize:'0.875rem', lineHeight:1.55 }}>
           {external
             ? 'This removes the live status and Watch on YouTube button from the app. Stop the broadcast separately on the external device.'
             : 'The camera, relay connection and YouTube live video will stop. Viewers will no longer see the Watch on YouTube button.'}
         </p>
         <button onClick={onConfirm} disabled={ending} style={{
           width:'100%', minHeight:50, margin:0, border:0, borderRadius:10,
-          background:'#b91c1c', color:'white', fontSize:'1rem', fontWeight:900,
-          boxShadow:'0 4px 14px rgba(185,28,28,.35)', cursor:'pointer',
+          background:'var(--cc-danger)', color:'var(--cc-on-media)', fontSize:'1rem', fontWeight:900,
+          boxShadow:'0 4px 14px color-mix(in srgb, var(--cc-danger) 35%, transparent)', cursor:'pointer',
         }}>
           {ending ? 'Ending Stream...' : 'Yes, End Stream'}
         </button>
         <button onClick={onCancel} disabled={ending} style={{
-          width:'100%', minHeight:46, margin:'10px 0 0', border:'1px solid #d1d5db',
-          borderRadius:10, background:'white', color:'#374151', fontWeight:800,
+          width:'100%', minHeight:46, margin:'10px 0 0', border:'1px solid var(--cc-media-muted)',
+          borderRadius:10, background:'var(--cc-surface)', color:'var(--cc-text)', fontWeight:800,
           boxShadow:'none', cursor:'pointer',
         }}>Keep Streaming</button>
       </div>
@@ -255,17 +259,17 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
 
   // ── Ended screen ─────────────────────────────────────────────────────────────
   if (ended) return (
-    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.95)', zIndex:9999,
+    <div style={{ position:'fixed', inset:0, background:'color-mix(in srgb, var(--cc-media-bg) 95%, transparent)', zIndex:9999,
       display:'flex', alignItems:'center', justifyContent:'center',
       flexDirection:'column', gap:16, fontFamily:'var(--font,sans-serif)',
       height:'100dvh' }}>
       <div style={{ fontSize:'3.25rem' }}>✅</div>
-      <h3 style={{ color:'white', fontWeight:900, fontSize:'1.25rem', margin:0 }}>Stream Ended</h3>
-      <p style={{ color:'#aaa', fontSize:'0.875rem', textAlign:'center', margin:0, padding:'0 24px' }}>
+      <h3 style={{ color:'var(--cc-on-media)', fontWeight:900, fontSize:'1.25rem', margin:0 }}>Stream Ended</h3>
+      <p style={{ color:'var(--cc-media-muted)', fontSize:'0.875rem', textAlign:'center', margin:0, padding:'0 24px' }}>
         Thank you for streaming with Community Events Australia!
       </p>
       <button onClick={onClose}
-        style={{ background:'#0f766e', color:'white', border:'none',
+        style={{ background:'var(--cc-accent-strong)', color:'var(--cc-on-media)', border:'none',
           borderRadius:12, padding:'12px 28px', fontSize:'0.9375rem',
           fontWeight:900, cursor:'pointer', marginTop:8 }}>
         ← Back to Home
@@ -282,27 +286,27 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
           ? { left:'-99999px', top:0, width:'100vw', height:'100dvh', opacity:0, pointerEvents:'none', visibility:'visible' }
           : { inset:0, height:'100dvh' }),
         zIndex:9999, display:'flex', flexDirection:'column',
-        background:'#000', fontFamily:'var(--font,sans-serif)',
+        background:'var(--cc-media-bg)', fontFamily:'var(--font,sans-serif)',
         paddingBottom:'env(safe-area-inset-bottom)',
       }}>
-        <div style={{ background:'#0f766e', padding:'10px 14px', flexShrink:0,
+        <div style={{ background:'var(--cc-accent-strong)', padding:'10px 14px', flexShrink:0,
           display:'flex', alignItems:'center', justifyContent:'space-between',
           paddingTop:'max(10px, env(safe-area-inset-top))' }}>
-          <div style={{ color:'white', fontWeight:900, fontSize:'0.875rem', display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ color:'var(--cc-on-media)', fontWeight:900, fontSize:'0.875rem', display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ animation:'liveBlink 1s infinite' }}>🔴</span>
             LIVE — {event.eventTypeDisplay || event.eventType || 'Stream'}
           </div>
           <button onClick={onClose}
-            style={{ background:'rgba(255,255,255,0.25)', border:'none', color:'white',
+            style={{ background:'color-mix(in srgb, var(--cc-on-media) 25%, transparent)', border:'none', color:'var(--cc-on-media)',
               borderRadius:8, padding:'6px 14px', fontSize:'0.8125rem', fontWeight:900, cursor:'pointer' }}>
             ← Home
           </button>
         </div>
         <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center',
-          justifyContent:'center', color:'white', gap:18, padding:24, textAlign:'center' }}>
+          justifyContent:'center', color:'var(--cc-on-media)', gap:18, padding:24, textAlign:'center' }}>
           <div style={{ fontSize:'3rem' }}>📺</div>
           <div style={{ fontWeight:900, fontSize:'1.125rem' }}>This event is streaming live</div>
-          <div style={{ fontSize:'0.8125rem', color:'#aaa', maxWidth:320, lineHeight:1.5 }}>
+          <div style={{ fontSize:'0.8125rem', color:'var(--cc-media-muted)', maxWidth:320, lineHeight:1.5 }}>
             Watch on YouTube for the best experience — full quality, works on any device.
           </div>
           <YouTubeWatchButton event={event} />
@@ -317,29 +321,29 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
       <div style={{ position:'fixed', ...(hidden
         ? { left:'-99999px', top:0, width:'100vw', height:'100dvh', opacity:0, pointerEvents:'none' }
         : { inset:0, height:'100dvh' }), zIndex:9999, display:'flex', flexDirection:'column',
-        background:'#090909', color:'white', fontFamily:'var(--font,sans-serif)' }}>
-        <div style={{ background:'#0f766e', padding:'max(10px, env(safe-area-inset-top)) 14px 10px',
+        background:'var(--cc-media-bg)', color:'var(--cc-on-media)', fontFamily:'var(--font,sans-serif)' }}>
+        <div style={{ background:'var(--cc-accent-strong)', padding:'max(10px, env(safe-area-inset-top)) 14px 10px',
           display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
           <div style={{ fontWeight:900, fontSize:'0.875rem' }}><span style={{ animation:'liveBlink 1s infinite' }}>LIVE</span> - EXTERNAL DEVICE</div>
           <div style={{ display:'flex', gap:8 }}>
-            {onMinimise && <button onClick={onMinimise} style={{ background:'rgba(255,255,255,.22)', color:'white',
+            {onMinimise && <button onClick={onMinimise} style={{ background:'color-mix(in srgb, var(--cc-on-media) 22%, transparent)', color:'var(--cc-on-media)',
               border:0, borderRadius:8, padding:'7px 12px', fontWeight:800, cursor:'pointer' }}>App</button>}
-            <button onClick={() => setConfirm(true)} style={{ background:'white', color:'#991b1b',
-              border:'2px solid white', borderRadius:9, padding:'8px 14px', fontSize:'0.875rem',
-              fontWeight:900, cursor:'pointer', boxShadow:'0 2px 10px rgba(0,0,0,.25)' }}>■ End Stream</button>
+            <button onClick={() => setConfirm(true)} style={{ background:'var(--cc-surface)', color:'var(--cc-danger)',
+              border:'2px solid var(--cc-surface)', borderRadius:9, padding:'8px 14px', fontSize:'0.875rem',
+              fontWeight:900, cursor:'pointer', boxShadow:'0 2px 10px color-mix(in srgb, var(--cc-shadow-base) 25%, transparent)' }}>■ End Stream</button>
           </div>
         </div>
         {confirm && <EndStreamConfirmation ending={ending} external onConfirm={handleEnd} onCancel={() => setConfirm(false)} />}
         <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
           padding:24, textAlign:'center', gap:16 }}>
-          <div style={{ width:72, height:72, borderRadius:'50%', background:'#0f766e', display:'grid',
+          <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--cc-accent-strong)', display:'grid',
             placeItems:'center', fontSize:'1.375rem', fontWeight:900 }}>LIVE</div>
-          <h2 style={{ margin:0, fontSize:'1.3125rem' }}>{event.eventTypeDisplay || event.eventType || 'Event'} is live</h2>
-          <p style={{ margin:0, color:'#bbb', maxWidth:430, fontSize:'0.875rem', lineHeight:1.55 }}>
+          <h2 style={{ margin:0, fontSize:'1.3125rem', color:'var(--cc-on-media)' }}>{event.eventTypeDisplay || event.eventType || 'Event'} is live</h2>
+          <p style={{ margin:0, color:'var(--cc-media-muted)', maxWidth:430, fontSize:'0.875rem', lineHeight:1.55 }}>
             Viewers are using the YouTube link supplied for this event. Ending here removes the Watch on YouTube buttons from the app.
           </p>
           <YouTubeWatchButton event={{ ...event, liveWatchUrl:nativeStream.watchUrl || event.liveWatchUrl }} />
-          <p style={{ margin:0, color:'#fbbf24', maxWidth:430, fontSize:'0.75rem', lineHeight:1.5 }}>
+          <p style={{ margin:0, color:'var(--cc-media-warning)', maxWidth:430, fontSize:'0.75rem', lineHeight:1.5 }}>
             You must also stop the broadcast on the external device or in YouTube Studio.
           </p>
         </div>
@@ -358,13 +362,13 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
         zIndex:9999,
         display:'flex',
         flexDirection:'column',
-        background:'linear-gradient(180deg,#062f2f,#020617)',
-        color:'white',
+        background:'linear-gradient(180deg,var(--cc-media-surface),var(--cc-media-bg))',
+        color:'var(--cc-on-media)',
         fontFamily:'var(--font,sans-serif)',
         paddingBottom:'env(safe-area-inset-bottom)',
       }}>
         <div style={{
-          background:'#0f766e',
+          background:'var(--cc-accent-strong)',
           padding:'max(10px, env(safe-area-inset-top)) 14px 10px',
           display:'flex',
           alignItems:'center',
@@ -378,14 +382,14 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
           </div>
           <div style={{ display:'flex', gap:8 }}>
             {onMinimise && (
-              <button onClick={onMinimise} style={{ background:'rgba(255,255,255,.22)', color:'white',
+              <button onClick={onMinimise} style={{ background:'color-mix(in srgb, var(--cc-on-media) 22%, transparent)', color:'var(--cc-on-media)',
                 border:0, borderRadius:8, padding:'7px 12px', fontWeight:800, cursor:'pointer' }}>
                 App
               </button>
             )}
-            <button onClick={handleEnd} disabled={ending} style={{ background:'white', color:'#991b1b',
-              border:'2px solid white', borderRadius:9, padding:'8px 14px', fontSize:'0.875rem',
-              fontWeight:900, cursor:ending ? 'wait' : 'pointer', boxShadow:'0 2px 10px rgba(0,0,0,.25)' }}>
+            <button onClick={handleEnd} disabled={ending} style={{ background:'var(--cc-surface)', color:'var(--cc-danger)',
+              border:'2px solid var(--cc-surface)', borderRadius:9, padding:'8px 14px', fontSize:'0.875rem',
+              fontWeight:900, cursor:ending ? 'wait' : 'pointer', boxShadow:'0 2px 10px color-mix(in srgb, var(--cc-shadow-base) 25%, transparent)' }}>
               {ending ? 'Ending...' : 'End Stream'}
             </button>
           </div>
@@ -402,20 +406,20 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
           gap:16,
         }}>
           <div style={{ fontSize:'2.5rem' }}>📡</div>
-          <h2 style={{ margin:0, fontSize:'1.25rem' }}>
+          <h2 style={{ margin:0, fontSize:'1.25rem', color:'var(--cc-on-media)' }}>
             {phase === 'error' ? 'Native stream needs attention' : 'Native Android stream is active'}
           </h2>
-          <p style={{ margin:0, color:'#cbd5e1', maxWidth:390, lineHeight:1.55, fontSize:'0.875rem' }}>
+          <p style={{ margin:0, color:'var(--cc-media-muted)', maxWidth:390, lineHeight:1.55, fontSize:'0.875rem' }}>
             The camera preview is handled by Android. If the camera screen is not visible, use these app controls to end or recover the stream without leaving the event stuck live.
           </p>
 
           {phase === 'error' && (
             <>
-              <div style={{ color:'#fecaca', fontWeight:800, fontSize:'0.8125rem', maxWidth:390 }}>
+              <div style={{ color:'var(--cc-danger-border)', fontWeight:800, fontSize:'0.8125rem', maxWidth:390 }}>
                 {errMsg || 'The native stream stopped unexpectedly.'}
               </div>
               <button onClick={() => { setErrMsg(''); setPhase('reconnecting'); streamerRef.current?.retryReconnect?.(); }}
-                style={{ background:'#f59e0b', color:'#111827', border:'none', borderRadius:10,
+                style={{ background:'var(--cc-warning)', color:'var(--cc-heading)', border:'none', borderRadius:10,
                   padding:'11px 20px', fontSize:'0.875rem', fontWeight:900, cursor:'pointer' }}>
                 Retry Same YouTube Stream
               </button>
@@ -424,15 +428,15 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
 
           <div style={{
             width:'min(100%, 390px)',
-            background:'rgba(0,0,0,0.28)',
-            border:'1px solid rgba(255,255,255,0.18)',
+            background:'color-mix(in srgb, var(--cc-media-bg) 28%, transparent)',
+            border:'1px solid color-mix(in srgb, var(--cc-on-media) 18%, transparent)',
             borderRadius:14,
             padding:12,
             display:'grid',
             gap:8,
             textAlign:'left',
             fontSize:'0.8125rem',
-            color:'#d1fae5',
+            color:'var(--cc-success-soft)',
           }}>
             <div><strong>Status:</strong> {phase === 'live' ? 'Live' : phase}</div>
             <div><strong>Event:</strong> {event.eventTypeDisplay || event.eventType || 'Event'} {event.hostName ? `- ${event.hostName}` : ''}</div>
@@ -440,8 +444,8 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
           </div>
 
           <button onClick={handleEnd} disabled={ending} style={{ width:'min(100%, 390px)', minHeight:50,
-            background:'#b91c1c', color:'white', border:0, borderRadius:12, fontSize:'1rem',
-            fontWeight:900, cursor:ending ? 'wait' : 'pointer', boxShadow:'0 5px 18px rgba(185,28,28,.35)' }}>
+            background:'var(--cc-danger)', color:'var(--cc-on-media)', border:0, borderRadius:12, fontSize:'1rem',
+            fontWeight:900, cursor:ending ? 'wait' : 'pointer', boxShadow:'0 5px 18px color-mix(in srgb, var(--cc-danger) 35%, transparent)' }}>
             {ending ? 'Ending Stream...' : 'End Stream'}
           </button>
         </div>
@@ -459,7 +463,7 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
         : { inset:0, height:'100dvh' }),
       zIndex:9999, display:'flex', flexDirection:'column',
       paddingBottom:'env(safe-area-inset-bottom)',
-      background:'#000', fontFamily:'var(--font,sans-serif)',
+      background:'var(--cc-media-bg)', fontFamily:'var(--font,sans-serif)',
     }}
       onPointerDown={showControlsTemporarily}
       onMouseMove={showControlsTemporarily}
@@ -469,12 +473,12 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
 
       {/* Header bar */}
       {!isNativeBridgeHost && <div style={{
-        background:'#0f766e', padding:'10px 14px', flexShrink:0,
+        background:'var(--cc-accent-strong)', padding:'10px 14px', flexShrink:0,
         display:'flex', alignItems:'center', justifyContent:'space-between',
         paddingTop:'max(10px, env(safe-area-inset-top))',
         ...topControlsCollapseStyle,
       }}>
-        <div style={{ color:'white', fontWeight:900, fontSize:'0.875rem', display:'flex', alignItems:'center', gap:8 }}>
+        <div style={{ color:'var(--cc-on-media)', fontWeight:900, fontSize:'0.875rem', display:'flex', alignItems:'center', gap:8 }}>
           <span style={{ animation:'liveBlink 1s infinite' }}>🔴</span>
           {phase === 'live' ? 'YOU ARE LIVE' : phase === 'reconnecting' ? 'RECONNECTING…' : phase === 'error' ? 'INTERRUPTED' : 'CONNECTING…'}
         </div>
@@ -482,17 +486,17 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
         <div style={{ display:'flex', gap:8 }}>
           {onMinimise && (
             <button onClick={onMinimise}
-              style={{ background:'rgba(255,255,255,0.25)', border:'none',
-                color:'white', borderRadius:8, padding:'6px 12px',
+              style={{ background:'color-mix(in srgb, var(--cc-on-media) 25%, transparent)', border:'none',
+                color:'var(--cc-on-media)', borderRadius:8, padding:'6px 12px',
                 fontSize:'0.8125rem', fontWeight:900, cursor:'pointer' }}>
               ← App
             </button>
           )}
 
           <button onClick={() => setConfirm(true)}
-            style={{ background:'white', border:'2px solid white', color:'#991b1b',
+            style={{ background:'var(--cc-surface)', border:'2px solid var(--cc-surface)', color:'var(--cc-danger)',
               borderRadius:9, padding:'8px 14px', fontSize:'0.875rem', fontWeight:900,
-              cursor:'pointer', boxShadow:'0 2px 10px rgba(0,0,0,.25)' }}>
+              cursor:'pointer', boxShadow:'0 2px 10px color-mix(in srgb, var(--cc-shadow-base) 25%, transparent)' }}>
             ■ End Stream
           </button>
         </div>
@@ -502,43 +506,43 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
 
       {/* Host note — keep screen open */}
       {!isNativeBridgeHost && <div style={{
-        background:'#fff7ed', color:'#9a3412', fontSize:'0.71875rem', fontWeight:700,
+        background:'var(--cc-warning-soft)', color:'var(--cc-warning-strong)', fontSize:'0.71875rem', fontWeight:700,
         padding:'7px 14px', textAlign:'center', lineHeight:1.4,
-        borderBottom:'1px solid #fed7aa',
+        borderBottom:'1px solid var(--cc-warning-border)',
         ...topControlsCollapseStyle,
       }}>
         🔒 Screen will stay awake automatically while live. Switching apps or locking your phone manually will still pause the broadcast.
       </div>}
 
       {/* Camera preview */}
-      <div style={{ flex:1, position:'relative', background:'#000', minHeight:0 }}>
+      <div style={{ flex:1, position:'relative', background:'var(--cc-media-bg)', minHeight:0 }}>
         {phase === 'error' ? (
           <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
-            alignItems:'center', justifyContent:'center', color:'white', gap:12, padding:24, textAlign:'center' }}>
+            alignItems:'center', justifyContent:'center', color:'var(--cc-on-media)', gap:12, padding:24, textAlign:'center' }}>
             <div style={{ fontSize:'2.5rem' }}>⚠️</div>
             <div style={{ fontWeight:900, fontSize:'1rem' }}>Stream Interrupted</div>
-            <div style={{ fontSize:'0.8125rem', color:'#fca5a5' }}>{errMsg}</div>
-            <div style={{ fontSize:'0.75rem', color:'#ddd' }}>
+            <div style={{ fontSize:'0.8125rem', color:'var(--cc-media-danger)' }}>{errMsg}</div>
+            <div style={{ fontSize:'0.75rem', color:'var(--cc-media-muted)' }}>
               Retry here to keep the same YouTube link for viewers.
             </div>
             <button onClick={() => { setErrMsg(''); setPhase('reconnecting'); streamerRef.current?.retryReconnect?.(); }}
-              style={{ background:'#f59e0b', color:'#111827', border:'none', borderRadius:10,
+              style={{ background:'var(--cc-warning)', color:'var(--cc-heading)', border:'none', borderRadius:10,
                 padding:'10px 18px', fontSize:'0.8125rem', fontWeight:900, cursor:'pointer' }}>
               ↻ Retry Same Stream
             </button>
           </div>
         ) : isNativeBridgeHost ? (
-          <div style={{ position:'absolute', inset:0, background:'#000', display:'none' }}>
+          <div style={{ position:'absolute', inset:0, background:'var(--cc-media-bg)', display:'none' }}>
           </div>
         ) : false ? (
           <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
-            alignItems:'center', justifyContent:'center', color:'white', gap:12, padding:24, textAlign:'center',
-            background:'linear-gradient(180deg,#071f1f,#020617)' }}>
+            alignItems:'center', justifyContent:'center', color:'var(--cc-on-media)', gap:12, padding:24, textAlign:'center',
+            background:'linear-gradient(180deg,var(--cc-media-surface),var(--cc-media-bg))' }}>
             <div style={{ fontSize:'2.25rem' }}>📡</div>
             <div style={{ fontWeight:900, fontSize:'1.0625rem' }}>
               {phase === 'live' ? 'Native Android stream is live' : 'Native Android stream is connecting'}
             </div>
-            <div style={{ fontSize:'0.8125rem', color:'#cbd5e1', lineHeight:1.5, maxWidth:330 }}>
+            <div style={{ fontSize:'0.8125rem', color:'var(--cc-media-muted)', lineHeight:1.5, maxWidth:330 }}>
               The camera preview and controls are handled by Android for better quality. Tap the video screen to show native controls.
             </div>
           </div>
@@ -548,20 +552,20 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
               style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
             {(phase === 'connecting' || phase === 'reconnecting') && (
               <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column',
-                alignItems:'center', justifyContent:'center', color:'white', gap:12,
-                background:'rgba(0,0,0,0.4)' }}>
+                alignItems:'center', justifyContent:'center', color:'var(--cc-on-media)', gap:12,
+                background:'color-mix(in srgb, var(--cc-media-bg) 40%, transparent)' }}>
                 <div style={{ fontSize:'2.5rem' }}>📡</div>
                 <div style={{ fontWeight:900, fontSize:'1rem' }}>
                   {phase === 'reconnecting' ? 'Reconnecting to the same YouTube stream…' : 'Connecting to YouTube…'}
                 </div>
-                <div style={{ fontSize:'0.75rem', color:'#ccc' }}>
+                <div style={{ fontSize:'0.75rem', color:'var(--cc-media-muted)' }}>
                   {phase === 'reconnecting' ? 'Keep this screen open. The viewer link will not change.' : 'Usually takes 10-20 seconds'}
                 </div>
               </div>
             )}
             {phase === 'live' && stats && (
-              <div style={{ position:'absolute', top:10, left:10, background:'rgba(0,0,0,0.6)',
-                color:'white', fontSize:'0.6875rem', fontWeight:700, padding:'4px 10px', borderRadius:8,
+              <div style={{ position:'absolute', top:10, left:10, background:'color-mix(in srgb, var(--cc-media-bg) 60%, transparent)',
+                color:'var(--cc-on-media)', fontSize:'0.6875rem', fontWeight:700, padding:'4px 10px', borderRadius:8,
                 display:'flex', gap:10, transform: controlsAreVisible ? 'translateY(0)' : 'translateY(-8px)',
                 ...overlayControlsStyle }}>
                 <span>{stats.elapsed != null ? fmtTime(stats.elapsed) : '0:00'}</span>
@@ -573,25 +577,25 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
             {phase !== 'error' && (
               <div style={{
                 position:'absolute', left:12, right:12, bottom:64, zIndex:3,
-                background:'rgba(0,0,0,0.68)', color:'white', border:'1px solid rgba(255,255,255,0.18)',
+                background:'color-mix(in srgb, var(--cc-media-bg) 68%, transparent)', color:'var(--cc-on-media)', border:'1px solid color-mix(in srgb, var(--cc-on-media) 18%, transparent)',
                 borderRadius:12, padding:'8px 10px', display:'flex', alignItems:'center', gap:10,
-                boxShadow:'0 6px 20px rgba(0,0,0,0.35)',
+                boxShadow:'0 6px 20px color-mix(in srgb, var(--cc-shadow-base) 35%, transparent)',
                 transform: controlsAreVisible ? 'translateY(0)' : 'translateY(10px)',
                 ...overlayControlsStyle,
               }}>
-                <div style={{ fontSize:'0.75rem', fontWeight:900, minWidth:86, color: micOk ? '#86efac' : '#fca5a5' }}>
+                <div style={{ fontSize:'0.75rem', fontWeight:900, minWidth:86, color: micOk ? 'var(--cc-accent-border)' : 'var(--cc-media-danger)' }}>
                   {micLabel}
                 </div>
                 <div aria-label={`Microphone level ${micPercent}%`} style={{
-                  flex:1, height:9, borderRadius:999, background:'rgba(255,255,255,0.18)', overflow:'hidden',
+                  flex:1, height:9, borderRadius:999, background:'color-mix(in srgb, var(--cc-on-media) 18%, transparent)', overflow:'hidden',
                 }}>
                   <div style={{
                     width:`${micPercent}%`, height:'100%', borderRadius:999,
-                    background: micOk ? '#22c55e' : '#ef4444',
+                    background: micOk ? 'var(--cc-success)' : 'var(--cc-danger)',
                     transition:'width 160ms ease',
                   }} />
                 </div>
-                <div style={{ fontSize:'0.6875rem', fontWeight:800, color:'#d1d5db', minWidth:34, textAlign:'right' }}>
+                <div style={{ fontSize:'0.6875rem', fontWeight:800, color:'var(--cc-media-muted)', minWidth:34, textAlign:'right' }}>
                   {micPercent}%
                 </div>
               </div>
@@ -599,9 +603,9 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
             {orientationWarning && (
               <div style={{
                 position:'absolute', left:16, right:16, top:48, zIndex:3,
-                background:'#fef3c7', color:'#92400e', border:'1px solid #f59e0b',
+                background:'var(--cc-warning-soft)', color:'var(--cc-warning-strong)', border:'1px solid var(--cc-warning)',
                 borderRadius:12, padding:'12px 14px', fontSize:'0.875rem',
-                fontWeight:900, textAlign:'center', boxShadow:'0 8px 24px rgba(0,0,0,0.35)'
+                fontWeight:900, textAlign:'center', boxShadow:'0 8px 24px color-mix(in srgb, var(--cc-shadow-base) 35%, transparent)'
               }}>
                 {orientationWarning}
               </div>
@@ -617,13 +621,13 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
             ...overlayControlsStyle,
           }}>
             <button onClick={handleSwitchCamera}
-              style={{ background:'rgba(0,0,0,0.55)', color:'white', border:'1px solid rgba(255,255,255,0.3)',
+              style={{ background:'color-mix(in srgb, var(--cc-media-bg) 55%, transparent)', color:'var(--cc-on-media)', border:'1px solid color-mix(in srgb, var(--cc-on-media) 30%, transparent)',
                 borderRadius:10, padding:'8px 12px', fontSize:'0.75rem', fontWeight:800, cursor:'pointer' }}>
               🔄 Flip
             </button>
             <button onClick={handleToggleMic}
-              style={{ background: muted ? '#0f766e' : 'rgba(0,0,0,0.55)', color:'white',
-                border:'1px solid rgba(255,255,255,0.3)',
+              style={{ background: muted ? 'var(--cc-accent-strong)' : 'color-mix(in srgb, var(--cc-media-bg) 55%, transparent)', color:'var(--cc-on-media)',
+                border:'1px solid color-mix(in srgb, var(--cc-on-media) 30%, transparent)',
                 borderRadius:10, padding:'8px 12px', fontSize:'0.75rem', fontWeight:800, cursor:'pointer' }}>
               {muted ? '🔇 Mic Off' : '🎙 Mic On'}
             </button>

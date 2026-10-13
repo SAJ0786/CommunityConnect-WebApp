@@ -2,26 +2,26 @@ import React, { useState, useRef, useCallback } from 'react';
 import { STORE_SHARE_LINES } from '../utils/storeLinks';
 
 // ── SVG Icons ────────────────────────────────────────────────────────────────
-const WaIcon = ({ size = 24, color = 'white' }) => (
+const WaIcon = ({ size = 24, color = 'var(--cc-on-primary)' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
     <path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.37 5.07L2 22l5.09-1.34A9.94 9.94 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.66 0-3.22-.46-4.55-1.26l-.32-.19-3.03.8.81-2.96-.21-.34A7.96 7.96 0 014 12c0-4.42 3.58-8 8-8s8 3.58 8 8-3.58 8-8 8zm4.45-5.95c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.39-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.69 2.58 4.1 3.62.57.25 1.02.39 1.37.5.57.18 1.09.16 1.5.1.46-.07 1.43-.58 1.63-1.15.2-.57.2-1.06.14-1.15-.06-.1-.22-.16-.46-.28z"/>
   </svg>
 );
 
-const MapIcon = ({ size = 24, color = 'white' }) => (
+const MapIcon = ({ size = 24, color = 'var(--cc-on-primary)' }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
   </svg>
 );
 
-const ChevL = ({ color = 'white' }) => (
+const ChevL = ({ color = 'var(--cc-on-primary)' }) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
     stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="15 18 9 12 15 6"/>
   </svg>
 );
 
-const ChevR = ({ color = 'white' }) => (
+const ChevR = ({ color = 'var(--cc-on-primary)' }) => (
   <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
     stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="9 18 15 12 9 6"/>
@@ -42,29 +42,29 @@ function CardContent({ e, isGuest }) {
   return (
     <div style={{ height:'100%', display:'flex', flexDirection:'column' }}>
       {/* Red top strip */}
-      <div style={{ height:5, background:'var(--red,#0f766e)', flexShrink:0 }} />
+      <div style={{ height:5, background:'var(--red,var(--cc-accent-strong))', flexShrink:0 }} />
       <div style={{ padding:'16px 18px', flex:1, overflowY:'auto' }}>
         {/* Badges */}
         <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
-          <span style={{ background:'var(--red-l,#e6f4f1)', color:'var(--red,#0f766e)',
+          <span style={{ background:'var(--red-l,var(--cc-accent-soft))', color:'var(--red,var(--cc-accent-strong))',
             fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
             {e.eventTypeDisplay || e.eventType}
           </span>
           <span style={{
-            background: isPrivate ? '#eafaf1' : 'var(--red-l,#e6f4f1)',
-            color: isPrivate ? '#27ae60' : 'var(--red,#0f766e)',
+            background: isPrivate ? 'var(--cc-accent-soft)' : 'var(--red-l,var(--cc-accent-soft))',
+            color: isPrivate ? 'var(--cc-success)' : 'var(--red,var(--cc-accent-strong))',
             fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
             {isPrivate ? '🔒 Private' : '🏛 Centre'}
           </span>
           {e.hijriDate && (
-            <span style={{ background:'#fef9e7', color:'#b7950b',
+            <span style={{ background:'var(--cc-warning-soft)', color:'var(--cc-warning-strong)',
               fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
               🌙 {e.hijriDate}
             </span>
           )}
         </div>
         {/* Title */}
-        <h2 style={{ margin:'0 0 4px', fontSize:'1.125rem', fontWeight:900, color:'var(--text,#1a1a2e)',
+        <h2 style={{ margin:'0 0 4px', fontSize:'1.125rem', fontWeight:900, color:'var(--text,var(--cc-heading))',
           lineHeight:1.25, fontFamily:'var(--font)' }}>
           {e.eventTypeDisplay || e.eventType} Programme
         </h2>
@@ -216,7 +216,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
   // Action button style helper
   const actBtn = (bg, shadow, disabled = false) => ({
     width: 52, height: 52, borderRadius: 16, border: 'none',
-    background: disabled ? 'var(--border,#e8ecef)' : bg,
+    background: disabled ? 'var(--border,var(--cc-border))' : bg,
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.4 : 1,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -238,10 +238,10 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
           <button onClick={() => goTo('prev')} disabled={index === 0 || !!animDir}
             style={actBtn(
-              'var(--red,#0f766e)', '0 4px 14px rgba(15,118,110,0.35)',
+              'var(--red,var(--cc-accent-strong))', '0 4px 14px color-mix(in srgb, var(--cc-accent-strong) 35%, transparent)',
               index === 0
             )}>
-            <ChevL color={index === 0 ? 'var(--muted)' : 'white'} />
+            <ChevL color={index === 0 ? 'var(--muted)' : 'var(--cc-on-primary)'} />
           </button>
           <span style={{ fontSize:'0.5625rem', fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Prev</span>
         </div>
@@ -249,7 +249,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
         {/* Share */}
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
           <button onClick={doShare}
-            style={actBtn('#25d366', '0 4px 16px rgba(37,211,102,0.45)')}>
+            style={actBtn('var(--cc-brand-whatsapp)', '0 4px 16px color-mix(in srgb, var(--cc-brand-whatsapp) 45%, transparent)')}>
             <WaIcon />
           </button>
           <span style={{ fontSize:'0.5625rem', fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Share</span>
@@ -260,8 +260,8 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
           <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
             <button onClick={() => onSaveToggle(cur.id, !isSaved)}
               style={actBtn(
-                isSaved ? '#f39c12' : 'var(--red,#0f766e)',
-                isSaved ? '0 4px 16px rgba(243,156,18,0.45)' : '0 4px 16px rgba(15,118,110,0.35)'
+                isSaved ? 'var(--cc-warning)' : 'var(--red,var(--cc-accent-strong))',
+                isSaved ? '0 4px 16px color-mix(in srgb, var(--cc-warning) 45%, transparent)' : '0 4px 16px color-mix(in srgb, var(--cc-accent-strong) 35%, transparent)'
               )}>
               <span style={{ fontSize:'1.375rem', lineHeight:1 }}>{isSaved ? '⭐' : '☆'}</span>
             </button>
@@ -272,7 +272,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
         {/* Directions */}
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
           <button onClick={doDirections} disabled={isGuest}
-            style={actBtn('#4285f4', '0 4px 16px rgba(66,133,244,0.45)', isGuest)}>
+            style={actBtn('var(--cc-brand-maps)', '0 4px 16px color-mix(in srgb, var(--cc-brand-maps) 45%, transparent)', isGuest)}>
             <MapIcon />
           </button>
           <span style={{ fontSize:'0.5625rem', fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Directions</span>
@@ -282,10 +282,10 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
         <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
           <button onClick={() => goTo('next')} disabled={index >= total - 1 || !!animDir}
             style={actBtn(
-              'var(--red,#0f766e)', '0 4px 14px rgba(15,118,110,0.35)',
+              'var(--red,var(--cc-accent-strong))', '0 4px 14px color-mix(in srgb, var(--cc-accent-strong) 35%, transparent)',
               index >= total - 1
             )}>
-            <ChevR color={index >= total - 1 ? 'var(--muted)' : 'white'} />
+            <ChevR color={index >= total - 1 ? 'var(--muted)' : 'var(--cc-on-primary)'} />
           </button>
           <span style={{ fontSize:'0.5625rem', fontWeight:800, color:'var(--muted)', fontFamily:'var(--font)' }}>Next</span>
         </div>
@@ -299,11 +299,11 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
         {events[index + 2] && (
           <div style={{
             position:'absolute', inset:0, borderRadius:22,
-            background:'var(--card,white)', border:'1px solid var(--border)',
+            background:'var(--card,var(--cc-surface))', border:'1px solid var(--border)',
             transform:'scale(0.94) translateY(14px)', zIndex:1, overflow:'hidden',
-            boxShadow:'0 2px 8px rgba(26,26,46,0.05)',
+            boxShadow:'0 2px 8px color-mix(in srgb, var(--cc-shadow-base) 5%, transparent)',
           }}>
-            <div style={{ height:5, background:'var(--red,#0f766e)' }} />
+            <div style={{ height:5, background:'var(--red,var(--cc-accent-strong))' }} />
           </div>
         )}
 
@@ -311,9 +311,9 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
         {events[index + 1] && (
           <div style={{
             position:'absolute', inset:0, borderRadius:22,
-            background:'var(--card,white)', border:'1px solid var(--border)',
+            background:'var(--card,var(--cc-surface))', border:'1px solid var(--border)',
             transform:'scale(0.97) translateY(7px)', zIndex:2, overflow:'hidden',
-            boxShadow:'0 4px 14px rgba(26,26,46,0.07)',
+            boxShadow:'0 4px 14px color-mix(in srgb, var(--cc-shadow-base) 7%, transparent)',
           }}>
             <CardContent e={events[index + 1]} isGuest={isGuest} />
           </div>
@@ -327,9 +327,9 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
           onTouchEnd={onTouchEnd}
           style={{
             position:'absolute', inset:0, borderRadius:22,
-            background:'var(--card,white)',
+            background:'var(--card,var(--cc-surface))',
             border:'1.5px solid var(--border)',
-            boxShadow:'0 8px 28px rgba(26,26,46,0.10)',
+            boxShadow:'0 8px 28px color-mix(in srgb, var(--cc-shadow-base) 10%, transparent)',
             cursor: dragging ? 'grabbing' : 'grab',
             overflow:'hidden', zIndex:3,
             transform: `translateX(${cardX}) rotate(${cardRot}deg)`,
@@ -339,16 +339,16 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
           {/* NEXT hint */}
           <div style={{
             position:'absolute', top:16, right:16, zIndex:10,
-            background:'var(--red,#0f766e)', color:'white', padding:'5px 13px',
+            background:'var(--red,var(--cc-accent-strong))', color:'var(--cc-on-primary)', padding:'5px 13px',
             borderRadius:9, fontSize:'0.8125rem', fontWeight:900, fontFamily:'var(--font)',
-            border:'2.5px solid white', opacity: hintNext, pointerEvents:'none',
+            border:'2.5px solid var(--cc-surface)', opacity: hintNext, pointerEvents:'none',
           }}>NEXT ›</div>
           {/* PREV hint */}
           <div style={{
             position:'absolute', top:16, left:16, zIndex:10,
-            background:'var(--red,#0f766e)', color:'white', padding:'5px 13px',
+            background:'var(--red,var(--cc-accent-strong))', color:'var(--cc-on-primary)', padding:'5px 13px',
             borderRadius:9, fontSize:'0.8125rem', fontWeight:900, fontFamily:'var(--font)',
-            border:'2.5px solid white', opacity: hintPrev, pointerEvents:'none',
+            border:'2.5px solid var(--cc-surface)', opacity: hintPrev, pointerEvents:'none',
           }}>‹ PREV</div>
           <CardContent e={cur} isGuest={isGuest} />
         </div>
@@ -365,7 +365,7 @@ export default function SwipeCards({ events, isGuest, savedIds, onSaveToggle }) 
             <button key={i} onClick={() => { if (!animating.current) setIndex(idx); }}
               style={{
                 width: idx===index ? 22 : 7, height:7, borderRadius:4, padding:0, border:'none',
-                background: idx===index ? 'var(--red,#0f766e)' : 'var(--border)',
+                background: idx===index ? 'var(--red,var(--cc-accent-strong))' : 'var(--border)',
                 cursor:'pointer', transition:'all 0.25s', boxShadow:'none',
               }}/>
           );

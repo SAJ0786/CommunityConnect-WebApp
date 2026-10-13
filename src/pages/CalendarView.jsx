@@ -10,11 +10,11 @@ import { DEFAULT_CITY, getEventMetroArea, normalizeCity } from '../utils/cities'
 // Category dot colour by audience type
 const dotColor = (a) => {
   const n = a === 'Mixed Audience' ? 'Family Event' : a;
-  if (n === 'Family Event') return '#2563eb';
-  if (n === 'Gents only')   return '#0f766e';
-  if (n === 'Ladies only')  return '#db2777';
-  if (n === 'Kids only')    return '#d97706';
-  return '#16a34a'; // all welcome / default
+  if (n === 'Family Event') return 'var(--cc-audience-family)';
+  if (n === 'Gents only')   return 'var(--cc-audience-gents)';
+  if (n === 'Ladies only')  return 'var(--cc-audience-ladies)';
+  if (n === 'Kids only')    return 'var(--cc-audience-kids)';
+  return 'var(--cc-audience-other)'; // all welcome / default
 };
 
 const MONTHS = ['January','February','March','April','May','June',
@@ -110,6 +110,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
       isExpanded={expandedId === e.id}
       onExpand={(id) => setExpandedId(prev => prev === id ? null : id)}
       savedIds={savedIds} onSaveToggle={onSaveToggle} onStreamStart={onStreamStart}
+      onCalendar={() => setShowSync(true)}
       isGuest={isGuest} />
   );
 
@@ -119,10 +120,10 @@ export default function CalendarView({ events = [], user, profile, setPage,
       <div style={{ padding: '8px 0 16px' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, padding:'4px 16px 12px' }}>
           <button onClick={() => setShowSync(false)} style={{
-            width:40, height:40, borderRadius:12, background:'var(--teal,#0f766e)',
-            border:'none', cursor:'pointer', color:'white', fontSize:'1.375rem', fontWeight:800,
+            width:40, height:40, borderRadius:12, background:'var(--teal,var(--cc-accent-strong))',
+            border:'none', cursor:'pointer', color:'var(--cc-on-primary)', fontSize:'1.375rem', fontWeight:800,
             display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1,
-            boxShadow:'0 2px 8px rgba(15,118,110,0.3)' }}>‹</button>
+            boxShadow:'0 2px 8px color-mix(in srgb, var(--cc-accent-strong) 30%, transparent)' }}>‹</button>
           <h2 style={{ margin:0, fontSize:'1.125rem', fontWeight:800 }}>Sync Calendar</h2>
         </div>
         <CalendarSync user={user} />
@@ -146,12 +147,12 @@ export default function CalendarView({ events = [], user, profile, setPage,
       {/* Prominent Sync button */}
       <button onClick={() => { if (!isGuest) setShowSync(true); }} disabled={isGuest} style={{
         margin:'0 16px 14px', width:'calc(100% - 32px)',
-        background: isGuest ? '#eef4f3' : 'linear-gradient(120deg,#0f766e,#0b5d57)',
-        color: isGuest ? 'var(--muted)' : 'white',
+        background: isGuest ? 'var(--cc-accent-soft)' : 'linear-gradient(120deg,var(--cc-accent-strong),var(--cc-accent-strong))',
+        color: isGuest ? 'var(--muted)' : 'var(--cc-on-primary)',
         border:'none', borderRadius:14, padding:'13px', cursor: isGuest ? 'not-allowed' : 'pointer',
         fontSize:'0.875rem', fontWeight:800, display:'flex', alignItems:'center',
         justifyContent:'center', gap:8,
-        boxShadow: isGuest ? 'none' : '0 4px 14px rgba(15,118,110,0.3)',
+        boxShadow: isGuest ? 'none' : '0 4px 14px color-mix(in srgb, var(--cc-accent-strong) 30%, transparent)',
         opacity: isGuest ? 0.8 : 1 }}>
         🔄 Sync to My Calendar
       </button>
@@ -167,23 +168,23 @@ export default function CalendarView({ events = [], user, profile, setPage,
       )}
 
       {/* Month / Week toggle */}
-      <div style={{ display:'flex', background:'var(--bg,#f4f7f6)', borderRadius:11,
+      <div style={{ display:'flex', background:'var(--bg,var(--cc-background))', borderRadius:11,
         padding:3, margin:'0 16px 14px' }}>
         {['month','week'].map(v => (
           <button key={v} onClick={() => setView(v)} style={{
             flex:1, textAlign:'center', fontSize:'0.8125rem', fontWeight:700, padding:8,
             borderRadius:8, border:'none', cursor:'pointer',
-            background: view===v ? 'white' : 'transparent',
-            color: view===v ? 'var(--teal,#0f766e)' : 'var(--muted)',
-            boxShadow: view===v ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
+            background: view===v ? 'var(--cc-surface)' : 'transparent',
+            color: view===v ? 'var(--teal,var(--cc-accent-strong))' : 'var(--muted)',
+            boxShadow: view===v ? '0 2px 6px color-mix(in srgb, var(--cc-shadow-base) 8%, transparent)' : 'none',
             textTransform:'capitalize' }}>{v}</button>
         ))}
       </div>
 
       <label style={{
         display:'flex', alignItems:'center', justifyContent:'space-between', gap:12,
-        margin:'0 16px 14px', padding:'10px 12px', background:'white',
-        border:'1px solid var(--border,#e8edec)', borderRadius:14,
+        margin:'0 16px 14px', padding:'10px 12px', background:'var(--cc-surface)',
+        border:'1px solid var(--border,var(--cc-border))', borderRadius:14,
         fontSize:'0.8125rem', fontWeight:800, color:'var(--text)',
       }}>
         <span>Show Hijri dates</span>
@@ -191,15 +192,15 @@ export default function CalendarView({ events = [], user, profile, setPage,
           type="checkbox"
           checked={showHijriDates}
           onChange={e => setShowHijriDates(e.target.checked)}
-          style={{ width:20, height:20, accentColor:'var(--teal,#0f766e)' }}
+          style={{ width:20, height:20, accentColor:'var(--teal,var(--cc-accent-strong))' }}
         />
       </label>
 
       {/* ── MONTH VIEW ── */}
       {view === 'month' && (
         <>
-          <div style={{ background:'white', margin:'0 16px 10px', borderRadius:16,
-            padding:'12px 10px 18px', border:'1px solid var(--border,#e8edec)',
+          <div style={{ background:'var(--cc-surface)', margin:'0 16px 10px', borderRadius:16,
+            padding:'12px 10px 18px', border:'1px solid var(--border,var(--cc-border))',
             boxSizing:'border-box', maxWidth:'calc(100vw - 32px)', overflow:'hidden' }}>
             {/* Month nav */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
@@ -232,16 +233,16 @@ export default function CalendarView({ events = [], user, profile, setPage,
                     fontSize: showHijriDates ? '0.9375rem' : '1rem',
                     lineHeight:1, boxSizing:'border-box',
                     fontWeight: isToday || isSel ? 900 : 800,
-                    background: isSel ? 'var(--teal,#0f766e)' : isToday ? '#e6f4f1'
-                      : evs.length ? '#f0faf8' : 'transparent',
-                    color: isSel ? 'white' : 'var(--text)',
-                    boxShadow: evs.length ? '0 4px 12px rgba(15,118,110,0.1)' : 'none',
+                    background: isSel ? 'var(--teal,var(--cc-accent-strong))' : isToday ? 'var(--cc-accent-soft)'
+                      : evs.length ? 'var(--cc-accent-soft)' : 'transparent',
+                    color: isSel ? 'var(--cc-on-primary)' : 'var(--text)',
+                    boxShadow: evs.length ? '0 4px 12px color-mix(in srgb, var(--cc-accent-strong) 10%, transparent)' : 'none',
                   }}>
                     <span style={{ lineHeight:1 }}>{d.getDate()}</span>
                     {showHijriDates && (
                       <small style={{
                         fontSize:'0.55rem', lineHeight:1, fontWeight:800,
-                        color: isSel ? 'rgba(255,255,255,0.88)' : 'var(--teal,#0f766e)',
+                        color: isSel ? 'color-mix(in srgb, var(--cc-surface) 88%, transparent)' : 'var(--teal,var(--cc-accent-strong))',
                         maxWidth:'100%', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis',
                       }}>
                         {hijriShort(d)}
@@ -251,7 +252,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
                       <div style={{ display:'flex', gap:3, position:'absolute', bottom:4 }}>
                         {evs.slice(0,3).map((e,j) => (
                           <i key={j} style={{ width:4.5, height:4.5, borderRadius:'50%',
-                            background: isSel ? 'white' : dotColor(e.audienceType) }} />
+                            background: isSel ? 'var(--cc-on-primary)' : dotColor(e.audienceType) }} />
                         ))}
                       </div>
                     )}
@@ -263,7 +264,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
 
           {/* Selected day events */}
           <div style={{ padding:'18px 18px 8px', fontSize:'0.75rem', fontWeight:800,
-            color:'var(--muted)', position:'relative', zIndex:1, background:'var(--bg,#f4f7f6)' }}>
+            color:'var(--muted)', position:'relative', zIndex:1, background:'var(--bg,var(--cc-background))' }}>
             {new Date(selected + 'T00:00:00').toLocaleDateString('en-AU',
               { weekday:'long', day:'numeric', month:'long' }).toUpperCase()}
             {' · '}{selectedEvents.length} EVENT{selectedEvents.length !== 1 ? 'S' : ''}
@@ -296,11 +297,11 @@ export default function CalendarView({ events = [], user, profile, setPage,
               <div key={i} style={{ padding:'0 16px', marginBottom:4 }}>
                 <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 2px 8px' }}>
                   <span style={{ fontSize:'0.8125rem', fontWeight:800,
-                    color: isWeekend ? 'var(--teal,#0f766e)' : 'var(--text)' }}>
+                    color: isWeekend ? 'var(--teal,var(--cc-accent-strong))' : 'var(--text)' }}>
                     {d.toLocaleDateString('en-AU',{weekday:'short', day:'numeric', month:'short'})}
                   </span>
                   {showHijriDates && (
-                    <span style={{ fontSize:'0.625rem', color:'var(--teal,#0f766e)', fontWeight:800 }}>
+                    <span style={{ fontSize:'0.625rem', color:'var(--teal,var(--cc-accent-strong))', fontWeight:800 }}>
                       {hijriShort(d)}
                     </span>
                   )}
@@ -320,8 +321,8 @@ export default function CalendarView({ events = [], user, profile, setPage,
 }
 
 const navBtn = {
-  width:40, height:40, borderRadius:12, background:'var(--teal,#0f766e)',
-  border:'none', cursor:'pointer', fontSize:'1.375rem', fontWeight:800, color:'white',
+  width:40, height:40, borderRadius:12, background:'var(--teal,var(--cc-accent-strong))',
+  border:'none', cursor:'pointer', fontSize:'1.375rem', fontWeight:800, color:'var(--cc-on-primary)',
   display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1,
-  boxShadow:'0 2px 8px rgba(15,118,110,0.3)',
+  boxShadow:'0 2px 8px color-mix(in srgb, var(--cc-accent-strong) 30%, transparent)',
 };

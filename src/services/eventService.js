@@ -1,8 +1,9 @@
 import {
-  addDoc, collection, deleteDoc, doc, getDocs,
+  addDoc, collection, doc, getDocs,
   orderBy, query, serverTimestamp, updateDoc, where, onSnapshot, limit
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { callMemberOperation } from './memberCallable.mjs';
 import { db, functions } from '../firebase/firebase';
 import { compareEventsByDateTime, localDateStr } from './dateUtils';
 import { classifyMetroArea } from '../utils/cities';
@@ -58,7 +59,14 @@ export async function updateEvent(id, event) {
 }
 
 export async function deleteEvent(id) {
-  return deleteDoc(doc(db, 'events', id));
+  if (typeof id !== 'string' || !id.trim() || id.includes('/')) throw new Error('A valid event reference is required.');
+  // Match native archival semantics. Never fall back to deleting the document
+  // when the backend is unavailable or its result cannot be confirmed.
+  const result = await callMemberOperation(httpsCallable, functions, 'archiveEventRecords', { eventId: id });
+  if (!Number.isInteger(result.data?.archived) || result.data.archived < 1) {
+    throw new Error('Could not confirm that the event was archived. Refresh the event list before retrying.');
+  }
+  return result.data;
 }
 
 // Home page + AI Search — exclude hidden events

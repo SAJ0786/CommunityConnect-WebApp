@@ -45,11 +45,11 @@ export default function StreamedVideos({ isGuest }) {
             alt=""
             loading="lazy"
             referrerPolicy="no-referrer"
-            style={{ width:'100%', aspectRatio:'16 / 9', objectFit:'cover', borderRadius:6, background:'#e5e7eb' }}
+            style={{ width:'100%', aspectRatio:'16 / 9', objectFit:'cover', borderRadius:6, background:'var(--cc-border)' }}
           />
         ) : (
           <div aria-hidden="true" style={{ width:'100%', aspectRatio:'16 / 9', borderRadius:6,
-            display:'grid', placeItems:'center', background:'#f1f5f4', color:'#64748b', fontSize:'2rem' }}>
+            display:'grid', placeItems:'center', background:'var(--cc-background)', color:'var(--cc-muted)', fontSize:'2rem' }}>
             ▶
           </div>
         )}
@@ -58,7 +58,7 @@ export default function StreamedVideos({ isGuest }) {
           <div style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:10 }}>
             <h3 style={{ margin:0, fontSize:'1rem', lineHeight:1.35 }}>{title}</h3>
             <span style={{ flexShrink:0, padding:'3px 7px', borderRadius:99, fontSize:'0.6875rem', fontWeight:800,
-              color:isLive ? '#991b1b' : '#475569', background:isLive ? '#fee2e2' : '#f1f5f9' }}>
+              color:isLive ? 'var(--cc-danger)' : 'var(--cc-muted)', background:isLive ? 'var(--cc-danger-soft)' : 'var(--cc-background)' }}>
               {isLive ? 'LIVE' : 'Completed'}
             </span>
           </div>
@@ -71,7 +71,7 @@ export default function StreamedVideos({ isGuest }) {
         {video.watchUrl ? (
           <a href={video.watchUrl} target="_blank" rel="noreferrer"
             style={{ minHeight:44, display:'flex', alignItems:'center', justifyContent:'center',
-              borderRadius:8, background:'#ff0000', color:'white', textDecoration:'none', fontWeight:900 }}>
+              borderRadius:8, background:'var(--cc-brand-youtube)', color:'var(--cc-on-primary)', textDecoration:'none', fontWeight:900 }}>
             Watch on YouTube
           </a>
         ) : (
@@ -98,8 +98,8 @@ export default function StreamedVideos({ isGuest }) {
       </div>
 
       {isGuest && (
-        <div style={{ padding:'12px 14px', marginBottom:14, border:'1px solid #99d5ce',
-          borderRadius:8, background:'#effcf9', color:'#115e59', fontSize:'0.8125rem', lineHeight:1.5 }}>
+        <div style={{ padding:'12px 14px', marginBottom:14, border:'1px solid var(--cc-accent-border)',
+          borderRadius:8, background:'var(--cc-accent-soft)', color:'var(--cc-accent-strong)', fontSize:'0.8125rem', lineHeight:1.5 }}>
           Sign in to open streamed videos on YouTube.
         </div>
       )}

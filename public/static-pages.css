@@ -1,3 +1,10 @@
+@import url('/theme-tokens.css');
+:root {
+  --teal: var(--cc-primary); --teal-dark: var(--cc-primary-strong);
+  --bg: var(--cc-background); --card: var(--cc-surface);
+  --text: var(--cc-text); --ink: var(--cc-heading); --muted: var(--cc-muted);
+  --border: var(--cc-border); --line: var(--cc-border); --surface: var(--cc-surface);
+}
 .static-back-link {
   position: fixed;
   top: max(14px, env(safe-area-inset-top));
@@ -8,19 +15,19 @@
   gap: 6px;
   min-height: 38px;
   padding: 8px 13px;
-  border: 1px solid rgba(15, 118, 110, 0.22);
+  border: 1px solid var(--cc-primary-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.94);
-  color: #0f766e !important;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  background: var(--cc-glass);
+  color: var(--cc-primary-strong) !important;
+  box-shadow: 0 8px 24px var(--cc-shadow-color);
   font: 800 14px/1.2 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
   text-decoration: none !important;
   backdrop-filter: blur(10px);
 }
 
 .static-back-link:hover {
-  background: #ffffff;
-  border-color: rgba(15, 118, 110, 0.42);
+  background: var(--cc-surface);
+  border-color: var(--cc-primary);
 }
 
 @media (max-width: 520px) {

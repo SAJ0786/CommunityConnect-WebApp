@@ -2,11 +2,17 @@ import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 
 import { onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { auth, firebaseConfigured, functions } from './firebase/firebase';
-import { ensureUserProfile, updateProfile } from './services/userService';
+import { ensureUserProfile, completeMemberProfile, updateProfile } from './services/userService';
 import { deleteEvent, getActiveEvents, listenLiveEvents } from './services/eventService';
 import { saveNativePushToken, startForegroundPushNotifications, syncGrantedNotificationToken } from './services/notificationService';
 import Header from './components/Header';
-import AuthPage from './pages/AuthPage';
+import EventsSidebar from './components/EventsSidebar';
+import ExperienceSwitch from './components/ExperienceSwitch';
+import CompleteMemberProfile from './components/CompleteMemberProfile';
+import { memberEntryState } from './utils/memberProfile.mjs';
+import './styles/directory.css';
+import ExperienceEntry from './pages/ExperienceEntry';
+import { getExperience, readExperience, saveExperience } from './config/experiences.mjs';
 import Home from './pages/Home';
 import BottomNav from './components/BottomNav';
 import AppWalkthrough from './components/AppWalkthrough';
@@ -17,7 +23,6 @@ import { DEFAULT_CITY, normalizeCity } from './utils/cities';
 import {
   clearPrivateEventCaches,
   readEventCache,
-  readProfileCache,
   writeEventCache,
   writeProfileCache,
 } from './services/eventCache';
@@ -26,6 +31,7 @@ const AddEvent = lazy(() => import('./pages/AddEvent'));
 const EditEvent = lazy(() => import('./pages/EditEvent'));
 const AISearch = lazy(() => import('./pages/AISearch'));
 const MyEvents = lazy(() => import('./pages/MyEvents'));
+const HostInbox = lazy(() => import('./pages/HostInbox'));
 const Profile = lazy(() => import('./pages/Profile'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const StreamCard = lazy(() => import('./pages/StreamCard'));
@@ -35,6 +41,8 @@ const InstallApp = lazy(() => import('./pages/InstallApp'));
 const CalendarView = lazy(() => import('./pages/CalendarView'));
 const StreamedVideos = lazy(() => import('./pages/StreamedVideos'));
 const HijriCalendar = lazy(() => import('./pages/HijriCalendar'));
+const BusinessDirectory = lazy(() => import('./pages/BusinessDirectory'));
+const MemberDirectory = lazy(() => import('./business/MemberDirectory'));
 
 function PageLoadingFallback() {
   return (
@@ -49,9 +57,9 @@ function PageLoadingFallback() {
 function MissingConfig() {
   return (
     <div style={{ maxWidth: 560, margin: '40px auto', padding: 24 }}>
-      <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 16, padding: 24 }}>
-        <h2 style={{ color: '#991b1b', margin: '0 0 12px' }}>⚠️ Firebase Not Configured</h2>
-        <p style={{ color: '#7f1d1d', margin: '0 0 8px' }}>
+      <div style={{ background: 'var(--cc-danger-soft)', border: '1px solid var(--cc-danger-border)', borderRadius: 16, padding: 24 }}>
+        <h2 style={{ color: 'var(--cc-danger)', margin: '0 0 12px' }}>⚠️ Firebase Not Configured</h2>
+        <p style={{ color: 'var(--cc-danger)', margin: '0 0 8px' }}>
           Copy <code>.env.example</code> to <code>.env</code>, fill in your Firebase values, then run <code>npm run build && firebase deploy</code>.
         </p>
       </div>
@@ -60,16 +68,36 @@ function MissingConfig() {
 }
 
 export default function App() {
-  const [page, setPage]                 = useState('home');
+  const directoryNavigation = useRef(null);
+  const explicitExperienceChoice = useRef(false);
+  const registerDirectoryNavigation = useCallback(handler => { directoryNavigation.current = handler; }, []);
+  const openAccountMenu = () => window.dispatchEvent(new CustomEvent('community-events-walkthrough-menu', { detail: { open: true } }));
+  const logoutFromDirectory = async () => {
+    try { localStorage.removeItem('socialLoginStarted'); await signOut(auth); }
+    catch { window.alert('Unable to sign out. Please try again.'); }
+  };
+  const [selectedExperience, setSelectedExperience] = useState(() => new URLSearchParams(window.location.search).has('event') ? 'events' : readExperience(window.sessionStorage));
+  const experienceRef = useRef(selectedExperience);
+  const [page, setPage] = useState(() => getExperience(selectedExperience).page);
+  const selectExperience = id => {
+    explicitExperienceChoice.current = true;
+    const experience = saveExperience(window.sessionStorage, id);
+    experienceRef.current = experience.id;
+    setSelectedExperience(experience.id);
+    setPage(experience.page);
+    setAuthError('');
+  };
 
   // Scroll to top whenever the active page changes
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, [page]);
-  const [focusEventId, setFocusEventId] = useState(null);
+  const [focusEventId, setFocusEventId] = useState(() => new URLSearchParams(window.location.search).get('event'));
   const [user, setUser]                 = useState(null);
   const [profile, setProfile]           = useState(null);
   const [profileVerified, setProfileVerified] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const profileRequestRef = useRef(0);
   const [events, setEvents]             = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [offlineMode, setOfflineMode]   = useState(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
@@ -114,12 +142,11 @@ export default function App() {
   const [redirectChecked, setRedirectChecked] = useState(false);
 
   const processingUidRef       = useRef(null);
-  const registrationInProgress = useRef(false); // true while AuthPage collects name/email
   const eventsRequestRef        = useRef(0);
   const authStateSettledRef     = useRef(false);
 
   useEffect(() => {
-    if (!user?.uid || !profile) return undefined;
+    if (!user?.uid || !profileVerified || memberEntryState(user, profile, false) !== 'ready') return undefined;
     const preferenceEnabled = profile.pushNotificationsEnabled !== undefined
       ? profile.pushNotificationsEnabled !== false
       : profile.reminderEmailEnabled !== false;
@@ -136,7 +163,7 @@ export default function App() {
     saveToken({ detail: { token: window.__communityEventsNativePushToken, platform: 'android-native' } });
     startForegroundPushNotifications().catch(() => {});
     return () => window.removeEventListener('community-events-native-push-token', saveToken);
-  }, [user?.uid, profile?.pushNotificationsEnabled, profile?.reminderEmailEnabled, profile]);
+  }, [user?.uid, profileVerified, profile?.pushNotificationsEnabled, profile?.reminderEmailEnabled, profile]);
 
   const loadEvents = useCallback(async (guestMode = authMode === 'guest') => {
     const requestId = ++eventsRequestRef.current;
@@ -165,6 +192,10 @@ export default function App() {
 
   const resetAuthState = useCallback(() => {
     eventsRequestRef.current += 1;
+    profileRequestRef.current += 1;
+    processingUidRef.current = null;
+    setProfileLoading(false);
+    setSavedIds([]);
     setUser(null);
     setProfile(null);
     setProfileVerified(false);
@@ -240,123 +271,57 @@ export default function App() {
     };
   }, [authMode, loadEvents]);
 
-  const buildFallbackProfile = useCallback((authenticatedUser) => ({
-    uid: authenticatedUser.uid,
-    fullName:
-      authenticatedUser.displayName ||
-      authenticatedUser.email ||
-      authenticatedUser.phoneNumber ||
-      'Community Member',
-    email: authenticatedUser.email || '',
-    phoneNumber: authenticatedUser.phoneNumber || '',
-    role: 'user',
-    isProfileFallback: true,
-  }), []);
-
-  const processAuthenticatedUser = useCallback(async (authenticatedUser, extraData = {}) => {
-    if (!authenticatedUser) return;
-
-    // Prevent duplicate processing when getRedirectResult and onAuthStateChanged both fire
+  const processAuthenticatedUser = useCallback(async authenticatedUser => {
+    if (!authenticatedUser || authenticatedUser.isAnonymous || auth.currentUser?.uid !== authenticatedUser.uid) return;
     if (processingUidRef.current === authenticatedUser.uid) return;
     processingUidRef.current = authenticatedUser.uid;
-    setProfileVerified(false);
-
-    // Restore the last verified local snapshot immediately. Network profile
-    // verification and event refresh continue below in parallel.
-    const cachedProfile = readProfileCache(authenticatedUser.uid);
-    const cachedEvents = readEventCache(false, authenticatedUser.uid);
-    const startupProfile = cachedProfile || buildFallbackProfile(authenticatedUser);
+    const request = ++profileRequestRef.current;
+    const current = () => request === profileRequestRef.current && auth.currentUser?.uid === authenticatedUser.uid;
     setUser(authenticatedUser);
-    setProfile(startupProfile);
-    setAuthMode('user');
-    setEvents(cachedEvents?.events || []);
-    setEventsLoading(!cachedEvents?.events?.length);
+    setProfile(null);
+    setProfileVerified(false);
+    setProfileLoading(true);
     setLoading(false);
-    const eventRefresh = loadEvents(false);
-
+    setAuthError('');
     try {
-      console.log('Processing authenticated user:', authenticatedUser.uid);
-
-      let p = null;
-      let profileExtraData = extraData || {};
-      let verifiedProfile = false;
-      try {
-        const isPhoneUser = !!authenticatedUser.phoneNumber ||
-          authenticatedUser.providerData?.some(provider => provider.providerId === 'phone');
-        if (isPhoneUser && !profileExtraData?._linkedFrom && !profileExtraData?.migratedFromUid) {
-          try {
-            const migratePhoneAccountByPhone = httpsCallable(functions, 'migratePhoneAccountByPhone');
-            const result = await migratePhoneAccountByPhone({});
-            if (result.data?.migrated && result.data?.profile) {
-              profileExtraData = { ...profileExtraData, ...result.data.profile };
-            }
-          } catch (migrationErr) {
-            console.warn('Startup phone profile migration check failed:', migrationErr);
-          }
-        }
-
-        p = await ensureUserProfile(authenticatedUser, profileExtraData);
-        verifiedProfile = true;
-        setAuthError('');
-      } catch (profileErr) {
-        console.error('Profile load/create failed:', profileErr.code, profileErr.message);
-
-        // Only force sign-out for banned users — not for Firestore/App Check errors
-        if (profileErr.message?.startsWith('BANNED:')) {
-          throw profileErr;
-        }
-
-        // A transient profile-read failure must not discard a previously
-        // verified cached role/name while the device is offline or slow.
-        p = cachedProfile || buildFallbackProfile(authenticatedUser);
-        setAuthError(
-          profileErr.code === 'permission-denied' || profileErr.code === 'failed-precondition'
-            ? 'Signed in, but the user profile could not be read. Please check Firestore rules and Firebase App Check configuration.'
-            : profileErr.message || 'Signed in, but the user profile could not be loaded.'
-        );
-      }
-
-      setUser(authenticatedUser);
+      const p = await ensureUserProfile(authenticatedUser);
+      if (!current()) return;
       setProfile(p);
-      setProfileVerified(verifiedProfile);
-      if (verifiedProfile && !p?.isProfileFallback) {
-        writeProfileCache(authenticatedUser.uid, p);
+      if (!explicitExperienceChoice.current && !new URLSearchParams(window.location.search).has('event') && ['events','directory'].includes(p.defaultModule)) {
+        const preferred = saveExperience(window.sessionStorage, p.defaultModule === 'directory' ? 'businesses' : 'events');
+        experienceRef.current = preferred.id; setSelectedExperience(preferred.id);
       }
+      setProfileVerified(true);
+      // Refresh and existing sessions use the same gate as first registration.
+      if (memberEntryState(authenticatedUser, p, false) !== 'ready') return;
+      writeProfileCache(authenticatedUser.uid, p);
       setAuthMode('user');
-      try { localStorage.removeItem('socialLoginStarted'); } catch (_) {}
-      setPage('home');
-      // Load saved event IDs
-      try {
-        const { getSavedEvents } = await import('./services/userService');
-        getSavedEvents(authenticatedUser.uid).then(setSavedIds).catch(() => {});
-      } catch {}
-      // Refresh any already-granted push token after login without showing a permission prompt.
+      setPage(getExperience(experienceRef.current).page);
+      setSavedIds(p.savedEvents || []);
       syncGrantedNotificationToken(authenticatedUser.uid, p).catch(() => {});
-
-      await eventRefresh;
-
-      console.log('Login complete — authMode=user');
-    } catch (e) {
-      console.error('Auth processing error:', e.code, e.message);
-
-      setAuthError(
-        e.message?.startsWith('BANNED:')
-          ? '🚫 Your account has been suspended. Contact communityeventssydney@gmail.com'
-          : e.message || 'Login failed. Please try again.'
-      );
-
-      resetAuthState();
-
-      try {
-        await signOut(auth);
-      } catch (signOutErr) {
-        console.warn('Sign-out after failed processing also failed:', signOutErr);
+      await loadEvents(false);
+    } catch (error) {
+      if (current()) {
+        setProfile(null);
+        setProfileVerified(false);
+        setAuthError('Your profile could not be verified. Please reconnect and try again.');
       }
     } finally {
-      processingUidRef.current = null;
-      setLoading(false);
+      if (current()) {
+        processingUidRef.current = null;
+        setProfileLoading(false);
+      }
     }
-  }, [buildFallbackProfile, loadEvents, resetAuthState]);
+  }, [loadEvents]);
+
+  const finishMemberProfile = async details => {
+    const account = auth.currentUser;
+    if (!account || account.uid !== user?.uid) throw new Error('Please sign in again.');
+    const p = await completeMemberProfile(account, details);
+    if (auth.currentUser?.uid !== account.uid) return;
+    if (memberEntryState(account, p, false) !== 'ready') throw new Error('Your profile could not be confirmed. Please try again.');
+    await processAuthenticatedUser(account);
+  };
 
   useEffect(() => {
     if (!firebaseConfigured) {
@@ -416,6 +381,10 @@ export default function App() {
       }
 
       if (u.isAnonymous) {
+        profileRequestRef.current += 1;
+        processingUidRef.current = null;
+        setProfileLoading(false);
+        setProfileVerified(false);
         setUser(u);
         setProfile(null);
         setAuthMode('guest');
@@ -424,26 +393,6 @@ export default function App() {
         await loadEvents(true);
         console.log('Login complete — authMode=guest');
         return;
-      }
-
-      // Block processing if registration is in progress
-      // Also block phone users who may need registration (check after brief delay)
-      if (registrationInProgress.current) {
-        console.log('Registration in progress — skipping onAuthStateChanged processing');
-        setLoading(false);
-        return;
-      }
-
-      // For phone-only users (no email), give AuthPage time to set the flag
-      // before we process — covers the race condition window
-      const isPhoneUser = u.providerData?.[0]?.providerId === 'phone';
-      if (isPhoneUser) {
-        // AuthPage sets registrationInProgress before confirming the OTP.
-        if (registrationInProgress.current) {
-          console.log('Registration flag set — skipping phone user processing');
-          setLoading(false);
-          return;
-        }
       }
 
       await processAuthenticatedUser(u);
@@ -455,7 +404,7 @@ export default function App() {
       if (cancelled || authStateSettledRef.current) return;
       console.warn('Firebase auth startup timed out; releasing splash screen.');
       const current = auth.currentUser;
-      if (current && !current.isAnonymous && !registrationInProgress.current) {
+      if (current && !current.isAnonymous) {
         processAuthenticatedUser(current).catch((err) => {
           console.warn('Timed startup user processing failed:', err);
           setLoading(false);
@@ -555,17 +504,11 @@ export default function App() {
     writeProfileCache(user.uid, nextProfile);
   };
 
-  // Force light mode — single theme only (before any conditional returns)
   useEffect(() => {
-    document.documentElement.removeAttribute('data-theme');
-    try { localStorage.removeItem('theme'); } catch {}
-  }, []);
-
-  useEffect(() => {
-    if (authMode === 'user' && user?.uid && profile && !profile.isProfileFallback) {
+    if (authMode === 'user' && user?.uid && profileVerified && memberEntryState(user, profile, false) === 'ready') {
       writeProfileCache(user.uid, profile);
     }
-  }, [authMode, user?.uid, profile]);
+  }, [authMode, user?.uid, profile, profileVerified]);
 
   useEffect(() => {
     if (profile?.defaultCity) {
@@ -580,41 +523,49 @@ export default function App() {
   if (!firebaseConfigured) return <MissingConfig />;
 
   if (loading) return (
-    <div className="startup-splash" role="status" aria-label="Starting Community Events Australia">
+    <div className="startup-splash" role="status" aria-label="Starting Community Connect Australia">
       <img src="/icons/icon-1024.png" alt="" width="148" height="148" />
-      <h1 style={{ margin:'8px 0 0', color:'#071733', fontSize:'1.55rem', lineHeight:1.15, textAlign:'center' }}>
-        Community Events Australia
+      <h1 style={{ margin:'8px 0 0', color:'var(--cc-heading)', fontSize:'1.55rem', lineHeight:1.15, textAlign:'center' }}>
+        Community Connect Australia
       </h1>
       <div className="startup-splash-progress" aria-hidden="true"><span /></div>
     </div>
   );
 
-  // ── Not logged in — show AuthPage ─────────────────────────────────────────
+  // Choose an experience before sign-in; the destination survives auth callbacks.
   if (!user) return (
     <div className="app-shell">
-      <Header showOnly />
-      <AuthPage
+      {import.meta.env.VITE_LOCAL_PREVIEW === 'true' && <p className="local-preview-notice" role="status">Local development build · live Firebase connection. Sign-in uses your real account. Nothing has been published.</p>}
+      <ExperienceEntry
+        selected={selectedExperience}
+        onSelect={selectExperience}
         authError={authError}
-        onRegistrationStart={() => { registrationInProgress.current = true; }}
-        onAuthComplete={async (u, extraData) => {
-          registrationInProgress.current = false;
+        onAuthComplete={async u => {
           if (!u) {
             await enterAsGuest();
             return;
           }
-          await processAuthenticatedUser(u, extraData || {});
+          await processAuthenticatedUser(u);
         }}
       />
     </div>
   );
 
+  const entryState = memberEntryState(user, profileVerified ? profile : null, profileLoading);
+  if (!['guest', 'ready'].includes(entryState)) return <CompleteMemberProfile
+    key={user.uid + ':' + entryState} user={user} profile={profile} state={entryState}
+    onComplete={finishMemberProfile} onRetry={() => processAuthenticatedUser(user)}
+    onSignOut={async () => { await signOut(auth); resetAuthState(); }}
+  />;
+
   const isGuest    = authMode === 'guest';
   const shared     = { user, profile, events, eventsLoading, offlineMode, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId, selectedCity, setSelectedCity };
-  const guestPage  = ['home','search','calendar','hijri-calendar','streams'].includes(page) ? page : 'home';
+  const guestPage  = ['home','businesses','search','calendar','hijri-calendar','streams'].includes(page) ? page : 'home';
   const activePage = isGuest ? guestPage : (page === 'series' ? 'add' : page);
 
   return (
     <div className="app-shell">
+      {import.meta.env.VITE_LOCAL_PREVIEW === 'true' && <p className="local-preview-notice" role="status">Local development build · live data. Changes you make affect your real account.</p>}
       <ToastContainer />
 
       {/* ── Full-screen stream card — stays MOUNTED while active so the   ── */}
@@ -656,17 +607,17 @@ export default function App() {
           onClick={() => setActiveStream(s => ({ ...s, show: true }))}
           style={{
             position: 'fixed', bottom: 80, right: 16, zIndex: 9998,
-            background: '#0f766e', color: 'white', border: 'none',
+            background: 'var(--cc-accent-strong)', color: 'var(--cc-on-primary)', border: 'none',
             borderRadius: 50, padding: '12px 18px',
             display: 'flex', alignItems: 'center', gap: 8,
             fontWeight: 900, fontSize: '0.8125rem', cursor: 'pointer',
-            boxShadow: '0 4px 20px rgba(15,118,110,0.5)',
+            boxShadow: '0 4px 20px var(--cc-shadow-strong)',
             animation: 'returnPulse 2s infinite',
           }}>
           <span style={{ animation: 'liveBlink 1s infinite' }}>🔴</span>
           Return to Stream
           <style>{`
-            @keyframes returnPulse{0%,100%{box-shadow:0 4px 20px rgba(15,118,110,0.5)}50%{box-shadow:0 4px 32px rgba(15,118,110,0.9)}}
+            @keyframes returnPulse{0%,100%{box-shadow:0 4px 20px var(--cc-shadow-strong)}50%{box-shadow:0 4px 32px var(--cc-shadow-strong)}}
             @keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.3}}
           `}</style>
         </button>
@@ -680,10 +631,10 @@ export default function App() {
           }}
           style={{
             position:'fixed', bottom:80, right:16, zIndex:9998,
-            background:'#b45309', color:'white', border:'2px solid white',
+            background:'var(--cc-warning-strong)', color:'var(--cc-on-primary)', border:'2px solid var(--cc-surface)',
             borderRadius:50, padding:'13px 18px', display:'flex', alignItems:'center', gap:8,
             fontWeight:900, fontSize:'0.8125rem', cursor:'pointer',
-            boxShadow:'0 5px 24px rgba(180,83,9,.5)',
+            boxShadow:'0 5px 24px var(--cc-shadow-strong)',
           }}>
           <span>↻</span> Resume Stream
         </button>
@@ -697,30 +648,39 @@ export default function App() {
         page={activePage} setPage={setPage}
         isGuest={isGuest}
         events={events}
+        onDirectoryCommand={activePage === 'businesses' && !isGuest && import.meta.env.VITE_DIRECTORY_WORKSPACE_ENABLED === 'true' && import.meta.env.VITE_READ_ONLY_PREVIEW !== 'true' ? command => directoryNavigation.current?.(command) : undefined}
         onOpenEvent={(id) => { setFocusEventId(id); setPage('home'); }}
       />
+      <ExperienceSwitch directory={activePage === 'businesses'}
+        onEvents={() => { if (activePage === 'businesses') { if (directoryNavigation.current?.('leave') === false) return; selectExperience('events'); } }}
+        onBusinesses={() => {
+          if (['add', 'edit', 'admin'].includes(activePage)
+            && !window.confirm('Open Business Directory? Any unsaved changes on this page may be lost.')) return;
+          selectExperience('businesses');
+        }} />
 
       {!isGuest && authError && (
-        <div className="card" style={{ margin: '12px auto', maxWidth: 900, borderColor: '#f59e0b', background: '#fffbeb' }}>
-          <p className="small" style={{ margin: 0, color: '#92400e', lineHeight: 1.5 }}>
+        <div className="card" style={{ margin: '12px auto', maxWidth: 900, borderColor: 'var(--cc-warning)', background: 'var(--cc-warning-soft)' }}>
+          <p className="small" style={{ margin: 0, color: 'var(--cc-warning-strong)', lineHeight: 1.5 }}>
             ⚠️ {authError}
           </p>
         </div>
       )}
 
-      {offlineMode && events.length > 0 && (
-        <div className="card" style={{ margin: '10px auto 0', maxWidth: 900, borderColor: '#99d6cf', background: '#e9fbf8' }}>
-          <p className="small" style={{ margin: 0, color: '#0f766e', lineHeight: 1.5, fontWeight: 700 }}>
+      {activePage !== 'businesses' && offlineMode && events.length > 0 && (
+        <div className="card" style={{ margin: '10px auto 0', maxWidth: 900, borderColor: 'var(--cc-accent-border)', background: 'var(--cc-accent-soft)' }}>
+          <p className="small" style={{ margin: 0, color: 'var(--cc-accent-strong)', lineHeight: 1.5, fontWeight: 700 }}>
             Offline mode: showing saved events from this device. Sharing and directions can use saved event details; live status and new updates will refresh when internet returns.
           </p>
         </div>
       )}
 
-      <div className={`app-content-frame ${activePage === 'home' ? 'is-home' : 'is-subpage'}`} style={{ display:'flex', alignItems:'flex-start',
+      <div className={`app-content-frame ${activePage === 'home' ? 'is-home' : 'is-subpage'} ${activePage !== 'businesses' ? 'cc-events-workspace' : ''}`} style={{ display:'flex', alignItems:'flex-start',
         maxWidth: activePage === 'home' ? 1720 : 1200, margin:'0 auto' }}>
+        {activePage !== 'businesses' && <EventsSidebar page={activePage} onNavigate={setPage} isGuest={isGuest} profile={profile}/>}
         <div className={`app-page-main ${activePage === 'home' ? 'is-home' : 'is-subpage'} page-${activePage}`} style={{ flex:1, minWidth:0 }}>
           {/* Prominent back button on all sub-pages (not Home) */}
-          {activePage !== 'home' && (
+          {!['home', 'businesses'].includes(activePage) && (
             <div style={{ padding:'10px 16px 4px' }}>
               <button onClick={() => {
                 if (activePage === 'add' && window.__communityAddEventBack?.()) return;
@@ -728,10 +688,10 @@ export default function App() {
               }}
                 style={{
                   display:'inline-flex', alignItems:'center', gap:8,
-                  background:'white', border:'1px solid var(--border,#e8edec)',
+                  background:'var(--cc-surface)', border:'1px solid var(--border,var(--cc-border))',
                   borderRadius:12, padding:'9px 16px 9px 12px', cursor:'pointer',
-                  fontSize:'0.875rem', fontWeight:800, color:'var(--teal,#0f766e)',
-                  boxShadow:'0 2px 8px rgba(0,0,0,0.05)',
+                  fontSize:'0.875rem', fontWeight:800, color:'var(--teal,var(--cc-accent-strong))',
+                  boxShadow:'0 2px 8px var(--cc-shadow-color)',
                 }}>
                 <span style={{ fontSize:'1.25rem', lineHeight:1 }}>‹</span>
                 Back
@@ -740,6 +700,9 @@ export default function App() {
           )}
 
           <Suspense fallback={<PageLoadingFallback />}>
+          {activePage === 'businesses' && (!isGuest && import.meta.env.VITE_DIRECTORY_WORKSPACE_ENABLED === 'true' && import.meta.env.VITE_READ_ONLY_PREVIEW !== 'true'
+            ? <MemberDirectory key={user.uid} user={user} profile={profile} onRegisterNavigation={registerDirectoryNavigation} renderProfile={() => <Profile user={user} profile={profile} setProfile={setProfile}/>} onSignOut={logoutFromDirectory}/>
+            : <BusinessDirectory selectedCity={selectedCity} setSelectedCity={setSelectedCity} />)}
           {activePage === 'home'      && <Home      {...shared} />}
           {activePage === 'search'    && <AISearch   {...shared} />}
           {activePage === 'streams'   && <StreamedVideos isGuest={isGuest} />}
@@ -759,15 +722,21 @@ export default function App() {
           {!isGuest && activePage === 'add'        && <AddEvent      user={user} profile={profile} onSaved={afterSave} setPage={setPage} events={events} initialEvent={editingEvent?.id === undefined ? editingEvent : null} />}
           {!isGuest && activePage === 'edit'       && <EditEvent     editingEvent={editingEvent} onSaved={afterSave} user={user} profile={profile} events={events} />}
           {!isGuest && activePage === 'my'         && <MyEvents      {...shared} />}
+          {!isGuest && activePage === 'host-inbox' && <HostInbox key={user?.uid} user={user} />}
           {!isGuest && activePage === 'favourites'  && <Favourites    {...shared} />}
+          {!isGuest && activePage === 'notifications' && <MemberDirectory key={user.uid} user={user} profile={profile} view="notifications" onOpenNotification={row => {
+            const destination = ['owner','detail','inbox','reviews','moderation'].includes(row.destination) ? row.destination : 'owner';
+            window.location.hash = `/${destination}/${encodeURIComponent(row.targetId || '')}`;
+            selectExperience('businesses');
+          }}/>}
           {!isGuest && activePage === 'profile'    && <Profile       user={user} profile={profile} setProfile={setProfile} />}
           {!isGuest && activePage === 'admin'      && <AdminDashboard {...shared} />}
           {!isGuest && activePage === 'bulkshare'  && <BulkShare     events={events} profile={profile} user={user} />}
           {!isGuest && activePage === 'install'    && <InstallApp />}
-          {activePage === 'hijri-calendar' && <HijriCalendar profile={profile} />}
+          {activePage === 'hijri-calendar' && <HijriCalendar profile={profile} selectedCity={selectedCity} />}
           </Suspense>
 
-          {isGuest && !['home','search','calendar','hijri-calendar','streams'].includes(page) && (
+          {isGuest && !['home','businesses','search','calendar','hijri-calendar','streams'].includes(page) && (
             <div className="card center" style={{ margin: '40px 16px' }}>
               <div style={{ fontSize: '2rem', marginBottom: 12 }}>🔒</div>
               <h3 style={{ margin: '0 0 8px' }}>Login Required</h3>
@@ -779,42 +748,13 @@ export default function App() {
           )}
         </div>
 
-        {activePage !== 'home' && <div className="desktop-sidebar">
-          <div className="card" style={{ margin: '16px 16px 16px 0' }}>
-            <h3 style={{ margin: '0 0 10px', fontSize: '0.9375rem', color: 'var(--teal)' }}>📅 Community Events</h3>
-            <p className="small" style={{ margin: '0 0 14px', color: 'var(--muted)' }}>Create · Share · Connect</p>
-            {!isGuest && (
-              <button style={{ width: '100%', marginBottom: 8 }} onClick={() => setPage('add')}>
-                ➕ Add Event
-              </button>
-            )}
-            <button className="btn-light" style={{ width: '100%', marginBottom: 8 }} onClick={() => setPage('search')}>
-              ✦ AI Search
-            </button>
-            <button className="btn-light" style={{ width: '100%' }} onClick={() => setPage('calendar')}>
-              📅 Sync Calendar
-            </button>
-          </div>
-          <div className="card" style={{ margin: '0 16px 16px 0' }}>
-            <p className="small" style={{ margin: 0, color: 'var(--muted)', lineHeight: 1.7 }}>
-              🌙 Hijri dates shown on all events<br/>
-              🔔 Evening reminders via email<br/>
-              📲 Install as app on your phone<br/>
-              🤖 AI-powered event search
-            </p>
-          </div>
-        </div>}
       </div>
 
-      <style>{`
-        .desktop-sidebar { display: none; width: 280px; flex-shrink: 0; position: sticky; top: 88px; align-self: flex-start; }
-        @media (min-width: 900px) { .desktop-sidebar { display: block; } }
-      `}</style>
-
-      <BottomNav page={activePage} setPage={setPage} isGuest={isGuest} />
+      {activePage !== 'businesses' && <BottomNav page={activePage} setPage={setPage} isGuest={isGuest} profile={profile} user={user} onOpenMenu={openAccountMenu} />}
+      {activePage === 'businesses' && (isGuest || import.meta.env.VITE_DIRECTORY_WORKSPACE_ENABLED !== 'true' || import.meta.env.VITE_READ_ONLY_PREVIEW === 'true') && <BottomNav directory page="home" isGuest profile={profile} user={user} onOpenMenu={openAccountMenu} setPage={key => { if (key === 'promotions') window.location.assign('/businesses/promotions'); else window.scrollTo({ top: 0 }); }}/>}
 
       {/* First-time walkthrough */}
-      <AppWalkthrough
+      {activePage !== 'businesses' && <AppWalkthrough
         isGuest={isGuest}
         userId={user?.uid}
         completed={profile?.walkthroughCompleted !== false}
@@ -825,7 +765,7 @@ export default function App() {
             console.error('Could not save walkthrough completion:', error);
           });
         }}
-      />
+      />}
     </div>
   );
 }

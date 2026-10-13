@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import EventCard from '../components/EventCard';
 import { getSavedEvents, toggleSavedEvent } from '../services/userService';
 
-export default function Favourites({ user, profile, events, setPage, setEditingEvent, handleDelete, handleCopy }) {
+export default function Favourites({ user, profile, events, setPage, setEditingEvent, handleDelete, handleCopy, onStreamStart }) {
   const [savedIds,   setSavedIds]   = useState([]);
   const [loading,    setLoading]    = useState(true);
   const [expandedId, setExpandedId] = useState(null);
@@ -67,7 +67,7 @@ export default function Favourites({ user, profile, events, setPage, setEditingE
               style={{
                 fontSize:'0.6875rem', padding:'3px 10px', borderRadius:6,
                 border:'none', cursor:'pointer', fontWeight:600,
-                background:'#fef3c7', color:'#92400e',
+                background:'var(--cc-warning-soft)', color:'var(--cc-warning-strong)',
               }}>
               ⭐ Remove from Favourites
             </button>
@@ -77,6 +77,7 @@ export default function Favourites({ user, profile, events, setPage, setEditingE
             onEdit={ev => { setEditingEvent(ev); setPage('edit'); }}
             onDelete={handleDelete}
             onCopy={handleCopy}
+            onStreamStart={onStreamStart} onCalendar={() => setPage('calendar')}
             isExpanded={expandedId === e.id}
             onExpand={setExpandedId}
             savedIds={savedIds}

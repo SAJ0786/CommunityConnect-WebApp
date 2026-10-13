@@ -1,0 +1,7 @@
+.ui-review-bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px 16px; padding:12px 18px; background:var(--cc-warning-soft); border-bottom:1px solid var(--cc-warning-border); }
+.ui-review-bar label { display:flex; align-items:center; gap:6px; }
+.ui-review-bar select { width:auto; margin:0; padding:6px; }
+.ui-review-bar button { padding:8px 10px; font-size:12px; }
+.ui-review-bar span { font-size:12px; color:var(--cc-warning-strong); }
+.ui-review-content { max-width:1200px; margin:18px auto; min-width:0; }
+.ui-review-content.is-home { max-width:1600px; }

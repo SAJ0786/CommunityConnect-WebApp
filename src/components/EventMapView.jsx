@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, MapPinned, Navigation } from 'lucide-react';
 import { compareEventsByDateTime, localDateStr, todayLocal } from '../services/dateUtils';
 import { hasGoogleMapsKey, loadGoogleMapsScript, waitForGoogleMaps } from '../services/googleMapsLoader';
+import { resolveThemeColor } from '../utils/themeColor.mjs';
 
 const TIME_FILTERS = [
   { key: 'today', label: 'Today' },
@@ -12,11 +13,11 @@ const TIME_FILTERS = [
 ];
 
 const AUDIENCE_COLORS = {
-  ladies: '#ec4899',
-  gents: '#2563eb',
-  family: '#0f766e',
-  kids: '#f97316',
-  other: '#64748b',
+  ladies: 'var(--cc-audience-ladies)',
+  gents: 'var(--cc-audience-gents)',
+  family: 'var(--cc-audience-family)',
+  kids: 'var(--cc-audience-kids)',
+  other: 'var(--cc-audience-other)',
 };
 
 function audienceKey(value = '') {
@@ -39,8 +40,8 @@ function audienceLabel(value = '') {
 
 function markerIcon(color) {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="46" viewBox="0 0 34 46">
-    <path fill="${color}" d="M17 1.5C8.4 1.5 1.5 8.4 1.5 17c0 11.8 15.5 27.5 15.5 27.5S32.5 28.8 32.5 17C32.5 8.4 25.6 1.5 17 1.5z"/>
-    <circle cx="17" cy="17" r="6.2" fill="white"/>
+    <path fill="${resolveThemeColor(color)}" d="M17 1.5C8.4 1.5 1.5 8.4 1.5 17c0 11.8 15.5 27.5 15.5 27.5S32.5 28.8 32.5 17C32.5 8.4 25.6 1.5 17 1.5z"/>
+    <circle cx="17" cy="17" r="6.2" fill="${resolveThemeColor('var(--cc-on-primary)')}"/>
   </svg>`;
   return {
     url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,

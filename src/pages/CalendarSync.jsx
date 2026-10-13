@@ -39,10 +39,10 @@ export default function CalendarSync({ user }) {
       {/* Hero */}
       <div className="card" style={{
         background: 'linear-gradient(135deg,var(--teal),var(--teal-dark))',
-        border: 'none', color: 'white'
+        border: 'none', color: 'var(--cc-on-primary)'
       }}>
-        <h2 style={{ color: 'white', margin: '0 0 6px' }}>Community Event Calendar</h2>
-        <p style={{ color: 'rgba(255,255,255,.88)', margin: 0, fontSize: '0.875rem' }}>
+        <h2 style={{ color: 'var(--cc-on-primary)', margin: '0 0 6px' }}>Community Event Calendar</h2>
+        <p style={{ color: 'color-mix(in srgb, var(--cc-surface) 88%, transparent)', margin: 0, fontSize: '0.875rem' }}>
           Subscribe once — your calendar automatically stays up to date as events are added or removed.
         </p>
       </div>
@@ -61,7 +61,7 @@ export default function CalendarSync({ user }) {
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              background: 'var(--teal-l,#e6f4f1)', border: '1px solid var(--teal,#a7d9ce)',
+              background: 'var(--teal-l,var(--cc-accent-soft))', border: '1px solid var(--teal,var(--cc-accent-border))',
               borderRadius: 16, padding: '16px 12px',
               display: 'flex', flexDirection: 'column',
               alignItems: 'center', gap: 10, cursor: 'pointer',
@@ -69,7 +69,7 @@ export default function CalendarSync({ user }) {
             }}
           >
             <div style={{
-              width: 48, height: 48, borderRadius: '50%', background: 'var(--card,white)',
+              width: 48, height: 48, borderRadius: '50%', background: 'var(--card,var(--cc-surface))',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
               <span style={{ fontSize: '2rem', lineHeight: 1 }}>🍎</span>
@@ -87,7 +87,7 @@ export default function CalendarSync({ user }) {
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                background: 'var(--teal-l,#e6f4f1)', border: '1px solid var(--teal,#a7d9ce)',
+                background: 'var(--teal-l,var(--cc-accent-soft))', border: '1px solid var(--teal,var(--cc-accent-border))',
                 borderRadius: 16, padding: '16px 12px',
                 display: 'flex', flexDirection: 'column',
                 alignItems: 'center', gap: 10, cursor: 'pointer', width: '100%',
@@ -95,13 +95,13 @@ export default function CalendarSync({ user }) {
               }}
             >
               <div style={{
-                width: 48, height: 48, borderRadius: '50%', background: 'var(--card,white)',
+                width: 48, height: 48, borderRadius: '50%', background: 'var(--card,var(--cc-surface))',
                 display: 'flex', alignItems: 'center', justifyContent: 'center'
               }}>
                 <span style={{ fontSize: '2rem', lineHeight: 1 }}>🤖</span>
               </div>
               <div>
-                <div style={{ fontWeight: 900, fontSize: '0.9375rem', color: 'var(--red,#0f766e)' }}>Android</div>
+                <div style={{ fontWeight: 900, fontSize: '0.9375rem', color: 'var(--red,var(--cc-accent-strong))' }}>Android</div>
                 <div style={{ fontSize: '0.6875rem', color: 'var(--muted)', marginTop: 2 }}>Google Calendar</div>
               </div>
             </a>
@@ -110,7 +110,7 @@ export default function CalendarSync({ user }) {
               target="_blank"
               rel="noopener noreferrer"
               style={{
-                background: '#f3f4f6', color: 'var(--muted)',
+                background: 'var(--cc-background)', color: 'var(--muted)',
                 border: '1px solid var(--border)',
                 borderRadius: 10, padding: '6px',
                 fontSize: '0.6875rem', cursor: 'pointer',
@@ -138,7 +138,7 @@ export default function CalendarSync({ user }) {
           Use this if the buttons above don't work, or to add to Outlook or any other calendar app.
         </p>
         <div style={{
-          background: 'var(--card,#f4f7f7)', borderRadius: 10, padding: '10px 14px',
+          background: 'var(--card,var(--cc-background))', borderRadius: 10, padding: '10px 14px',
           fontSize: '0.75rem', wordBreak: 'break-all', color: 'var(--teal)',
           fontFamily: 'monospace', border: '1px solid var(--border)', marginBottom: 10
         }}>
@@ -151,7 +151,7 @@ export default function CalendarSync({ user }) {
           If your calendar app doesn't accept the short URL above, use this direct URL:
         </p>
         <div style={{
-          background: 'var(--card,#f4f7f7)', borderRadius: 10, padding: '10px 14px',
+          background: 'var(--card,var(--cc-background))', borderRadius: 10, padding: '10px 14px',
           fontSize: '0.6875rem', wordBreak: 'break-all', color: 'var(--teal)',
           fontFamily: 'monospace', border: '1px solid var(--border)', marginBottom: 10
         }}>
@@ -174,8 +174,8 @@ export default function CalendarSync({ user }) {
             <button key={key} onClick={() => setTab(key)} style={{
               flex: 1, padding: '8px 10px', fontSize: '0.8125rem', borderRadius: 10,
               border: '1px solid var(--border)',
-              background: tab === key ? 'var(--teal)' : 'var(--card,white)',
-              color: tab === key ? 'white' : 'var(--text)',
+              background: tab === key ? 'var(--teal)' : 'var(--card,var(--cc-surface))',
+              color: tab === key ? 'var(--cc-on-primary)' : 'var(--text)',
               fontWeight: tab === key ? 900 : 400, cursor: 'pointer'
             }}>{label}</button>
           ))}

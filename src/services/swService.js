@@ -1,34 +1,51 @@
 // Service Worker registration + update management
+import { registerAppWorker } from './workerRegistration.mjs';
 
 export async function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   try {
-    const reg = await navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' });
+    const reg = await registerAppWorker(navigator.serviceWorker);
     let pendingWorker = reg.waiting || null;
     let refreshing = false;
+    let reloadPending = false;
     let hasControlledPage = Boolean(navigator.serviceWorker.controller);
     const UPDATE_RELOAD_KEY = 'community-events-sw-update-reload-at';
     const UPDATE_RELOAD_WINDOW_MS = 2 * 60 * 1000;
 
     const updateReloadRecentlyStarted = () => {
-      const startedAt = Number(sessionStorage.getItem(UPDATE_RELOAD_KEY) || 0);
-      return startedAt && Date.now() - startedAt < UPDATE_RELOAD_WINDOW_MS;
+      try {
+        const startedAt = Number(sessionStorage.getItem(UPDATE_RELOAD_KEY) || 0);
+        return startedAt && Date.now() - startedAt < UPDATE_RELOAD_WINDOW_MS;
+      } catch { return false; }
     };
 
     const markUpdateReloadStarted = () => {
-      sessionStorage.setItem(UPDATE_RELOAD_KEY, String(Date.now()));
+      try { sessionStorage.setItem(UPDATE_RELOAD_KEY, String(Date.now())); } catch {}
     };
 
     const canActivate = () => {
       try {
-        if (typeof window.__communityCanAutoUpdate === 'function') {
-          return window.__communityCanAutoUpdate();
+        if (document.querySelector?.('[role="dialog"][aria-modal="true"]')) return false;
+        if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return false;
+        for (const guard of [window.__communityCanAutoUpdate, window.__communityDirectoryCanAutoUpdate]) {
+          if (typeof guard === 'function' && !guard()) return false;
         }
-      } catch {}
+      } catch { return false; }
       return true;
     };
 
+    // Another tab can activate the waiting worker while this tab is editing.
+    const reloadWhenSafe = () => {
+      if (!reloadPending || refreshing || !canActivate()) return;
+      refreshing = true;
+      markUpdateReloadStarted();
+      const destination = new URL(window.location.href);
+      destination.searchParams.set('app-update', String(Date.now()));
+      window.location.replace(destination.pathname + destination.search + destination.hash);
+    };
+
     const activateWhenSafe = () => {
+      reloadWhenSafe();
       if (!pendingWorker || !canActivate() || updateReloadRecentlyStarted()) return;
       pendingWorker.postMessage({ type: 'SKIP_WAITING' });
       pendingWorker = null;
@@ -55,13 +72,8 @@ export async function registerSW() {
         hasControlledPage = true;
         return;
       }
-      if (!refreshing) {
-        refreshing = true;
-        markUpdateReloadStarted();
-        // Request a fresh app shell. The cache-busting query prevents an old
-        // HTML document from referencing asset files removed by this update.
-        window.location.replace(`/?app-update=${Date.now()}`);
-      }
+      reloadPending = true;
+      reloadWhenSafe();
     });
 
     // Check on launch, every 15 minutes, when returning to the app, and when

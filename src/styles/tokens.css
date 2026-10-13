@@ -1,0 +1,71 @@
+/* Shared blue palette for every Community Connect web screen. Colour literals belong
+ * here, not in feature UI. Future schemes override these semantic properties. */
+:root {
+  --cc-primary: #2563eb;
+  --cc-primary-strong: #1d4ed8;
+  --cc-primary-soft: #e8f0ff;
+  --cc-primary-border: #c3d4fb;
+  --cc-accent: var(--cc-primary);
+  --cc-accent-strong: var(--cc-primary-strong);
+  --cc-accent-soft: var(--cc-primary-soft);
+  --cc-accent-border: var(--cc-primary-border);
+  --cc-purple: #7c53bd;
+  --cc-purple-soft: #f1ecfb;
+  --cc-rose: #c94970;
+  --cc-rose-soft: #fbeaf0;
+  --cc-warning: #c98b13;
+  --cc-warning-strong: #78530b;
+  --cc-warning-soft: #fff4d9;
+  --cc-warning-border: #e4c47f;
+  --cc-success: #18794e;
+  --cc-success-soft: #eaf7ef;
+  --cc-success-border: #b8dec9;
+  --cc-danger: #c8342c;
+  --cc-danger-soft: #fff0ef;
+  --cc-danger-border: #edbab7;
+  --cc-heading: #11192f;
+  --cc-text: #192238;
+  --cc-muted: #66717d;
+  --cc-border: #dce3ee;
+  --cc-surface: #ffffff;
+  --cc-background: #f5f7fb;
+  --cc-on-primary: #ffffff;
+  --cc-disabled: #66717d;
+  --cc-disabled-surface: #e9edf4;
+  --cc-glass: rgba(255,255,255,0.88);
+  --cc-glass-border: rgba(255,255,255,0.82);
+  --cc-focus: var(--cc-primary);
+  --cc-focus-glow: color-mix(in srgb, var(--cc-primary) 15%, transparent);
+  --cc-danger-glow: color-mix(in srgb, var(--cc-danger) 12%, transparent);
+  --cc-overlay: rgba(17,25,47,0.45);
+  --cc-shadow-color: rgba(17,25,47,0.09);
+  --cc-shadow-strong: rgba(17,25,47,0.18);
+  --cc-shadow-base: #11192f;
+  --cc-overlay-base: #11192f;
+  /* Video stages need their own contrast regardless of the page surface. */
+  --cc-media-bg: #020617;
+  --cc-media-surface: #192238;
+  --cc-on-media: #ffffff;
+  --cc-media-muted: #cbd5e1;
+  --cc-media-border: #66717d;
+  --cc-media-accent: #93c5fd;
+  --cc-media-warning: #fde68a;
+  --cc-media-danger: #fca5a5;
+  /* Third-party identities remain separate from the application palette. */
+  --cc-brand-whatsapp: #25d366;
+  --cc-brand-whatsapp-text: #087c46;
+  --cc-brand-maps: #4285f4;
+  --cc-brand-youtube: #ff0000;
+  --cc-audience-family: var(--cc-primary);
+  --cc-audience-gents: var(--cc-success);
+  --cc-audience-ladies: var(--cc-rose);
+  --cc-audience-kids: var(--cc-warning-strong);
+  --cc-audience-other: var(--cc-muted);
+  --cc-shadow-soft: 0 4px 16px var(--cc-shadow-color);
+  --cc-shadow-card: 0 9px 18px var(--cc-shadow-color);
+  --cc-shadow-raised: 0 12px 28px var(--cc-shadow-strong);
+  --cc-radius-small: 8px;
+  --cc-radius-control: 14px;
+  --cc-radius-card: 22px;
+  --cc-radius-panel: 30px;
+}

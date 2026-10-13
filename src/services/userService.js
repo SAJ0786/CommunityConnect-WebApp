@@ -1,104 +1,33 @@
 import {
-  collection, deleteDoc, deleteField, doc, getDoc, getDocs, query,
-  serverTimestamp, setDoc, updateDoc, where
+  collection, doc, getDoc, getDocFromServer, getDocs, query,
+  serverTimestamp, updateDoc, where
 } from 'firebase/firestore';
 import { deleteUser } from 'firebase/auth';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getApp } from 'firebase/app';
-import { db } from '../firebase/firebase';
+import { auth, db } from '../firebase/firebase';
 import { ROLES } from '../utils/constants';
+import { memberRegistrationPayload } from '../utils/profileRegistration.mjs';
 
-// ── IMPORTANT: Set your Super Admin email here ─────────────────────────────────
-// On first login this email will automatically get superAdmin role.
-const SUPER_ADMIN_EMAILS = ['sajjadzaheer@gmail.com', 'communityeventstester@outlook.com'];
-const isSuperAdminEmail = email => SUPER_ADMIN_EMAILS.includes(String(email || '').trim().toLowerCase());
+// Never manufacture a complete profile from cached/Auth fields or client roles.
+export async function ensureUserProfile(user) {
+  const snapshot = await getDocFromServer(doc(db, 'users', user.uid));
+  return snapshot.exists() ? snapshot.data() : {};
+}
 
-export async function ensureUserProfile(user, extraData = {}) {
-  const ref  = doc(db, 'users', user.uid);
-  const snap = await getDoc(ref);
-
-  // ── Account linking: phone user matched to existing Google/Microsoft account ──
-  // extraData._linkedFrom = the old UID (Google/Microsoft account)
-  // We copy the old profile to the new phone UID, preserving role/events/etc.
-  if (extraData._linkedFrom && extraData._linkedFrom !== user.uid) {
-    const oldRef  = doc(db, 'users', extraData._linkedFrom);
-    const oldSnap = await getDoc(oldRef);
-    if (oldSnap.exists()) {
-      const oldData = oldSnap.data();
-      const merged  = {
-        ...oldData,
-        phone:     user.phoneNumber || '',
-        phoneVerified: true,
-        updatedAt: serverTimestamp(),
-        linkedFrom: extraData._linkedFrom,
-        migratedFromUid: extraData._linkedFrom,
-        isActive: true,
-        migratedToUid: deleteField(),
-        inactiveReason: deleteField(),
-        walkthroughCompleted: oldData.walkthroughCompleted ?? true,
-      };
-      // Write new profile under phone UID
-      await setDoc(ref, merged, { merge: true });
-      // The old social-login profile is now merged into the phone UID.
-      await deleteDoc(oldRef).catch(() => {});
-      return merged;
+export async function completeMemberProfile(user, details) {
+  if (auth.currentUser?.uid !== user.uid) throw new Error('Your sign-in changed. Please try again.');
+  const payload = memberRegistrationPayload(user, details);
+  try {
+    await httpsCallable(getFunctions(getApp(), 'australia-southeast1'), 'completeMemberRegistration')(payload);
+  } catch (error) {
+    if (['functions/not-found', 'functions/unavailable'].includes(error.code)) {
+      throw new Error('Profile completion is currently unavailable. Please try again later or contact support.');
     }
+    throw error;
   }
-
-  if (!snap.exists()) {
-    const profileEmail = (extraData.email || user.email || '').trim().toLowerCase();
-    const role = isSuperAdminEmail(profileEmail) ? ROLES.SUPER_ADMIN : ROLES.USER;
-    // extraData contains name/email from registration form — use them first
-    const p = {
-      fullName: extraData.fullName || user.displayName || user.email?.split('@')[0] || '',
-      email:    profileEmail,
-      emailLower: profileEmail,
-      phone:    user.phoneNumber   || extraData.phone || '',
-      role,
-      isActive: true,
-      reminderEmailEnabled: true,
-      pushNotificationsEnabled: true,
-      adminAlertEmailEnabled: true,
-      privacyAccepted: true,
-      privacyAcceptedAt: serverTimestamp(),
-      termsAccepted: true,
-      termsAcceptedAt: serverTimestamp(),
-      walkthroughCompleted: false,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    };
-    await setDoc(ref, p);
-    return p;
-  }
-
-  // Update phone/email if missing
-  const existingData = snap.data();
-  const updates = {};
-  if (!existingData.phone?.trim() && user.phoneNumber) updates.phone = user.phoneNumber;
-  if (!existingData.email && extraData.email) {
-    updates.email = extraData.email.trim().toLowerCase();
-    updates.emailLower = updates.email;
-  } else if (existingData.email && !existingData.emailLower) {
-    updates.emailLower = String(existingData.email).trim().toLowerCase();
-  }
-  if (!existingData.fullName && extraData.fullName) updates.fullName = extraData.fullName;
-  // Profiles created before account-level tour tracking are existing users.
-  // Mark them complete so updates or new devices never replay the tour.
-  if (existingData.walkthroughCompleted === undefined) updates.walkthroughCompleted = true;
-  if (Object.keys(updates).length > 0) {
-    await updateDoc(ref, { ...updates, updatedAt: serverTimestamp() });
-    return { ...existingData, ...updates };
-  }
-
-  // If existing user with superAdmin email somehow got downgraded, fix it
-  const data = existingData;
-  const existingEmail = String(data.email || user.email || '').trim().toLowerCase();
-  if (isSuperAdminEmail(existingEmail) && data.role !== ROLES.SUPER_ADMIN) {
-    await updateDoc(ref, { role: ROLES.SUPER_ADMIN, updatedAt: serverTimestamp() });
-    return { ...data, role: ROLES.SUPER_ADMIN };
-  }
-
-  return data;
+  if (auth.currentUser?.uid !== user.uid) throw new Error('Your sign-in changed. Please try again.');
+  return ensureUserProfile(user);
 }
 
 export async function listUsers({ includeHidden = false } = {}) {

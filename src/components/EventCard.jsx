@@ -1,5 +1,10 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { canDeleteEvent, canEditEvent, isAdminRole, getSharePrivacy, getDisplayPrivacy } from '../utils/permissions';
+import { canEditEvent, canAdminAccessEvent, canArrangeEventNiaz, getSharePrivacy, getDisplayPrivacy } from '../utils/permissions';
+import { getEventMetroArea } from '../utils/cities';
+import { directoryQuery, PUBLIC_DIRECTORY_PATH } from '../utils/businessRoutes.mjs';
+import { CalendarDays, Clock, MapPin, Heart, ChevronDown } from 'lucide-react';
+import EventActionPanel from './EventActionPanel';
+import { eventActions } from '../utils/eventActions.mjs';
 import { RELIGIOUS_EVENT_TYPES } from '../utils/constants';
 import { getEventImage, getFallbackImageAsync } from '../services/imageService';
 import { getHijriDisplay, hijriDisplayFromParts } from '../services/hijriService';
@@ -8,6 +13,9 @@ import { STORE_SHARE_LINES } from '../utils/storeLinks';
 
 const GoLiveButton = lazy(() => import('./LiveStream').then(module => ({ default: module.GoLiveButton })));
 const WatchLiveButton = lazy(() => import('./LiveStream').then(module => ({ default: module.WatchLiveButton })));
+const EventSeriesArchiveDialog = lazy(() => import('./EventSeriesArchiveDialog'));
+const ContactHostDialog = lazy(() => import('./ContactHostDialog'));
+const EventReminderDialog = lazy(() => import('./EventReminderDialog'));
 
 let hijriOverridesCache = [];
 
@@ -35,42 +43,14 @@ const dateChip = (d) => {
   } catch { return { mo: '', dy: '', wd: '' }; }
 };
 
-// ── SVG icons ────────────────────────────────────────────────────────────────
-const WaIcon = ({ size = 17, color = '#25d366' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-    <path d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.37 5.07L2 22l5.09-1.34A9.94 9.94 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm0 18c-1.66 0-3.22-.46-4.55-1.26l-.32-.19-3.03.8.81-2.96-.21-.34A7.96 7.96 0 014 12c0-4.42 3.58-8 8-8s8 3.58 8 8-3.58 8-8 8zm4.45-5.95c-.24-.12-1.43-.7-1.65-.78-.22-.08-.38-.12-.54.12-.16.24-.62.78-.76.94-.14.16-.28.18-.52.06-.24-.12-1.01-.37-1.92-1.18-.71-.63-1.19-1.41-1.33-1.65-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.19-.47-.39-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.69 2.58 4.1 3.62.57.25 1.02.39 1.37.5.57.18 1.09.16 1.5.1.46-.07 1.43-.58 1.63-1.15.2-.57.2-1.06.14-1.15-.06-.1-.22-.16-.46-.28z"/>
-  </svg>
-);
-
-const MapIcon = ({ size = 15, color = '#4285f4' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-  </svg>
-);
-
-const TrashIcon = ({ size = 15, color = '#0f766e' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-    stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <polyline points="3 6 5 6 21 6"/>
-    <path d="M19 6l-1 14H6L5 6"/>
-    <path d="M10 11v6M14 11v6"/>
-    <path d="M9 6V4h6v2"/>
-  </svg>
-);
-
-const EditIcon = ({ size = 15, color = '#0f766e' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-    stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-  </svg>
-);
-
 export default function EventCard({
   event, user, profile, onEdit, onDelete, onCopy,
   isExpanded, onExpand, isGuest,
-  savedIds = [], onSaveToggle, onStreamStart, imagePriority = false
+  savedIds = [], onSaveToggle, onStreamStart, onCalendar, onContactHost, onReminder, onNiazArrangement, onEditSeries, onDeleteSeries, imagePriority = false
 }) {
+  const [seriesArchiveOpen, setSeriesArchiveOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false), [seriesEditBusy, setSeriesEditBusy] = useState(false), [actionError, setActionError] = useState('');
+  const [reminderOpen, setReminderOpen] = useState(false);
   const a        = event.address || {};
   const fullAddr = a.fullAddress || [a.street, a.suburb, a.state, a.postcode].filter(Boolean).join(', ');
   const suburbOnly = `${a.suburb || ''}${a.state ? ', ' + a.state : ''}`;
@@ -80,11 +60,15 @@ export default function EventCard({
   const addr   = displayPrivacy.showFullAddress ? fullAddr : suburbOnly;
   const suburb = a.suburb || '';
 
-  const displayType   = event.eventTypeDisplay || event.eventType || '';
+  const displayType   = event.eventTypeDisplay || event.customEventType || event.eventType || 'Event';
   const displayTime   = `${event.prayerLabel ? `${event.prayerLabel} ` : ''}${event.startTime || ''}${event.endTime ? ` – ${event.endTime}` : ''}`.trim();
   const isPrivate     = event.organiserType === 'private';
   const showReligious = RELIGIOUS_EVENT_TYPES.includes(event.eventType);
-  const canCopy       = isAdminRole(profile?.role);
+  const member = Boolean(!isGuest && user?.uid && !user.isAnonymous && profile?.isActive !== false);
+  const manage = member && canEditEvent(profile, event, user?.uid);
+  const admin = member && canAdminAccessEvent(profile, event);
+  const readOnly = import.meta.env.VITE_READ_ONLY_PREVIEW === 'true';
+  const [showLiveControls, setShowLiveControls] = useState(false);
   const isSaved       = savedIds.includes(event.id);
   const [lightbox, setLightbox] = useState(false);
   const [hijriOverrides, setHijriOverrides] = useState(hijriOverridesCache);
@@ -194,20 +178,32 @@ export default function EventCard({
     window.location.assign(url);
   };
 
-  // ── Small icon button ─────────────────────────────────────────────────────
-  const iconBtn = (onClick, title, bg, borderColor, content, disabled = false) => (
-    <button onClick={onClick} title={title} disabled={disabled}
-      style={{
-        width: 36, height: 36, borderRadius: 10, border: `1.5px solid ${borderColor}`,
-        background: bg, cursor: disabled ? 'not-allowed' : 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        opacity: disabled ? 0.4 : 1, transition: 'all 0.15s',
-        boxShadow: '0 1px 4px rgba(26,26,46,0.08)',
-        flexShrink: 0, padding: 0, margin: 0,
-      }}>
-      {content}
-    </button>
-  );
+  const handlers = {
+    uid: user?.uid, share: handleShare, directions: handleDirections,
+    live: () => setShowLiveControls(value => !value),
+    edit: onEdit && (() => onEdit(event)), delete: onDelete && (() => onDelete(event.id)),
+    copy: onCopy && (() => onCopy(event)), calendar: onCalendar && (() => onCalendar(event)),
+    contact: () => { if (!readOnly && member) { if (onContactHost) onContactHost(event); else setContactOpen(true); } },
+    reminder: () => { if (!readOnly && member) { if (onReminder) onReminder(event); else setReminderOpen(true); } },
+    niaz: () => {
+      if (!canArrangeEventNiaz(event, user, profile, isGuest)) return;
+      if (onNiazArrangement) return onNiazArrangement(event);
+      window.location.assign(PUBLIC_DIRECTORY_PATH + directoryQuery({ city: getEventMetroArea(event),
+        category: 'Food & Catering', service: 'Niaz Preparation and supply' }));
+    },
+    editSeries: (onEditSeries || onEdit) && (async () => {
+      if (readOnly || !manage || seriesEditBusy) return;
+      if (onEditSeries) return onEditSeries(event);
+      setSeriesEditBusy(true); setActionError('');
+      try { const service = await import('../services/eventSeriesEditService'); onEdit(await service.prepareFutureSeriesEdit(event)); }
+      catch (problem) { setActionError(problem.message); }
+      finally { setSeriesEditBusy(false); }
+    }),
+    deleteSeries: () => { if (!readOnly && member && admin && manage) { if (onDeleteSeries) onDeleteSeries(event); else setSeriesArchiveOpen(true); } },
+  };
+  const actions = eventActions({ event, member, manage, admin, arrangeNiaz: canArrangeEventNiaz(event, user, profile, isGuest), readOnly, handlers });
+  const chip = dateChip(event.eventDate);
+  const organiser = isPrivate ? 'Private' : (event.organisationType === 'org' || event.organiserCategory === 'org') ? 'Org' : 'Centre';
 
   return (
     <div
@@ -215,120 +211,40 @@ export default function EventCard({
       onClick={() => onExpand(isExpanded ? null : event.id)}
       style={{
         cursor: 'pointer', padding: '12px 14px',
-        border: isExpanded ? '1.5px solid var(--red,#0f766e)' : '1.5px solid transparent',
-        boxShadow: isExpanded ? '0 6px 24px rgba(15,118,110,0.15)' : 'var(--shadow-sm)',
+        border: isExpanded ? '1.5px solid var(--red,var(--cc-accent-strong))' : '1.5px solid transparent',
+        boxShadow: isExpanded ? '0 6px 24px color-mix(in srgb, var(--cc-accent-strong) 15%, transparent)' : 'var(--shadow-sm)',
         transition: 'all 0.25s',
         transform: isExpanded ? 'translateY(-1px)' : 'none',
         marginBottom: 8,
       }}>
 
-      {/* ── COMPACT ROW (image-led) ── */}
-      <div className="event-card-compact" style={{ display:'flex', gap:12, alignItems:'stretch' }}>
-
-        {/* Thumbnail with date chip */}
-        {(() => {
-          const chip = dateChip(event.eventDate);
-          return (
-            <div
-              onClick={hasPoster ? (e => { e.stopPropagation(); setLightbox(true); }) : undefined}
-              style={{
-                width:92, minWidth:92, height:92, borderRadius:14, overflow:'hidden',
-                position:'relative', background:'#f0f4f3', flexShrink:0,
-                display:'flex', alignItems:'center', justifyContent:'center',
-                cursor: hasPoster ? 'zoom-in' : 'default',
-              }}>
-              <img src={posterSrc} alt="" width="92" height="92"
-                loading={imagePriority ? 'eager' : 'lazy'}
-                fetchPriority={imagePriority ? 'high' : 'auto'} decoding="async"
-                style={{ width:'100%', height:'100%',
-                  objectFit: posterIsLogo ? 'contain' : 'cover',
-                  // For logo fallbacks, pad so the centered logo sits clear of the date chip
-                  padding: posterIsLogo ? '26px 8px 8px' : 0 }} />
-              <div style={{
-                position:'absolute', top:6, left:6, background:'white',
-                borderRadius:8, padding:'3px 6px', textAlign:'center',
-                boxShadow:'0 2px 8px rgba(0,0,0,0.18)', minWidth:34,
-              }}>
-                <div style={{ fontSize:'0.5625rem', fontWeight:900, color:'var(--green,#16a34a)', letterSpacing:'0.04em' }}>{chip.mo}</div>
-                <div style={{ fontSize:'1rem', fontWeight:900, color:'var(--text)', lineHeight:1 }}>{chip.dy}</div>
-                <div style={{ fontSize:'0.5625rem', fontWeight:700, color:'var(--muted)' }}>{chip.wd}</div>
-              </div>
-              {event.isLive && (
-                <div style={{
-                  position:'absolute', bottom:0, left:0, right:0,
-                  background:'var(--red,#0f766e)', color:'white', fontSize:'0.5rem',
-                  fontWeight:900, textAlign:'center', padding:'2px 0',
-                  animation:'pulse 2s infinite',
-                }}>🔴 LIVE</div>
-              )}
-              {/* Zoom hint — only on real posters, when not live */}
-              {hasPoster && !event.isLive && (
-                <div style={{
-                  position:'absolute', bottom:4, right:4,
-                  background:'rgba(0,0,0,0.55)', color:'white', borderRadius:'50%',
-                  width:20, height:20, display:'flex', alignItems:'center',
-                  justifyContent:'center', fontSize:'0.6875rem',
-                }}>🔍</div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Body */}
-        <div style={{ flex:1, minWidth:0, display:'flex', flexDirection:'column', justifyContent:'center' }}>
-          {/* Title */}
-          <div className="event-card-title" style={{ fontWeight:800, fontSize:'0.875rem', color:'var(--text)', fontFamily:'var(--font)',
-            whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', marginBottom:4 }}>
-            {displayType} — {event.hostName}
-          </div>
-          {/* Meta */}
-          <div className="event-card-meta" style={{ fontSize:'0.78125rem', color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)', marginBottom:2 }}>
-            ⏰ {displayTime}
-          </div>
-          {suburb && (
-            <div className="event-card-meta" style={{ fontSize:'0.78125rem', color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)', marginBottom:6,
-              whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-              📍 {suburb}
-            </div>
-          )}
-          {/* Footer: audience pill + organiser badge + heart */}
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:6 }}
-            onClick={e => e.stopPropagation()}>
-            <div style={{ display:'flex', alignItems:'center', gap:5, flex:1, minWidth:0, flexWrap:'wrap' }}>
-              <span className="pill-audience event-card-badge" style={{
-                fontSize:'0.6875rem', fontWeight:800, padding:'4px 10px', borderRadius:20,
-                background: normAudience(event.audienceType) === 'Family Event' ? '#dbeafe' : '#dcfce7',
-                color:      normAudience(event.audienceType) === 'Family Event' ? '#1d4ed8' : '#15803d',
-                letterSpacing:'0.02em', whiteSpace:'nowrap',
-              }}>
-                {(normAudience(event.audienceType) || 'All Welcome').toUpperCase()}
-              </span>
-              {/* Organiser badge — Centre or Private only */}
-              <span className="event-card-badge" style={{
-                fontSize:'0.6875rem', fontWeight:800, padding:'4px 9px', borderRadius:20,
-                background: event.organiserType === 'private' ? '#f1f5f9' : '#fef9c3',
-                color:      event.organiserType === 'private' ? '#475569' : '#854d0e',
-                whiteSpace:'nowrap',
-              }}>
-                {event.organiserType === 'private' ? '🔒 Private' : '🏛 Centre'}
-              </span>
-            </div>
-            {onSaveToggle && (
-              <span onClick={ev => { ev.stopPropagation(); if (!isGuest) onSaveToggle(event.id, !isSaved); }}
-                style={{ fontSize:'1.125rem', color: isSaved ? 'var(--red,#0f766e)' : '#cbd5d3',
-                  cursor: isGuest ? 'default' : 'pointer', lineHeight:1, flexShrink:0 }}>
-                {isSaved ? '❤️' : '🤍'}
-              </span>
-            )}
-          </div>
+      <div className="event-native-summary">
+        <div className="event-native-poster">
+          <button type="button" aria-label={hasPoster ? 'View event poster' : 'Expand event details'}
+            onClick={click => { click.stopPropagation(); if (hasPoster) setLightbox(true); else onExpand(isExpanded ? null : event.id); }}>
+            <img src={posterSrc} alt="" width="78" height="78" className={posterIsLogo ? 'event-logo' : ''}
+              loading={imagePriority ? 'eager' : 'lazy'} fetchPriority={imagePriority ? 'high' : 'auto'} decoding="async" />
+          </button>
+          <span className="event-native-date"><small>{chip.mo}</small><strong>{chip.dy}</strong><small>{chip.wd}</small></span>
+          {event.isLive ? <span className="event-native-live">LIVE</span>
+            : <span className="event-native-calendar"><CalendarDays size={15} aria-hidden="true" /></span>}
         </div>
-
-        {/* Chevron */}
-        <span style={{
-          fontSize:'0.625rem', color:'var(--teal,#0f766e)', flexShrink:0, alignSelf:'center',
-          transition:'transform 0.3s', display:'inline-block',
-          transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-        }}>▼</span>
+        <div className="event-native-content">
+          <h3 className="event-native-title">{[displayType, event.hostName || event.organiserName || event.organizationName].filter(Boolean).join(' - ')}</h3>
+          <div className="event-native-meta">
+            <span><Clock size={13} aria-hidden="true" /> {displayTime || 'TBC'}</span>
+            <span><MapPin size={13} aria-hidden="true" /><span className="event-native-suburb">{suburb || 'TBC'}</span></span>
+          </div>
+          <div className="event-native-badges"><span>{displayType}</span><span className="event-organiser">{organiser}</span></div>
+        </div>
+        <div className="event-native-buttons" onClick={click => click.stopPropagation()}>
+          <button type="button" aria-label={isSaved ? 'Remove from Favourites' : 'Add to Favourites'} aria-pressed={isSaved}
+            className={isSaved ? 'event-saved' : ''} disabled={!member || readOnly || !onSaveToggle}
+            title={!member ? 'Sign in to save favourites.' : readOnly ? 'Disabled in the read-only preview.' : !onSaveToggle ? 'Favourites are unavailable on this screen.' : isSaved ? 'Remove from Favourites' : 'Add to Favourites'}
+            onClick={() => onSaveToggle?.(event.id, !isSaved)}><Heart size={20} fill={isSaved ? 'currentColor' : 'none'} aria-hidden="true" /></button>
+          <button type="button" aria-label={isExpanded ? 'Collapse event details' : 'Expand event details'} aria-expanded={Boolean(isExpanded)}
+            onClick={() => onExpand(isExpanded ? null : event.id)}><ChevronDown size={20} style={{ transform:isExpanded ? 'rotate(180deg)' : undefined }} aria-hidden="true" /></button>
+        </div>
       </div>
 
       {/* ── EXPANDED BODY ── */}
@@ -341,32 +257,42 @@ export default function EventCard({
       }}>
         {isExpanded && (
         <div className="event-card-details" style={{ borderTop:'1px solid var(--border)', paddingTop:10 }}>
+          <EventActionPanel actions={actions} handlers={handlers} />
+          <p className="event-action-note">{readOnly ? 'Read-only preview: actions that change data are disabled. ' : ''}Unavailable actions are dimmed; their labels explain the restriction.</p>
+          {showLiveControls && !actions.find(action => action.id === 'live').disabled && <div onClick={click => click.stopPropagation()}>
+            <Suspense fallback={<span className="small">Loading live controls…</span>}>
+              {event.isLive && event.liveWatchUrl && event.liveAppVisibility !== 'private'
+                ? <WatchLiveButton event={event} isGuest={!member} onWatchStarted={onStreamStart} />
+                : manage && !readOnly && <GoLiveButton event={event} onLiveStarted={onStreamStart} onLiveEnded={() => {}} />}
+            </Suspense>
+          </div>}
+          <p className="event-action-note">{fmtDate(event.eventDate)}</p>
           {/* Hijri badge */}
           {hijriDisplay && (
             <div style={{ marginBottom:8 }}>
-              <span style={{ background:'#fef9e7', color:'#b7950b',
-                fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:800, fontFamily:'var(--font)' }}>
+              <span style={{ background:'var(--cc-warning-soft)', color:'var(--cc-warning-strong)',
+                fontSize:'0.6875rem', padding:'3px 10px', borderRadius:99, fontWeight:700, fontFamily:'var(--font)' }}>
                 🌙 {hijriDisplay}
               </span>
             </div>
           )}
           {/* Subject */}
           {event.eventSubject && (
-            <p style={{ margin:'0 0 6px', fontWeight:900, color:'var(--red)', fontSize:'0.875rem', fontFamily:'var(--font)' }}>
+            <p style={{ margin:'0 0 6px', fontWeight:700, color:'var(--red)', fontSize:'0.875rem', fontFamily:'var(--font)' }}>
               {event.eventSubject}
             </p>
           )}
           {event.notes?.trim() && (
             <p style={{
               margin:'0 0 8px', fontSize:'0.8125rem', whiteSpace:'pre-wrap',
-              color:'var(--text)', fontWeight:600, overflowWrap:'anywhere',
+              color:'var(--text)', fontWeight:400, overflowWrap:'anywhere',
               wordBreak:'break-word', lineHeight:1.45,
             }}>
               <strong>Notes:</strong> {event.notes.trim()}
             </p>
           )}
           {/* Address */}
-          <p style={{ margin:'0 0 5px', fontSize:'0.8125rem', color:'var(--text)', fontWeight:600, fontFamily:'var(--font)' }}>
+          <p style={{ margin:'0 0 5px', fontSize:'0.8125rem', color:'var(--text)', fontWeight:400, fontFamily:'var(--font)' }}>
             📍 {addr}
             {isGuest && (
               <span style={{ fontSize:'0.6875rem', color:'var(--muted)', marginLeft:4 }}>
@@ -376,19 +302,19 @@ export default function EventCard({
           </p>
           {/* Audience */}
           {event.audienceType && (
-            <p style={{ margin:'0 0 5px', fontSize:'0.8125rem', color:'var(--muted)', fontWeight:600, fontFamily:'var(--font)' }}>
+            <p style={{ margin:'0 0 5px', fontSize:'0.8125rem', color:'var(--muted)', fontWeight:400, fontFamily:'var(--font)' }}>
               👥 {normAudience(event.audienceType)}
             </p>
           )}
           {/* Speaker */}
           {showReligious && event.speakerName && (
-            <p style={{ margin:'0 0 4px', fontSize:'0.8125rem', color:'var(--text)', fontWeight:600, fontFamily:'var(--font)' }}>
+            <p style={{ margin:'0 0 4px', fontSize:'0.8125rem', color:'var(--text)', fontWeight:400, fontFamily:'var(--font)' }}>
               🎤 {event.speakerName}
             </p>
           )}
           {/* Reciters */}
           {showReligious && (event.reciters || []).filter(r => r.name).map((r, i) => (
-            <p key={i} style={{ margin:'0 0 4px', fontSize:'0.8125rem', color:'var(--text)', fontWeight:600, fontFamily:'var(--font)' }}>
+            <p key={i} style={{ margin:'0 0 4px', fontSize:'0.8125rem', color:'var(--text)', fontWeight:400, fontFamily:'var(--font)' }}>
               🎙️ {r.customType || r.type}: {r.name}
             </p>
           ))}
@@ -399,92 +325,25 @@ export default function EventCard({
             </p>
           )}
 
-          {/* Live stream buttons */}
-          <div style={{ marginTop:10, display:'flex', gap:8, flexWrap:'wrap' }}
-            onClick={e => e.stopPropagation()}>
-            {/* Watch Live — all logged-in users when event is live */}
-            <Suspense fallback={<span className="small">Loading live controls...</span>}>
-            <WatchLiveButton event={event} isGuest={isGuest}
-              onWatchStarted={onStreamStart} />
-            {/* Go Live — only event owner or admin */}
-            {canEditEvent(profile, event, user?.uid) && (
-              <GoLiveButton event={event}
-                onLiveStarted={onStreamStart}
-                onLiveEnded={() => {}}
-              />
-            )}
-            </Suspense>
-          </div>
 
-          {/* Action buttons */}
-          <div style={{ marginTop:8, display:'flex', gap:8, flexWrap:'wrap' }}
-            onClick={e => e.stopPropagation()}>
-            {/* Share */}
-            <button onClick={handleShare} style={{
-              fontSize:'0.75rem', padding:'8px 14px', borderRadius:10,
-              background:'#ffffff', color:'#128c4a', fontWeight:800, fontFamily:'var(--font)',
-              border:'1.5px solid #25d366',
-              display:'flex', alignItems:'center', gap:5, boxShadow:'0 2px 8px rgba(37,211,102,0.18)',
-              cursor:'pointer',
-            }}>
-              <WaIcon size={15} color="#25d366" /> Share
-            </button>
-            {/* Directions */}
-            <button onClick={handleDirections} disabled={isGuest} style={{
-              fontSize:'0.75rem', padding:'8px 14px', borderRadius:10, border:'none',
-              background: isGuest ? 'var(--border)' : '#4285f4', color:'white',
-              fontWeight:800, fontFamily:'var(--font)',
-              display:'flex', alignItems:'center', gap:5,
-              boxShadow: isGuest ? 'none' : '0 2px 8px rgba(66,133,244,0.4)',
-              cursor: isGuest ? 'not-allowed' : 'pointer', opacity: isGuest ? 0.4 : 1,
-            }}>
-              <MapIcon size={13} color="white" /> Directions
-            </button>
-            {/* Edit */}
-            {canEditEvent(profile, event, user?.uid) && (
-              <button onClick={e => { e.stopPropagation(); onEdit(event); }} style={{
-                fontSize:'0.75rem', padding:'8px 14px', borderRadius:10,
-                background:'var(--red-l,#e6f4f1)', color:'var(--red)',
-                border:'1px solid var(--red-m,#b7d8d4)', fontWeight:800, fontFamily:'var(--font)',
-                display:'flex', alignItems:'center', gap:5, boxShadow:'none', cursor:'pointer',
-              }}>
-                <EditIcon size={13} color="var(--red,#0f766e)" /> Edit
-              </button>
-            )}
-            {/* Delete */}
-            {canDeleteEvent(profile, event, user?.uid) && (
-              <button onClick={e => { e.stopPropagation(); onDelete(event.id); }} style={{
-                fontSize:'0.75rem', padding:'8px 12px', borderRadius:10,
-                background:'var(--red-l,#e6f4f1)', color:'var(--red)',
-                border:'1px solid var(--red-m,#b7d8d4)', fontWeight:800, fontFamily:'var(--font)',
-                display:'flex', alignItems:'center', gap:4, boxShadow:'none', cursor:'pointer',
-              }}>
-                <TrashIcon size={13} color="var(--red,#0f766e)" />
-              </button>
-            )}
-            {/* Copy */}
-            {canCopy && onCopy && (
-              <button onClick={e => { e.stopPropagation(); onCopy(event); }} style={{
-                fontSize:'0.75rem', padding:'8px 14px', borderRadius:10,
-                background:'var(--red-l,#e6f4f1)', color:'var(--red)',
-                border:'1px solid var(--red-m,#b7d8d4)', fontWeight:800, fontFamily:'var(--font)',
-                display:'flex', alignItems:'center', gap:4, boxShadow:'none', cursor:'pointer',
-              }}>
-                📋 Copy
-              </button>
-            )}
-          </div>
         </div>
         )}
       </div>
 
+      {seriesEditBusy && <p role="status">Checking future occurrences…</p>}
+      {actionError && <p role="alert">{actionError}</p>}
+      {contactOpen && <Suspense fallback={<p role="status">Opening host message…</p>}><ContactHostDialog key={user?.uid + event.id} event={event} onClose={() => setContactOpen(false)}/></Suspense>}
+      {reminderOpen && <Suspense fallback={<p role="status">Loading reminder…</p>}><EventReminderDialog key={user?.uid + event.id} event={event} onClose={() => setReminderOpen(false)}/></Suspense>}
+      {seriesArchiveOpen && <Suspense fallback={<p role="status">Loading series review…</p>}>
+        <EventSeriesArchiveDialog key={event.id} event={event} onClose={() => setSeriesArchiveOpen(false)}/>
+      </Suspense>}
       {/* ── Poster lightbox ── */}
       {lightbox && hasPoster && (
         <div
           onClick={e => { e.stopPropagation(); setLightbox(false); }}
           style={{
             position:'fixed', inset:0, zIndex:10000,
-            background:'rgba(0,0,0,0.9)', display:'flex',
+            background:'color-mix(in srgb, var(--cc-overlay-base) 90%, transparent)', display:'flex',
             alignItems:'center', justifyContent:'center', padding:20,
           }}>
           <button
@@ -492,14 +351,14 @@ export default function EventCard({
             aria-label="Close"
             style={{
               position:'absolute', top:16, right:16, width:44, height:44,
-              borderRadius:'50%', background:'rgba(255,255,255,0.15)', color:'white',
+              borderRadius:'50%', background:'color-mix(in srgb, var(--cc-surface) 15%, transparent)', color:'var(--cc-on-primary)',
               border:'none', cursor:'pointer', fontSize:'1.5rem', lineHeight:1,
               display:'flex', alignItems:'center', justifyContent:'center',
             }}>×</button>
           <img src={posterSrc} alt="Event poster"
             onClick={e => e.stopPropagation()}
             style={{ maxWidth:'100%', maxHeight:'90vh', objectFit:'contain',
-              borderRadius:12, boxShadow:'0 10px 50px rgba(0,0,0,0.5)' }} />
+              borderRadius:12, boxShadow:'0 10px 50px color-mix(in srgb, var(--cc-shadow-base) 50%, transparent)' }} />
         </div>
       )}
     </div>

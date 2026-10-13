@@ -10,7 +10,7 @@ const STEPS = [
   {
     target: 'city-and-view',
     title: 'Explore by city',
-    body: 'Your home screen starts with your selected city. Change city anytime, then switch between List and Map view.',
+    body: 'Your home screen starts with your selected city. Change city anytime. Use the Map/List panel in Quick access below to change the view.',
     kicker: 'City + map',
   },
   {
@@ -58,13 +58,13 @@ const STEPS = [
   {
     target: 'top-hamburger',
     title: 'More tools in the menu',
-    body: 'Open extra tools from here. Guests see restricted tools greyed out.',
+    body: 'Use Menu in the bottom bar on mobile or at the top on PC for account tools, calendars and admin shortcuts.',
     kicker: 'Menu',
   },
   {
     target: 'bottom-profile',
-    title: 'Manage your settings',
-    body: 'Update your city, contact details, email reminders, push notifications, support options and account settings.',
+    title: 'Your account menu',
+    body: 'Open Menu, then My Profile to update your city, contact details, reminders and account settings.',
     guestBody: 'Sign in to manage your city, contact details, reminders, push notifications and account settings.',
     kicker: 'Profile',
     authOnly: true,
@@ -137,23 +137,6 @@ export default function AppWalkthrough({ isGuest, userId, completed, onComplete 
     setStep(index => Math.min(steps.length - 1, index + 1));
   };
 
-  useEffect(() => {
-    if (!visible) return undefined;
-
-    const shouldOpenMenu = current?.target === 'top-hamburger';
-    window.dispatchEvent(new CustomEvent('community-events-walkthrough-menu', {
-      detail: { open: shouldOpenMenu },
-    }));
-
-    return () => {
-      if (shouldOpenMenu) {
-        window.dispatchEvent(new CustomEvent('community-events-walkthrough-menu', {
-          detail: { open: false },
-        }));
-      }
-    };
-  }, [visible, current?.target]);
-
   useLayoutEffect(() => {
     if (!visible || !current?.target) {
       setTargetRect(null);
@@ -164,7 +147,10 @@ export default function AppWalkthrough({ isGuest, userId, completed, onComplete 
     let raf = 0;
 
     const measure = () => {
-      const target = document.querySelector(`[data-walkthrough-target="${current.target}"]`);
+      let target = document.querySelector(`[data-walkthrough-target="${current.target}"]`);
+      if (!target?.getClientRects().length && ['top-hamburger','bottom-profile'].includes(current.target)) {
+        target = [...document.querySelectorAll('[data-walkthrough-target="top-hamburger"], [data-walkthrough-target="bottom-profile"]')].find(item => item.getClientRects().length);
+      }
       if (!target) {
         setTargetRect(null);
         setCardPos(null);
@@ -257,17 +243,17 @@ export default function AppWalkthrough({ isGuest, userId, completed, onComplete 
         .walkthrough-dim {
           position: absolute;
           inset: 0;
-          background: rgba(7, 18, 25, 0.72);
+          background: color-mix(in srgb, var(--cc-overlay-base) 72%, transparent);
           backdrop-filter: blur(2px);
         }
         .walkthrough-spotlight {
           position: absolute;
           border-radius: 18px;
-          border: 2px solid rgba(255,255,255,0.96);
+          border: 2px solid color-mix(in srgb, var(--cc-surface) 96%, transparent);
           box-shadow:
-            0 0 0 9999px rgba(7, 18, 25, 0.72),
-            0 0 0 8px rgba(15, 118, 110, 0.22),
-            0 18px 42px rgba(0,0,0,0.28);
+            0 0 0 9999px color-mix(in srgb, var(--cc-overlay-base) 72%, transparent),
+            0 0 0 8px color-mix(in srgb, var(--cc-accent-strong) 22%, transparent),
+            0 18px 42px color-mix(in srgb, var(--cc-overlay-base) 28%, transparent);
           background: transparent;
           pointer-events: none;
           transition: left 180ms ease, top 180ms ease, width 180ms ease, height 180ms ease;
@@ -276,12 +262,12 @@ export default function AppWalkthrough({ isGuest, userId, completed, onComplete 
           position: absolute;
           width: ${CARD_WIDTH}px;
           max-width: calc(100vw - 28px);
-          background: #ffffff;
-          color: #101828;
+          background: var(--cc-surface);
+          color: var(--cc-heading);
           border-radius: 18px;
           padding: 16px;
-          box-shadow: 0 22px 70px rgba(0,0,0,0.34);
-          border: 1px solid rgba(15,118,110,0.18);
+          box-shadow: 0 22px 70px color-mix(in srgb, var(--cc-shadow-base) 34%, transparent);
+          border: 1px solid color-mix(in srgb, var(--cc-accent-strong) 18%, transparent);
         }
         .walkthrough-card.center {
           left: 50%;
@@ -293,8 +279,8 @@ export default function AppWalkthrough({ isGuest, userId, completed, onComplete 
           display: inline-flex;
           align-items: center;
           gap: 6px;
-          background: #e7f5f2;
-          color: #0f766e;
+          background: var(--cc-accent-soft);
+          color: var(--cc-accent-strong);
           border-radius: 999px;
           padding: 5px 10px;
           font-size: 0.72rem;
@@ -306,11 +292,11 @@ export default function AppWalkthrough({ isGuest, userId, completed, onComplete 
           font-size: 1.05rem;
           line-height: 1.2;
           font-weight: 900;
-          color: #101828;
+          color: var(--cc-heading);
         }
         .walkthrough-body {
           margin: 0 0 14px;
-          color: #5f6f73;
+          color: var(--cc-muted);
           font-size: 0.83rem;
           line-height: 1.5;
           font-weight: 650;
@@ -337,16 +323,16 @@ export default function AppWalkthrough({ isGuest, userId, completed, onComplete 
           box-shadow: none;
         }
         .walkthrough-btn.primary {
-          background: #0f766e;
-          color: white;
+          background: var(--cc-accent-strong);
+          color: var(--cc-on-primary);
         }
         .walkthrough-btn.ghost {
           background: transparent;
-          color: #6f7d80;
+          color: var(--cc-muted);
         }
         .walkthrough-btn.secondary {
-          background: #eef4f3;
-          color: #102d2a;
+          background: var(--cc-accent-soft);
+          color: var(--cc-text);
         }
         .walkthrough-progress {
           display: flex;
@@ -359,15 +345,15 @@ export default function AppWalkthrough({ isGuest, userId, completed, onComplete 
           width: 6px;
           height: 6px;
           border-radius: 999px;
-          background: #d0dcda;
+          background: var(--cc-border);
           transition: width 180ms ease, background 180ms ease;
         }
         .walkthrough-dot.active {
           width: 18px;
-          background: #0f766e;
+          background: var(--cc-accent-strong);
         }
         .walkthrough-counter {
-          color: #758487;
+          color: var(--cc-muted);
           font-size: 0.7rem;
           font-weight: 800;
           margin-top: 8px;
