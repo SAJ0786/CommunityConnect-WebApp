@@ -1,5 +1,9 @@
 # Registration prototype
 
+13 October feedback: closing-date validation updates immediately below the input when either date changes. Public suburb rejects street-address-like values; public notes reject a matching private venue or a recognised numbered street address. Invalid notes/suburb are omitted from the public card even before saving. Native, web and the undeployed backend use the same contract. These checks are defensive, not a comprehensive personal-data detector; organisers must still review all public text. The screenshot's admin role correctly exposes the separate private venue section.
+
+Maps status: registration setup still uses manual address/suburb fields. Both existing app address pickers can resolve a selected address to coordinates, but registration has not yet integrated them. Integration must store exact address/coordinates privately and expose exact pins/directions only to confirmed registrants, organisers and authorised admins; public browsing must remain suburb-only. No device GPS access is needed merely to resolve the venue address.
+
 Isolated, memory-only UI review. No Firebase, service worker, production routing or real booking authority.
 
 Run `node tools/preview-registration.mjs` from the web project, or double-click `preview-registration.cmd`. Open the printed local URL (port 5196). `--build-only` validates bundling; `--serve-only` serves the existing bundle.

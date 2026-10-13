@@ -3,6 +3,36 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { createDraft, makeField, moveField, validateDraft, validateAnswers, snapshotBooking, FIELD_TYPES, consentLast, TERMS_LIMIT, publicEvent, templateFields, FORM_TEMPLATES } from '../src/registration/prototypeModel.mjs';
 const valid = () => ({ ...createDraft(), date: '2026-12-01', address: '1 Fictional Street, Parramatta NSW', suburb: 'Parramatta' });
+import { closingDateError, publicNotesError } from '../src/registration/prototypeModel.mjs';
+
+test('closing feedback reacts to either date and is directly below its input', () => {
+  assert.match(closingDateError({ ...valid(), closes: '2026-12-01T00:00' }), /not the same day/);
+  assert.equal(closingDateError({ ...valid(), closes: '2026-11-30T23:59' }), '');
+  assert.match(closingDateError({ ...valid(), date: '2026-11-30', closes: '2026-11-30T23:59' }), /not the same day/);
+  assert.equal(closingDateError({ ...valid(), closes: '' }), '');
+  const source = fs.readFileSync(new URL('../src/registration/RegistrationPrototype.jsx', import.meta.url), 'utf8');
+  assert.match(source, /value=\{draft.closes\}[^\n]+\/><small id="closing-date-feedback"/);
+  assert.match(source, /const closeError = closingDateError\(draft\)/);
+});
+
+test('street addresses are rejected in public text and hidden in unsaved card previews', () => {
+  for (const notes of ['1 Fictional Street', 'Meet at 1 FICTIONAL STREET, please.', 'Meet at 42 Example Dr']) {
+    const draft = { ...valid(), notes };
+    assert.ok(publicNotesError(draft));
+    assert.ok(validateDraft(draft).some(error => error.includes('public notes')));
+    assert.equal(publicEvent(draft).notes, '');
+  }
+  const draft = { ...valid(), address: 'Community Hall, Parramatta', notes: 'Meet at COMMUNITY HALL.' };
+  assert.equal(publicEvent(draft).notes, '');
+  assert.equal(publicEvent({ ...valid(), notes: 'Bring a notebook. Children aged 5 to 12 welcome.' }).notes, 'Bring a notebook. Children aged 5 to 12 welcome.');
+  assert.equal(publicEvent({ ...valid(), suburb: '1 Fictional Street' }).suburb, '');
+});
+
+test('backend uses the same validation and public projection contract', context => {
+  const path = new URL('../../sdk51-package-backup/backend/functions-registration/formModel.mjs', import.meta.url);
+  if (!fs.existsSync(path)) { context.skip('Sibling native checkout is absent.'); return; }
+  assert.equal(fs.readFileSync(path, 'utf8'), fs.readFileSync(new URL('../src/registration/prototypeModel.mjs', import.meta.url), 'utf8'));
+});
 test('native and web contracts are identical', context => {
   if (!fs.existsSync(new URL('../../sdk51-package-backup/src/registration/prototypeModel.js', import.meta.url))) { context.skip('Sibling native checkout is not present.'); return; }
   assert.equal(fs.readFileSync(new URL('../src/registration/prototypeModel.mjs', import.meta.url), 'utf8'), fs.readFileSync(new URL('../../sdk51-package-backup/src/registration/prototypeModel.js', import.meta.url), 'utf8'));
