@@ -1,27 +1,27 @@
-# Registration prototype
+# Event registration on web
 
-13 October feedback: closing-date validation updates immediately below the input when either date changes. Public suburb rejects street-address-like values; public notes reject a matching private venue or a recognised numbered street address. Invalid notes/suburb are omitted from the public card even before saving. Native, web and the undeployed backend use the same contract. These checks are defensive, not a comprehensive personal-data detector; organisers must still review all public text. The screenshot's admin role correctly exposes the separate private venue section.
+## Current candidate integration - 16 October 2026
 
-Maps status: registration setup still uses manual address/suburb fields. Both existing app address pickers can resolve a selected address to coordinates, but registration has not yet integrated them. Integration must store exact address/coordinates privately and expose exact pins/directions only to confirmed registrants, organisers and authorised admins; public browsing must remain suburb-only. No device GPS access is needed merely to resolve the venue address.
+`RegistrationRoute.jsx` connects the production UI to candidate registration callables, with account-bound requests and `VITE_EVENT_REGISTRATION_ENABLED=false` by default. No candidate backend has been deployed or gate enabled by this web work.
 
-Isolated, memory-only UI review. No Firebase, service worker, production routing or real booking authority.
+Implemented: public discovery with scanned-page cursors, My registrations, hosted/review lists, host event/form builder with ten question types, saved templates, attendee preview, initial approval, registration submit/edit/cancel/confirmation, responses and CSV, answer deletion, host cancellation, private venue/maps/directions and private poster upload/retry/remove/read. Approved-event edits preserve approval according to the server; attendees see form-review notices and post-closing restrictions from server flags. Profile deletion explains the candidate organiser-cancellation policy. Notification links enforce the intended account before opening the protected detail.
 
-Run `node tools/preview-registration.mjs` from the web project, or double-click `preview-registration.cmd`. Open the printed local URL (port 5196). `--build-only` validates bundling; `--serve-only` serves the existing bundle.
+Private data stays in component memory. Switching account/admin scope remounts the workspace; backgrounding clears private rendered state and drafts, and foregrounding reloads permission-checked detail. Venue coordinates are cleared when the address text changes and must be resolved again. No public card receives a private venue or poster.
 
-The build also exports `.qa-registration-preview/registration-preview.html`, a self-contained offline HTML review file. Open it in a normal browser without a server. Browser review in the agent runtime remains blocked: loopback times out and file URLs are disallowed. No visual verification is claimed.
+Read `docs/PWA-INTEGRATION-HANDOVER-2026-10-16.md` for evidence and remaining release acceptance. Candidate code is not a claim of live booking or notification delivery.
 
-Tests: `node --test tests/registration-prototype.test.mjs`.
+## Isolated previews
 
-The native mirror is `sdk51-package-backup/src/registration/prototypeModel.js`; the parity test checks it when the sibling checkout is available.
+- `node tools/preview-registration-workflows.mjs`: actual connected UI with an in-memory fictional API on port 5198. No Firebase, emails, push or real bookings. `--build-only` compiles without starting a server.
+- `node tools/preview-registration.mjs`: earlier design-only prototype on port 5196, including its self-contained offline HTML. `RegistrationPrototype.jsx` is never imported by the production route.
 
-Uses the web project's existing `src/styles/tokens.css`. That shared stylesheet belongs to the ongoing PWA work and must be committed before this preview is a self-contained Git checkout. Do not deploy the preview as a replacement for the application.
+## Checks
 
-Working: event choices, event setup, ten question types, required flags, editing/reordering/removal, session-only drafts/templates, attendee validation, demo confirmation and immutable question/answer snapshot.
+```powershell
+node --test tests/*.test.mjs
+npm ci --prefix tests/registration-renderer
+npm test --prefix tests/registration-renderer
+node tools/check-candidate-integrations.mjs
+```
 
-12 October review update: added existing Add Event categories/custom category, detailed public notes, full private address plus confirmed public suburb, private poster preview, templates-first builder, required host-written consent terms (1,000 characters) pinned last, strictly earlier-day closing validation, host confirmation, attendee edit/confirmation and role-simulated event cards.
-
-`registrationClient.mjs` and `firebaseRegistration.mjs` provide a feature-disabled transport adapter. They are NOT imported by the demo. Backend candidate lives in the native checkout under `backend/functions-registration`; tested locally and against an isolated Firestore emulator, not deployed. Native/PWA model and transport files mirror one another.
-
-Still to connect: production host/attendee screens and event discovery/cards, persistent template UI, address autocomplete/dynamic event options, private poster lifecycle/Storage tests, real role/auth/App Check acceptance and confirmation delivery. Backend primitives for capacity, revisions, private access, cancellation and templates exist, but that does not make this demo a production booking system. Native entry remains development-only; no test APK or store build produced.
-
-Hosted isolated review: https://community-event-8b639--registration-prototype-20261012-k6z9852a.web.app (expires 19 October). Not the live PWA.
+The renderer tests exercise real React components against fictional callable responses. They do not establish browser layout, Firebase rules/App Check, production backend or device notification acceptance.

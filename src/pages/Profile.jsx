@@ -2,6 +2,7 @@ import NotificationPreferences from '../components/NotificationPreferences';
 import React, { useEffect, useState } from 'react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase/firebase';
+import { REGISTRATION_ENABLED } from '../config/releaseGates.mjs';
 import { deleteMyAccountAndEvents, updateAdminAlertPreference, updateProfile, updatePushPreference, updateReminderPreference, updateUserContactProfile } from '../services/userService';
 import { enablePushNotifications, getNotificationPermissionState, sendTestPushNotification, showLocalTestNotification, syncGrantedNotificationToken } from '../services/notificationService';
 import { isAdminRole } from '../utils/permissions';
@@ -446,6 +447,7 @@ export default function Profile({ user, profile, setProfile }) {
           </p>
           <p style={{ fontSize:'0.8125rem', color:'var(--cc-danger)', margin:'0 0 14px', lineHeight:1.5 }}>
             Your account will be permanently deleted.{' '}
+            {REGISTRATION_ENABLED && 'Your upcoming hosted registration events will be cancelled and attendees notified. Your own submitted registration answers and private templates will be deleted. Other attendees’ answers follow the retention policy and scoped administrator controls. '}
             {archiveEventsNow
               ? 'Your active events will be moved to the inactive archive now. Event, host and submission details will be retained.'
               : 'Your events will remain active until their normal expiry date, then move to the inactive archive. Event, host and submission details will be retained.'}

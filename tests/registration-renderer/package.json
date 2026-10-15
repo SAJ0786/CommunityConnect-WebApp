@@ -1,0 +1,7 @@
+{
+  "name": "community-connect-registration-workflow-checks",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "node --test workflows.test.mjs" },
+  "devDependencies": { "react": "18.3.1", "react-test-renderer": "18.3.1" }
+}

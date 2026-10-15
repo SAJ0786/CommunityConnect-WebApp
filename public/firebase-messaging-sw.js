@@ -2,10 +2,14 @@
 // opened on this origin and expand the intended event after sign-in.
 self.addEventListener('notificationclick', event => {
   const data = event.notification.data || {};
-  if (data.type !== 'event-reminder') return;
+  const registration = data.module === 'registration' && String(data.type || '').startsWith('registration.')
+    && /^[A-Za-z0-9_-]{1,128}$/.test(data.eventId || '') && /^[A-Za-z0-9_-]{1,128}$/.test(data.recipientUid || '');
+  if (data.type !== 'event-reminder' && !registration) return;
   event.stopImmediatePropagation();
   event.notification.close();
-  const target = new URL('/?event=' + encodeURIComponent(data.eventId || ''), self.location.origin).href;
+  const target = new URL(registration
+    ? '/?registration=' + encodeURIComponent(data.eventId) + '&recipient=' + encodeURIComponent(data.recipientUid)
+    : '/?event=' + encodeURIComponent(data.eventId || ''), self.location.origin).href;
   event.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(async list => {
     const existing = list.find(client => new URL(client.url).origin === self.location.origin);
     if (existing) { await existing.navigate(target); return existing.focus(); }

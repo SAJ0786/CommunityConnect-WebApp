@@ -21,7 +21,7 @@ const destination=path.resolve('.qa-web-release/site');
 await build({...config,configFile:false,define,resolve:{...config.resolve,preserveSymlinks:true},
   plugins:[...config.plugins.slice(0,1),{name:'release-source-boundary',generateBundle(_,bundle){
     for(const chunk of Object.values(bundle)) if(chunk.type==='chunk') {
-      for(const id of Object.keys(chunk.modules)) if(/\/(?:tests|src\/registration)\//.test(id.replaceAll('\\','/'))) {
+      for(const id of Object.keys(chunk.modules)) if(/\/tests\/|\/RegistrationPrototype\.jsx$/.test(id.replaceAll('\\','/'))) {
         throw new Error('Unreleased prototype/test code reached the production bundle: '+id);
       }
     }

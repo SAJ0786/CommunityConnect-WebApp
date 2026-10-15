@@ -26,7 +26,7 @@ const names = { profile: 'My Profile', tools: 'Categories and tools', diagnostic
 const readRoute = () => { const [page = 'home', id = ''] = window.location.hash.replace(/^#\/?/, '').split('/'); try { return { page: names[page] ? page : 'home', id: decodeURIComponent(id) }; } catch { return { page: 'home', id: '' }; } };
 
 // Data and commands are injected by the isolated controller or offline fixtures.
-export default function DirectoryWorkspace({ data, profile, onAction, findAddresses, lookupAbn, status = 'ready', onRetry, listenMessages, renderHome, loadOperations, onRegisterNavigation, renderProfile, onSignOut }) {
+export default function DirectoryWorkspace({ onOpenNotification, data, profile, onAction, findAddresses, lookupAbn, status = 'ready', onRetry, listenMessages, renderHome, loadOperations, onRegisterNavigation, renderProfile, onSignOut }) {
   const [route, setRoute] = useState(readRoute), [city, setCity] = useState('sydney'), [query, setQuery] = useState(''), [message, setMessage] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const dirty = useRef(false), routeRef = useRef(route), inFlight = useRef(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -104,7 +104,7 @@ export default function DirectoryWorkspace({ data, profile, onAction, findAddres
             {route.page === 'detail' && <>{business && profile && <div className="bw-actions"><button onClick={() => navigate('enquiry',business.id)}>Contact business</button><button className="btn-light" onClick={() => navigate('support',business.id)}>Report a problem</button><button className="btn-light" onClick={() => run(data.savedIds.includes(business.id) ? 'saved.remove' : 'saved.add', { id: business.id }).catch(() => {})}>{data.savedIds.includes(business.id) ? 'Unsave business' : 'Save business'}</button></div>}<PublicBusinessPage embedded business={business} promotionState={{ rows: currentOffers }}/></>}
             {route.page === 'profile' && renderProfile?.()}
             {route.page === 'saved' && <SavedBusinesses businesses={data.publicBusinesses} savedIds={data.savedIds} onOpen={id => navigate('detail',id)} onAction={run}/>}
-            {route.page === 'notifications' && <Notifications notifications={data.notifications} onAction={run} onOpen={async row => { try { await run('notification.read', { id: row.id }); navigate(row.destination || 'owner',row.targetId || ''); } catch {} }}/>}
+            {route.page === 'notifications' && <Notifications notifications={data.notifications} onAction={run} onOpen={async row => { try { await run('notification.read', { id: row.id }); if (onOpenNotification?.(row) === true) return; navigate(row.destination || 'owner',row.targetId || ''); } catch {} }}/>}
             {route.page === 'inbox' && <BusinessInbox listenMessages={listenMessages} onDirty={value => { dirty.current = value; }} key={route.id || 'inbox'} profile={profile} threads={data.threads} initialThread={route.id} onAction={run}/>}
             {route.page === 'enquiry' && (business ? <EnquiryForm onDirty={value => { dirty.current = value; }} business={business} onAction={run} onCancel={() => navigate('detail',business.id)} onDone={id => navigate('inbox',id)}/> : <Empty title="Business unavailable"/>)}
             {route.page === 'owner' && <OwnerScreen businesses={ownerBusinesses} promotions={ownerPromotions} onAdd={() => navigate('listing')} onEdit={row => navigate('listing',row.id)} onPromotion={(row,id) => navigate('promotion',row?.id || `new:${id}`)} onAction={run}/>}

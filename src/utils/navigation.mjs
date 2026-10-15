@@ -1,3 +1,4 @@
+import { REGISTRATION_ENABLED } from '../config/releaseGates.mjs';
 export function navigationTabs(directory = false) {
   return directory ? [
     { key: 'home', label: 'Home' }, { key: 'promotions', label: 'Promotions' },
@@ -33,6 +34,7 @@ export function accountItems({ directory = false, guest = false, role } = {}) {
   ];
 }
 export const eventExploreItems = [
+  ...(REGISTRATION_ENABLED ? [{ key: 'registration', label: 'Registration events', icon: 'calendar' }] : []),
   { key: 'home', label: 'Home', icon: 'home' }, { key: 'my', label: 'My Events', icon: 'calendar', member: true },
   { key: 'add', label: 'Add Event', icon: 'plus', member: true }, { key: 'favourites', label: 'Favourites', icon: 'heart', member: true },
   { key: 'search', label: 'AI Search', icon: 'search' }, { key: 'calendar', label: 'Calendar', icon: 'calendar' },

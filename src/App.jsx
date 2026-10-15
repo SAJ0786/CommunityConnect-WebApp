@@ -5,6 +5,8 @@ import { auth, firebaseConfigured, functions } from './firebase/firebase';
 import { ensureUserProfile, completeMemberProfile, updateProfile } from './services/userService';
 import { deleteEvent, getActiveEvents, listenLiveEvents } from './services/eventService';
 import { saveNativePushToken, startForegroundPushNotifications, syncGrantedNotificationToken } from './services/notificationService';
+import { REGISTRATION_ENABLED } from './config/releaseGates.mjs';
+import { registrationEntry } from './registration/registrationLinks.mjs';
 import Header from './components/Header';
 import EventsSidebar from './components/EventsSidebar';
 import ExperienceSwitch from './components/ExperienceSwitch';
@@ -27,6 +29,7 @@ import {
   writeProfileCache,
 } from './services/eventCache';
 
+const RegistrationRoute = REGISTRATION_ENABLED ? lazy(() => import('./registration/RegistrationRoute')) : null;
 const AddEvent = lazy(() => import('./pages/AddEvent'));
 const EditEvent = lazy(() => import('./pages/EditEvent'));
 const AISearch = lazy(() => import('./pages/AISearch'));
@@ -76,7 +79,7 @@ export default function App() {
     try { localStorage.removeItem('socialLoginStarted'); await signOut(auth); }
     catch { window.alert('Unable to sign out. Please try again.'); }
   };
-  const [selectedExperience, setSelectedExperience] = useState(() => new URLSearchParams(window.location.search).has('event') ? 'events' : readExperience(window.sessionStorage));
+  const [selectedExperience, setSelectedExperience] = useState(() => (new URLSearchParams(window.location.search).has('event') || new URLSearchParams(window.location.search).has('registration')) ? 'events' : readExperience(window.sessionStorage));
   const experienceRef = useRef(selectedExperience);
   const [page, setPage] = useState(() => getExperience(selectedExperience).page);
   const selectExperience = id => {
@@ -95,9 +98,15 @@ export default function App() {
   const [focusEventId, setFocusEventId] = useState(() => new URLSearchParams(window.location.search).get('event'));
   const [user, setUser]                 = useState(null);
   const [profile, setProfile]           = useState(null);
+  const [registrationTarget, setRegistrationTarget] = useState(null);
   const [profileVerified, setProfileVerified] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const profileRequestRef = useRef(0);
+  useEffect(() => {
+    if (!REGISTRATION_ENABLED || !user?.uid || !profileVerified) return;
+    const target = registrationEntry(window.location.search, user.uid);
+    if (target) { setRegistrationTarget(target); setPage('registration'); }
+  }, [user?.uid, profileVerified]);
   const [events, setEvents]             = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
   const [offlineMode, setOfflineMode]   = useState(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
@@ -115,7 +124,7 @@ export default function App() {
   const [streamRecovery, setStreamRecovery] = useState(null);
 
   useEffect(() => {
-    const dataEntryPages = new Set(['add', 'edit', 'bulkshare', 'admin']);
+    const dataEntryPages = new Set(['add', 'edit', 'bulkshare', 'admin', 'registration', 'registration-create']);
     window.__communityCanAutoUpdate = () => {
       const activeElement = document.activeElement;
       const enteringData = activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeElement.tagName);
@@ -287,7 +296,7 @@ export default function App() {
       const p = await ensureUserProfile(authenticatedUser);
       if (!current()) return;
       setProfile(p);
-      if (!explicitExperienceChoice.current && !new URLSearchParams(window.location.search).has('event') && ['events','directory'].includes(p.defaultModule)) {
+      if (!explicitExperienceChoice.current && !(new URLSearchParams(window.location.search).has('event') || new URLSearchParams(window.location.search).has('registration')) && ['events','directory'].includes(p.defaultModule)) {
         const preferred = saveExperience(window.sessionStorage, p.defaultModule === 'directory' ? 'businesses' : 'events');
         experienceRef.current = preferred.id; setSelectedExperience(preferred.id);
       }
@@ -558,9 +567,15 @@ export default function App() {
     onSignOut={async () => { await signOut(auth); resetAuthState(); }}
   />;
 
+  const openRegistrationUpdate = row => {
+    if (!REGISTRATION_ENABLED || row.module !== 'registration') return false;
+    const target = registrationEntry('?registration=' + encodeURIComponent(row.eventId || row.targetId || '') + '&recipient=' + encodeURIComponent(row.recipientUid || user.uid), user.uid);
+    if (!target) return false;
+    selectExperience('events'); setRegistrationTarget(target); setPage('registration'); return true;
+  };
   const isGuest    = authMode === 'guest';
   const shared     = { user, profile, events, eventsLoading, offlineMode, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId, selectedCity, setSelectedCity };
-  const guestPage  = ['home','businesses','search','calendar','hijri-calendar','streams'].includes(page) ? page : 'home';
+  const guestPage  = ['home','businesses','search','calendar','hijri-calendar','streams', ...(REGISTRATION_ENABLED ? ['registration'] : [])].includes(page) ? page : 'home';
   const activePage = isGuest ? guestPage : (page === 'series' ? 'add' : page);
 
   return (
@@ -701,7 +716,7 @@ export default function App() {
 
           <Suspense fallback={<PageLoadingFallback />}>
           {activePage === 'businesses' && (!isGuest && import.meta.env.VITE_DIRECTORY_WORKSPACE_ENABLED === 'true' && import.meta.env.VITE_READ_ONLY_PREVIEW !== 'true'
-            ? <MemberDirectory key={user.uid} user={user} profile={profile} onRegisterNavigation={registerDirectoryNavigation} renderProfile={() => <Profile user={user} profile={profile} setProfile={setProfile}/>} onSignOut={logoutFromDirectory}/>
+            ? <MemberDirectory key={user.uid} user={user} profile={profile} onRegisterNavigation={registerDirectoryNavigation} onOpenNotification={openRegistrationUpdate} renderProfile={() => <Profile user={user} profile={profile} setProfile={setProfile}/>} onSignOut={logoutFromDirectory}/>
             : <BusinessDirectory selectedCity={selectedCity} setSelectedCity={setSelectedCity} />)}
           {activePage === 'home'      && <Home      {...shared} />}
           {activePage === 'search'    && <AISearch   {...shared} />}
@@ -719,12 +734,14 @@ export default function App() {
               : <CalendarView {...shared} />
           )}
 
+          {REGISTRATION_ENABLED && ['registration', 'registration-create'].includes(activePage) && <RegistrationRoute key={[user?.uid, profile?.role, profile?.adminCity, selectedCity, activePage, registrationTarget].join(':')} user={user} profile={profile} city={selectedCity} initialCreate={activePage === 'registration-create'} initialEventId={activePage === 'registration' ? registrationTarget : null} onBack={() => { setRegistrationTarget(null); setPage('home'); }} onRequireSignIn={() => { setAuthMode(null); setPage('home'); }}/>}
           {!isGuest && activePage === 'add'        && <AddEvent      user={user} profile={profile} onSaved={afterSave} setPage={setPage} events={events} initialEvent={editingEvent?.id === undefined ? editingEvent : null} />}
           {!isGuest && activePage === 'edit'       && <EditEvent     editingEvent={editingEvent} onSaved={afterSave} user={user} profile={profile} events={events} />}
           {!isGuest && activePage === 'my'         && <MyEvents      {...shared} />}
           {!isGuest && activePage === 'host-inbox' && <HostInbox key={user?.uid} user={user} />}
           {!isGuest && activePage === 'favourites'  && <Favourites    {...shared} />}
           {!isGuest && activePage === 'notifications' && <MemberDirectory key={user.uid} user={user} profile={profile} view="notifications" onOpenNotification={row => {
+            if (openRegistrationUpdate(row)) return;
             const destination = ['owner','detail','inbox','reviews','moderation'].includes(row.destination) ? row.destination : 'owner';
             window.location.hash = `/${destination}/${encodeURIComponent(row.targetId || '')}`;
             selectExperience('businesses');
@@ -736,7 +753,7 @@ export default function App() {
           {activePage === 'hijri-calendar' && <HijriCalendar profile={profile} selectedCity={selectedCity} />}
           </Suspense>
 
-          {isGuest && !['home','businesses','search','calendar','hijri-calendar','streams'].includes(page) && (
+          {isGuest && !['home','businesses','search','calendar','hijri-calendar','streams', ...(REGISTRATION_ENABLED ? ['registration'] : [])].includes(page) && (
             <div className="card center" style={{ margin: '40px 16px' }}>
               <div style={{ fontSize: '2rem', marginBottom: 12 }}>🔒</div>
               <h3 style={{ margin: '0 0 8px' }}>Login Required</h3>

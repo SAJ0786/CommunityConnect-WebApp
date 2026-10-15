@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import EventForm from '../components/EventForm';
 import AddRecurringEvent from './AddRecurringEvent';
 import { createEvent } from '../services/eventService';
+import { REGISTRATION_ENABLED } from '../config/releaseGates.mjs';
 import { isAdminRole } from '../utils/permissions';
 
 export default function AddEvent({ user, profile, onSaved, setPage, events = [], initialEvent = null }) {
@@ -79,6 +80,7 @@ export default function AddEvent({ user, profile, onSaved, setPage, events = [],
               <div className="small" style={{ marginTop: 8, fontWeight: 800 }}>Admin only</div>
             )}
           </button>
+          {REGISTRATION_ENABLED && <button type="button" className="card" style={{ textAlign: 'left' }} onClick={() => setPage('registration-create')}><div>📋</div><h3>Registration only events</h3><p>Create an event that requires registration, customise your form and manage attendees.</p></button>}
         </div>
       </div>
     );

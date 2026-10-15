@@ -17,7 +17,7 @@ export default function ConnectedDirectoryWorkspace({ gateway, findAddresses, on
     {state.status === 'loading' ? <p role="status">Loading notifications…</p> : state.status === 'error' ? <button onClick={() => setRetry(value => value + 1)}>Retry</button> : <Notifications notifications={state.data.notifications} onAction={gateway.action} onOpen={async row => { try { await gateway.action('notification.read', {id:row.id}); onOpenNotification?.(row); } catch(error) { setNotificationError(error.message); } }}/>}</main>;
   return <>
     {state.error && <p role="alert" className="bw-error">{state.error}</p>}
-    <DirectoryWorkspace {...state} onRegisterNavigation={onRegisterNavigation} renderProfile={renderProfile} onSignOut={onSignOut} onAction={gateway.action} listenMessages={gateway.listenMessages} loadOperations={gateway.loadOperations}
+    <DirectoryWorkspace {...state} onOpenNotification={onOpenNotification} onRegisterNavigation={onRegisterNavigation} renderProfile={renderProfile} onSignOut={onSignOut} onAction={gateway.action} listenMessages={gateway.listenMessages} loadOperations={gateway.loadOperations}
       findAddresses={findAddresses} lookupAbn={gateway.lookupAbn} onRetry={() => setRetry(value => value + 1)}
       renderHome={({ city, setCity, navigate }) => <BusinessDirectoryView businesses={state.data.publicBusinesses}
         selectedCity={city} setSelectedCity={setCity} savedIds={state.data.savedIds} categoryCatalogue={state.data.categories}

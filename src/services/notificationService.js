@@ -1,3 +1,4 @@
+import { registrationNotificationLink } from '../registration/registrationLinks.mjs';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions, getMessagingInstance, getToken, onMessage } from '../firebase/firebase';
@@ -237,7 +238,8 @@ export async function startForegroundPushNotifications() {
     } catch {
       try {
         const notification = new Notification(title, options);
-        if (payload.data?.type === 'event-reminder') notification.onclick = () => {
+        if (registrationNotificationLink(payload.data)) notification.onclick = () => { window.location.assign(registrationNotificationLink(payload.data)); };
+        else if (payload.data?.type === 'event-reminder') notification.onclick = () => {
           window.location.assign('/?event=' + encodeURIComponent(payload.data.eventId || ''));
         };
       } catch {

@@ -1,0 +1,15 @@
+.registration-workspace { width:100%; min-width:0; max-width:980px; margin:0 auto; padding:12px; overflow-wrap:anywhere; }
+.registration-workspace .card { min-width:0; margin:14px 0; }
+.registration-workspace h1,.registration-workspace h2,.registration-workspace h3 { font-weight:600; }
+.registration-workspace label { display:grid; gap:6px; margin:12px 0; }
+.registration-workspace input:not([type=checkbox]):not([type=radio]),.registration-workspace textarea,.registration-workspace select { width:100%; max-width:100%; box-sizing:border-box; }
+.registration-fields { border:0; padding:0; min-width:0; }
+.registration-actions { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.registration-actions button { white-space:normal; }
+.registration-workspace .registration-check { display:flex; align-items:flex-start; gap:8px; }
+.registration-check input { flex:0 0 auto; width:auto; margin-top:4px; }
+.registration-terms,.registration-workspace dd { white-space:pre-wrap; }
+.registration-workspace dt { font-weight:600; }
+.registration-workspace dd { margin:4px 0 14px; }
+.registration-poster { display:block; max-width:100%; max-height:440px; object-fit:contain; margin:12px auto; }
+.registration-confirm { padding:16px; border:1px solid var(--cc-border); border-radius:12px; background:var(--cc-surface); }

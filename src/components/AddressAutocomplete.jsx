@@ -21,7 +21,7 @@ function waitForGoogle(cb, attempts = 0) {
   setTimeout(() => waitForGoogle(cb, attempts + 1), 100);
 }
 
-export default function AddressAutocomplete({ value = {}, onChange, required, invalid = false }) {
+export default function AddressAutocomplete({ value = {}, onChange, required, invalid = false, label = 'Event address' }) {
   const inputRef = useRef(null);
   const acRef    = useRef(null);
   const [ready,  setReady]  = useState(false);
@@ -81,6 +81,7 @@ export default function AddressAutocomplete({ value = {}, onChange, required, in
     <div>
       <input
         ref={inputRef}
+        aria-label={label}
         required={required}
         aria-invalid={invalid}
         value={text}
@@ -88,7 +89,7 @@ export default function AddressAutocomplete({ value = {}, onChange, required, in
           const fullAddress = e.target.value;
           setText(fullAddress);
           setStatus('');
-          onChange({ ...value, fullAddress });
+          onChange({ ...value, fullAddress, latitude: null, longitude: null, placeId: '' });
         }}
         placeholder={ready ? 'Start typing address…' : 'Loading address search…'}
         disabled={!ready}
@@ -117,7 +118,7 @@ const inputStyle = {
 
 function ManualAddress({ value = {}, onChange, required }) {
   const upd = (k, v) => {
-    const n = { ...value, [k]: v };
+    const n = { ...value, [k]: v, latitude: null, longitude: null, placeId: '' };
     n.fullAddress = `${n.street||''}, ${n.suburb||''} ${n.state||''} ${n.postcode||''}`.trim();
     onChange(n);
   };
