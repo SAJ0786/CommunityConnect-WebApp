@@ -27,13 +27,13 @@ export function distanceKm(from, to) {
   return 6371 * 2 * Math.asin(Math.sqrt(Math.min(1, d)));
 }
 
-const ZONES = { sydney: 'Australia/Sydney', melbourne: 'Australia/Melbourne', canberra: 'Australia/Sydney',
-  brisbane: 'Australia/Brisbane', adelaide: 'Australia/Adelaide', hobart: 'Australia/Hobart', perth: 'Australia/Perth' };
+import { getCityDefinition } from './cities.js';
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 // Work only with the existing public projection; never infer a location for suburb-only records.
 export function businessOpenNow(business, now = new Date()) {
-  if (!ZONES[business.city]) return null;
-  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-AU', { timeZone: ZONES[business.city],
+  const zone = getCityDefinition(business.city)?.timeZone;
+  if (!zone) return null;
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-AU', { timeZone: zone,
     weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now).map(p => [p.type, p.value]));
   const index = DAYS.indexOf(parts.weekday);
   const minutes = Number(parts.hour) * 60 + Number(parts.minute);

@@ -28,6 +28,7 @@ import { getApp } from 'firebase/app';
 import * as XLSX from 'xlsx';
 import { getOrganisations, addOrganisation, deleteOrganisation, updateOrganisation, fileToBase64, seedBuiltInOrgs } from '../services/organisationsService';
 import { invalidateOrgsCache } from '../services/imageService';
+import CityManagementPanel from '../components/CityManagementPanel';
 import { CITY_OPTIONS, DEFAULT_CITY, cityCode, cityLabel, normalizeCity } from '../utils/cities';
 import { compareEventsByDateTime } from '../services/dateUtils';
 import { hasGoogleMapsKey, loadGoogleMapsScript, waitForGoogleMaps } from '../services/googleMapsLoader';
@@ -1394,7 +1395,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
       {tab === 'overview' ? <AdminActionPanels groups={adminGroups} onSelect={setTab}/> : <nav className="cc-admin-tool-nav" aria-label="Admin tools"><button className="btn-light" onClick={() => setTab('overview')}>← Admin Dashboard</button><span>{adminGroups.flatMap(group => group.items).find(item => item[0] === tab)?.[1]}</span></nav>}
 
       {tab === 'troubleshooting' && <DiagnosticsRegister user={user} profile={profile}/>}
-      {tab === 'tools' && <><YouTubeConnectCard isSuperAdmin={isSuperAdmin}/><div className="card"><h3>Utilities</h3><button className="btn-light" onClick={() => setTab('import')}>Event Import &amp; Export</button>{isSuperAdmin && <button className="btn-light" onClick={() => setTab('repair')}>Data Repair</button>}</div></>}
+      {tab === 'tools' && <><CityManagementPanel profile={profile}/><YouTubeConnectCard isSuperAdmin={isSuperAdmin}/><div className="card"><h3>Utilities</h3><button className="btn-light" onClick={() => setTab('import')}>Event Import &amp; Export</button>{isSuperAdmin && <button className="btn-light" onClick={() => setTab('repair')}>Data Repair</button>}</div></>}
       {tab === 'import' && <section className="card"><h3>Export Upcoming Events</h3><p>Download upcoming events within your administrator access.</p><button disabled={adminEvents === null} onClick={exportUpcoming}>Download upcoming events CSV</button></section>}
       {tab === 'users' && renderSummaryPanels(userSummaryPanels, userPanelFilter, applyUserSummaryFilter)}
       {tab === 'events' && adminEvents !== null && renderSummaryPanels(eventSummaryPanels, adminEventPanelFilter, applyEventSummaryFilter)}

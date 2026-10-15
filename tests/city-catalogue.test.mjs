@@ -1,0 +1,46 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { BUNDLED_CITY_CATALOGUE, validateCityCatalogue, installCityCatalogue, getCityDefinition, getCityDefinitions, CITY_OPTIONS, normalizeCity, cityLabel } from '../src/utils/cities.js';
+import { createCityManagement, validCityPreview } from '../src/utils/cityManagement.mjs';
+import { businessOpenNow } from '../src/utils/browseFilters.mjs';
+import { toPublicBusiness } from '../src/utils/publicBusinesses.mjs';
+import { getPrayerLocation } from '../src/utils/prayerLocations.js';
+import { isFutureSeriesEvent } from '../src/utils/eventSeriesScope.mjs';
+const darwin = { id: 'darwin', label: 'Darwin, Australia', code: 'DRW', enabled: true, order: 20, state: 'NT', timeZone: 'Australia/Darwin', latitude: -12.4634, longitude: 130.8456, aliases: ['darwin'], postcodeRanges: [[800, 830]] };
+const extended = () => ({ schemaVersion: 1, cities: [...structuredClone(BUNDLED_CITY_CATALOGUE.cities), { ...darwin }] });
+test('bundled and new cities use the same validated coordinate/timezone contract', () => {
+  assert.ok(validateCityCatalogue(BUNDLED_CITY_CATALOGUE));
+  assert.equal(installCityCatalogue(extended()), true);
+  assert.equal(getCityDefinition('darwin').timeZone, 'Australia/Darwin');
+  assert.ok(CITY_OPTIONS.some(row => row.value === 'darwin'));
+  const invalid = extended(); invalid.cities.at(-1).latitude = null;
+  assert.equal(installCityCatalogue(invalid), false);
+  assert.equal(getCityDefinition('darwin').latitude, darwin.latitude);
+  assert.equal(installCityCatalogue(BUNDLED_CITY_CATALOGUE), false, 'cannot delete a previously installed city');
+  assert.equal(normalizeCity('unknown-city'), 'unknown-city');
+  assert.match(cityLabel('unknown-city'), /Unavailable/);
+  assert.deepEqual(getPrayerLocation('unknown-city'), {});
+});
+test('new city works in business projection, opening times, prayer location and series filtering', () => {
+  installCityCatalogue(extended());
+  const business = toPublicBusiness('example', { status: 'approved', name: 'Example', location: { city: 'darwin' } });
+  assert.equal(business.city, 'darwin');
+  assert.equal(businessOpenNow({ ...business, hours: Array(7).fill('Open 24 hours') }), true);
+  assert.equal(getPrayerLocation('darwin').longitude, darwin.longitude);
+  assert.equal(isFutureSeriesEvent({ metroArea: 'darwin', eventDate: '2026-10-16', startTime: '12:00' }, new Date('2026-10-16T00:00:00Z'), getCityDefinitions()), true);
+  const disabled = extended(); disabled.cities.at(-1).enabled = false;
+  assert.equal(installCityCatalogue(disabled), true);
+  assert.equal(CITY_OPTIONS.some(row => row.value === 'darwin'), false);
+  assert.equal(getCityDefinition('darwin').id, 'darwin');
+});
+test('Add City is off by default and requires verified coordinates before mutation', async () => {
+  const calls = []; const call = async (name, data) => { calls.push({ name, data }); return { data: {} }; };
+  await assert.rejects(createCityManagement(call).search('Darwin'), /not enabled/);
+  const preview = { placeId: 'google-place', fingerprint: 'server-fingerprint', city: darwin };
+  assert.ok(validCityPreview(preview));
+  for (const value of [null, undefined, '12', NaN]) assert.equal(validCityPreview({ ...preview, city: { ...darwin, latitude: value } }), false);
+  const client = createCityManagement(call, { enabled: true });
+  assert.throws(() => client.add({ ...preview, city: { ...darwin, longitude: null } }, 'DRW'), /coordinates/);
+  await client.add(preview, 'DRW');
+  assert.deepEqual(calls, [{ name: 'addCatalogueCity', data: { placeId: 'google-place', fingerprint: 'server-fingerprint', code: 'DRW' } }]);
+});

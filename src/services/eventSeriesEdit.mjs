@@ -1,3 +1,4 @@
+import { getCityDefinitions } from '../utils/cities.js';
 import { isFutureSeriesEvent } from '../utils/eventSeriesScope.mjs';
 import { planSeriesSchedule } from './eventSeriesSchedule.mjs';
 const editable = ['hostName', 'hostPhone', 'hostContactOptional', 'startTime', 'endTime', 'timeMode',
@@ -28,7 +29,7 @@ export function createEventSeriesEditor({ db, sdk, currentUser, canEdit, prepare
     const snapshots = await Promise.all(['seriesId', 'recurringSeriesId'].map(field =>
       sdk.getDocsFromServer(sdk.query(sdk.collection(db, 'events'), sdk.where(field, '==', seriesId)))));
     const rows = [...new Map(snapshots.flatMap(s => s.docs).map(row => [row.id, { ...row.data(), id: row.id }])).values()]
-      .filter(row => isFutureSeriesEvent(row, now())).sort((a, b) => a.eventDate.localeCompare(b.eventDate) || a.id.localeCompare(b.id));
+      .filter(row => isFutureSeriesEvent(row, now(), getCityDefinitions())).sort((a, b) => a.eventDate.localeCompare(b.eventDate) || a.id.localeCompare(b.id));
     if (!rows.length || rows.length > 450) throw new Error('Choose a series with 1–450 future occurrences.');
     if (rows.some(row => !canEdit(member.profile, row, member.uid))) throw new Error('You cannot edit every future occurrence in this series.');
     if (currentUser()?.uid !== member.uid) throw new Error('Your account changed. Reopen Edit Series.');
@@ -55,11 +56,11 @@ export function createEventSeriesEditor({ db, sdk, currentUser, canEdit, prepare
       const changes = snapshots.map((snapshot, index) => {
         const previous = snapshot.data(), before = rows[index];
         if (!snapshot.exists() || version({ ...previous, id: snapshot.id }) !== source.__futureVersions[before.id]
-          || !isFutureSeriesEvent(previous, now())) throw new Error('The series changed. Reopen Edit Series before saving.');
+          || !isFutureSeriesEvent(previous, now(), getCityDefinitions())) throw new Error('The series changed. Reopen Edit Series before saving.');
         const occurrence = planned?.[index] || {};
         const data = { ...prepareFields(updates, { ...previous, ...occurrence }), ...occurrence };
         if (!canEdit(profile, previous, member.uid) || !canEdit(profile, { ...previous, ...data }, member.uid)) throw new Error('You no longer have permission to edit this series.');
-        if (!isFutureSeriesEvent({ ...previous, ...data }, now())) throw new Error('Every updated occurrence must still start in the future.');
+        if (!isFutureSeriesEvent({ ...previous, ...data }, now(), getCityDefinitions())) throw new Error('Every updated occurrence must still start in the future.');
         return { ref: snapshot.ref, data };
       });
       changes.forEach(row => transaction.update(row.ref, { ...row.data, updatedAt: sdk.serverTimestamp() }));

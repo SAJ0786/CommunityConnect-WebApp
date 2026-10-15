@@ -57,6 +57,9 @@ function asrTime(factor, latitude, declination) {
 }
 
 function timeZoneForAddress(address = {}) {
+  if (address.timeZone) {
+    try { new Intl.DateTimeFormat('en-AU', { timeZone: address.timeZone }); return address.timeZone; } catch { return null; }
+  }
   const state = String(address.state || '').trim().toUpperCase();
   if (state === 'WA') return 'Australia/Perth';
   if (state === 'SA') return 'Australia/Adelaide';
@@ -118,6 +121,7 @@ export function calculatePrayerTimes(dateStr, address = {}) {
   const latitude = Number(address.latitude);
   const longitude = Number(address.longitude);
   const timeZone = timeZoneForAddress(address);
+  if (!timeZone) return null;
   const offset = timeZoneOffsetHours(dateStr, timeZone);
   if (offset === null) return null;
   const julian = dateToJulian(year, month, day) - longitude / (15 * 24);

@@ -2,7 +2,7 @@
 import { publicBusinessCoordinates, timestampMillis } from './businessDiscovery.mjs';
 const text = value => typeof value === 'string' ? value.trim() : '';
 const strings = value => Array.isArray(value) ? [...new Set(value.map(text).filter(Boolean))] : [];
-const cities = new Set(['sydney', 'melbourne', 'canberra', 'brisbane', 'adelaide', 'hobart', 'perth', 'rest-of-australia']);
+import { normalizeCity } from './cities.js';
 
 export function safeWebsite(value) {
   const raw = text(value);
@@ -32,7 +32,7 @@ export function toPublicBusiness(id, data = {}) {
     id: text(id), name: text(data.name), description: text(data.description),
     categories: strings([...(Array.isArray(data.categories) ? data.categories : []), data.category]),
     services: strings(data.subcategories),
-    city: cities.has(location.city) ? location.city : 'rest-of-australia',
+    city: location.city ? normalizeCity(location.city) : 'rest-of-australia',
     suburb: text(location.suburb),
     coordinates: publicBusinessCoordinates(location),
     locationApproximate: location.publicDisplay !== 'full',

@@ -1,4 +1,4 @@
-import { DEFAULT_CITY, normalizeCity } from './cities.js';
+import { DEFAULT_CITY, normalizeCity, getCityDefinition } from './cities.js';
 
 export const CITY_PRAYER_LOCATIONS = {
   sydney: { suburb: 'Sydney', state: 'NSW', latitude: -33.8688, longitude: 151.2093, fullAddress: 'Sydney NSW, Australia' },
@@ -13,5 +13,7 @@ export const CITY_PRAYER_LOCATIONS = {
 
 export function getPrayerLocation(city) {
   const normalized = normalizeCity(city || DEFAULT_CITY);
-  return CITY_PRAYER_LOCATIONS[normalized] || CITY_PRAYER_LOCATIONS[DEFAULT_CITY];
+  if (normalized === 'rest-of-australia') return CITY_PRAYER_LOCATIONS.sydney; // Explicitly labelled reference only.
+  const row = getCityDefinition(normalized);
+  return row ? { suburb: row.label.replace(', Australia', ''), state: row.state, latitude: row.latitude, longitude: row.longitude, timeZone: row.timeZone, fullAddress: row.label } : {};
 }

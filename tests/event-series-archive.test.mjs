@@ -18,7 +18,7 @@ function setup(overrides = {}) {
 test('web future-occurrence selection keeps exact parity with native timezone and eligibility logic', async () => {
   const native = await fs.readFile(new URL('../../sdk51-package-backup/backend/functions-lifecycle/seriesScope.js', import.meta.url), 'utf8');
   const web = await fs.readFile(new URL('../src/utils/eventSeriesScope.mjs', import.meta.url), 'utf8');
-  assert.equal(web.replace('export { isFutureSeriesEvent };', 'module.exports = { isFutureSeriesEvent };'), native);
+  assert.equal(web.replace('export { isFutureSeriesEvent };', 'module.exports = { isFutureSeriesEvent };').replace(/\r\n/g, '\n'), native.replace(/\r\n/g, '\n'));
   assert.equal(isFutureSeriesEvent({ ...future, eventDate: '2026-10-10', startTime: '10:30' }, now), false);
   assert.equal(isFutureSeriesEvent({ ...future, metroArea: 'perth', eventDate: '2026-10-10', startTime: '10:30' }, now), true);
   for (const change of [{ isLive: true }, { status: 'archived' }, { eventDate: '2026-02-30' }, { eventDate: '2026-10-09' }])

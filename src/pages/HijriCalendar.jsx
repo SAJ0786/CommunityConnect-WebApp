@@ -1,3 +1,4 @@
+import { getCityDefinition } from '../utils/cities';
 import { Moon, Sun, Sunrise, Sunset, MapPin } from 'lucide-react';
 import { calculatePrayerTimes } from '../services/prayerTimeService';
 import { getPrayerLocation } from '../utils/prayerLocations';
@@ -78,13 +79,16 @@ function Field({ label, children, active = true }) {
 }
 
 export default function HijriCalendar({ selectedCity }) {
-  const [todayIso, setTodayIso] = useState(() => toIsoDate(new Date()));
+  const selectedZone = getCityDefinition(selectedCity === 'rest-of-australia' ? 'sydney' : selectedCity)?.timeZone;
+  const cityToday = () => selectedZone ? new Intl.DateTimeFormat('en-CA', { timeZone: selectedZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date()) : toIsoDate(new Date());
+  const [todayIso, setTodayIso] = useState(cityToday);
   useEffect(() => {
-    const refresh = () => setTodayIso(toIsoDate(new Date()));
+    const refresh = () => setTodayIso(cityToday());
+    refresh();
     const timer = setInterval(refresh, 30000);
     document.addEventListener("visibilitychange", refresh);
     return () => { clearInterval(timer); document.removeEventListener("visibilitychange", refresh); };
-  }, []);
+  }, [selectedZone]);
   const [settings, setSettings] = useState({ overrides: [] });
   const [observances, setObservances] = useState(DEFAULT_HIJRI_OBSERVANCES);
   const [loading, setLoading] = useState(true);

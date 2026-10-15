@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, MapPin } from 'lucide-react';
-import { CITY_OPTIONS } from '../utils/cities';
+import { CITY_OPTIONS, cityLabel } from '../utils/cities';
 import '../styles/browse.css';
 
 export default function CitySelector({ value, onChange, compact = false, label = 'Events location', options = CITY_OPTIONS, showPin = true }) {
@@ -11,10 +11,11 @@ export default function CitySelector({ value, onChange, compact = false, label =
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [position, setPosition] = useState({});
-  const selected = Math.max(0, options.findIndex(city => city.value === value));
-  const caption = city => city.label.replace(', Australia', '');
-  const show = () => { setActive(selected); setOpen(true); };
+  const selected = options.findIndex(city => city.value === value);
+  const caption = city => (city?.label || cityLabel(value)).replace(', Australia', '');
+  const show = () => { setActive(Math.max(0, selected)); setOpen(true); };
   const choose = index => {
+    if (!options[index]) return;
     onChange(options[index].value);
     setOpen(false);
     trigger.current?.focus();
