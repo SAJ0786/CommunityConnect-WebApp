@@ -1,3 +1,4 @@
+import { PROMOTION_AUDIENCE_ENABLED } from '../config/releaseGates.mjs';
 import { safeWebsite } from './publicBusinesses.mjs';
 
 const text = value => typeof value === 'string' ? value.trim() : '';
@@ -24,16 +25,17 @@ export function toPublicPromotion(id, data = {}) {
     id: text(id), businessId: text(data.businessId), title: text(data.title),
     briefText: text(data.briefText), discountText: text(data.discountText), fullDetails: text(data.fullDetails),
     startDate: text(data.startDate), endDate: text(data.endDate), imageUrl: safeWebsite(data.imageUrl),
+    approvedAudience: data.approvedAudience === 'australia' ? 'australia' : 'local',
     status: 'active', hidden: false, boosted: data.boosted === true,
     updatedMillis: millis(data.updatedAt) || millis(data.approvedAt),
   };
 }
 
-export function activePublicPromotions(promotions, businesses, { city, businessId, today } = {}) {
+export function activePublicPromotions(promotions, businesses, { city, businessId, today, audienceEnabled = PROMOTION_AUDIENCE_ENABLED } = {}) {
   const visible = new Map(businesses.map(business => [business.id, business]));
   return promotions.filter(promotion => promotionIsActive(promotion, today))
     .filter(promotion => visible.has(promotion.businessId)
-      && (!city || visible.get(promotion.businessId).city === city)
+      && (!city || audienceEnabled && promotion.approvedAudience === 'australia' || visible.get(promotion.businessId).city === city)
       && (!businessId || promotion.businessId === businessId))
     .map(promotion => ({ ...promotion, business: visible.get(promotion.businessId) }))
     .sort((a, b) => Number(b.boosted) - Number(a.boosted) || b.updatedMillis - a.updatedMillis || a.id.localeCompare(b.id));

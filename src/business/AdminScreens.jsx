@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { newestMembersFirst, memberJoinedLabel } from '../utils/memberProfile.mjs';
 import { historical, published, scopedBusinesses, aggregateStatistics } from './workspaceModel.mjs';
 import { Badge, Panel, Field, Check, Metrics, Empty, ConfirmDialog } from './WorkspaceParts';
+import { PROMOTION_AUDIENCE_ENABLED } from '../config/releaseGates.mjs';
 import { CITY_OPTIONS } from '../utils/cities';
 
 function BusinessReview({ business, history, onAction }) {
@@ -25,20 +26,21 @@ function BusinessReview({ business, history, onAction }) {
   </Panel>;
 }
 
-function PromotionReview({ promotion, business, onAction }) {
-  const [dialog, setDialog] = useState(''), [boosted, setBoosted] = useState(!!promotion.boosted);
+export function PromotionReview({ promotion, business, onAction, audienceEnabled = PROMOTION_AUDIENCE_ENABLED }) {
+  const [dialog, setDialog] = useState(''), [boosted, setBoosted] = useState(!!promotion.boosted), [audience, setAudience] = useState('local'), [confirmed, setConfirmed] = useState(false);
   return <Panel><div className="bw-card-heading"><h2>{promotion.title}</h2><Badge status={promotion.status}/></div><p>{business?.name || 'Business unavailable'}</p><p>{promotion.discountText}</p><p>{promotion.briefText}</p><h3>Details and conditions</h3><p className="bw-preline">{promotion.fullDetails}</p><p>{promotion.startDate} to {promotion.endDate}</p>{promotion.rejectionReason && <p className="bw-error">{promotion.rejectionReason}</p>}
-    {!historical(promotion) && <><Check checked={boosted} onChange={event => setBoosted(event.target.checked)}>Sponsored placement</Check>{!business || !published(business) ? <p className="bw-notice">Publish the linked business before approving this offer.</p> : null}<div className="bw-actions">{promotion.status !== 'active' && <button disabled={!business || !published(business)} onClick={() => setDialog('approve')}>Approve promotion</button>}<button className="btn-light" onClick={() => setDialog('reject')}>Request promotion changes</button></div></>}
-    {dialog && <ConfirmDialog title={dialog === 'approve' ? 'Approve promotion?' : 'Request promotion changes'} description={promotion.title} requireReason={dialog === 'reject'} onClose={() => setDialog('')} onConfirm={reason => onAction(`promotion.${dialog}`, { id: promotion.id, reason, boosted })}/>}
+    {!historical(promotion) && <>{audienceEnabled && <><p>Requested audience: {promotion.requestedAudience === 'australia' ? 'Australia-wide' : 'Local city'}</p><Field label={`Approved audience for ${promotion.title}`}><select value={audience} onChange={event => { setAudience(event.target.value); setConfirmed(false); }}><option value="local">Local city</option>{promotion.requestedAudience === 'australia' && <option value="australia">Australia-wide</option>}</select></Field><Check checked={confirmed} onChange={event => setConfirmed(event.target.checked)}>I confirm this offer is suitable for the selected audience.</Check><p className="bw-muted">Approval may announce the offer before its start date. Editing or approving it again does not send a new campaign.</p></>}<Check checked={boosted} onChange={event => setBoosted(event.target.checked)}>Sponsored placement</Check>{!business || !published(business) ? <p className="bw-notice">Publish the linked business before approving this offer.</p> : null}<div className="bw-actions">{promotion.status !== 'active' && <button disabled={!business || !published(business) || audienceEnabled && !confirmed} onClick={() => setDialog('approve')}>Approve promotion</button>}<button className="btn-light" onClick={() => setDialog('reject')}>Request promotion changes</button></div></>}
+    {dialog && <ConfirmDialog title={dialog === 'approve' ? 'Approve promotion?' : 'Request promotion changes'} description={audienceEnabled && dialog === 'approve' ? `${promotion.title} — ${audience === 'australia' ? 'Australia-wide' : 'Local city'}` : promotion.title} requireReason={dialog === 'reject'} onClose={() => setDialog('')} onConfirm={reason => onAction(`promotion.${dialog}`, { id: promotion.id, reason, boosted, ...(audienceEnabled && dialog === 'approve' ? { audience, confirmAudience: confirmed } : {}) })}/>}
   </Panel>;
 }
 
-export function Reviews({ businesses, promotions, profile, onAction, management = false }) {
+export function Reviews({ businesses, promotions, profile, onAction, management = false, audienceEnabled = PROMOTION_AUDIENCE_ENABLED }) {
   const [tab, setTab] = useState('businesses'), [query, setQuery] = useState(''), [status, setStatus] = useState(management ? 'all' : 'pending');
   const scoped = scopedBusinesses(businesses, profile);
-  const rows = (tab === 'businesses' ? scoped : promotions.filter(row => scoped.some(b => b.id === row.businessId))).filter(row => (status === 'all' || row.status === status) && `${row.name || row.title}`.toLowerCase().includes(query.toLowerCase()));
+  const promotionBusinesses = audienceEnabled ? businesses : scoped;
+  const rows = (tab === 'businesses' ? scoped : promotions.filter(row => promotionBusinesses.some(b => b.id === row.businessId))).filter(row => (status === 'all' || row.status === status) && `${row.name || row.title}`.toLowerCase().includes(query.toLowerCase()));
   return <><div className="bw-tabs" aria-label="Review type">{['businesses','promotions'].map(key => <button key={key} aria-pressed={tab === key} onClick={() => setTab(key)}>{key === 'businesses' ? 'Businesses' : 'Promotions'}</button>)}</div><div className="bw-grid"><Field label="Search reviews"><input value={query} onChange={event => setQuery(event.target.value)}/></Field><Field label="Review status"><select value={status} onChange={event => setStatus(event.target.value)}>{['all','pending','approved','active','rejected','archived','deleted'].map(value => <option key={value} value={value}>{value === 'all' ? 'All statuses' : value}</option>)}</select></Field></div><p>{rows.length} matching records</p>
-    {!rows.length ? <Empty title="No matching reviews"><p>Choose another status or search term.</p></Empty> : <div className="bw-stack">{rows.map(row => tab === 'businesses' ? <BusinessReview key={row.id + row.status} business={row} history={scoped.filter(other => other.id !== row.id && (row.abn && other.abn === row.abn || other.name.toLowerCase() === row.name.toLowerCase()))} onAction={onAction}/> : <PromotionReview key={row.id + row.status} promotion={row} business={scoped.find(b => b.id === row.businessId)} onAction={onAction}/>)}</div>}
+    {!rows.length ? <Empty title="No matching reviews"><p>Choose another status or search term.</p></Empty> : <div className="bw-stack">{rows.map(row => tab === 'businesses' ? <BusinessReview key={row.id + row.status} business={row} history={scoped.filter(other => other.id !== row.id && (row.abn && other.abn === row.abn || other.name.toLowerCase() === row.name.toLowerCase()))} onAction={onAction}/> : <PromotionReview key={[row.id, row.status, row.requestedAudience].join(':')} promotion={row} business={promotionBusinesses.find(b => b.id === row.businessId)} audienceEnabled={audienceEnabled} onAction={onAction}/>)}</div>}
   </>;
 }
 

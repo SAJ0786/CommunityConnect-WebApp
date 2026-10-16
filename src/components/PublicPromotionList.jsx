@@ -1,4 +1,5 @@
 import React from 'react';
+import { PROMOTION_AUDIENCE_ENABLED } from '../config/releaseGates.mjs';
 import { Tag } from 'lucide-react';
 import { businessPath } from '../utils/businessRoutes.mjs';
 
@@ -8,7 +9,7 @@ export function PublicImage({ src, alt = '', className = '', fallback = null }) 
   return src && !failed ? <img src={src} alt={alt} className={className} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : fallback;
 }
 
-export default function PublicPromotionList({ rows, loading, error, fromCache, onRetry, details = false, returnQuery = '' }) {
+export default function PublicPromotionList({ rows, loading, error, fromCache, onRetry, details = false, returnQuery = '', audienceEnabled = PROMOTION_AUDIENCE_ENABLED }) {
   if (loading) return <p role="status" className="directory-state">Loading promotions…</p>;
   if (error) return <div role="alert" className="directory-state directory-error"><h2>Promotions unavailable</h2><p>We couldn’t load offers. Please try again.</p><button onClick={onRetry}>Retry promotions</button></div>;
   return <>
@@ -18,6 +19,7 @@ export default function PublicPromotionList({ rows, loading, error, fromCache, o
         <PublicImage src={promotion.imageUrl} className="directory-promotion-image" />
         <p className="directory-eyebrow">{promotion.boosted ? 'Sponsored offer' : 'Business-supplied offer'}</p>
         <h3>{promotion.title}</h3>
+        {audienceEnabled && promotion.approvedAudience === 'australia' && <p className="directory-offer">Australia-wide</p>}
         {promotion.discountText && <p className="directory-offer">{promotion.discountText}</p>}
         <p className="directory-description">{promotion.briefText}</p>
         {details ? <><h4>Details and conditions</h4><p className="directory-description">{promotion.fullDetails || 'Contact the business for conditions.'}</p></>

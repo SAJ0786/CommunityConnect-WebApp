@@ -1,3 +1,4 @@
+import { PROMOTION_AUDIENCE_ENABLED } from '../../config/releaseGates.mjs';
 import { createBusinessService } from './businesses.mjs';
 import { requireDirectoryMember, requireDirectoryAdmin, requireBusinessParticipant, replyText } from './policy.mjs';
 import { toPublicBusiness } from '../../utils/publicBusinesses.mjs';
@@ -23,7 +24,7 @@ export const emptyDirectoryData = () => ({ businesses: [], promotions: [], publi
 
 // SDK injection supports separately gated live and isolated sessions.
 // No production Firebase singleton is imported into this shared gateway.
-export function createDirectoryGateway({ db, user, assertOpen = () => {}, storage = globalThis.localStorage, sdk, images, operationsEnabled = false,
+export function createDirectoryGateway({ db, user, assertOpen = () => {}, storage = globalThis.localStorage, sdk, images, operationsEnabled = false, promotionAudienceEnabled = PROMOTION_AUDIENCE_ENABLED,
   callFunction = async () => { throw new Error('The isolated Functions service is not connected. No changes were sent.'); } }) {
   const { arrayRemove, arrayUnion, collection, doc, getDocFromServer, getDocsFromServer, increment,
     onSnapshot, orderBy, query, serverTimestamp, updateDoc, where, writeBatch } = sdk;
@@ -57,7 +58,7 @@ export function createDirectoryGateway({ db, user, assertOpen = () => {}, storag
       return guarded;
     },
   };
-  const businessService = createBusinessService({ db, functions: null, sdk: guardedSdk,
+  const businessService = createBusinessService({ db, functions: null, sdk: guardedSdk, promotionAudienceEnabled,
     httpsCallable: (_, name) => async payload => ({ data: await invoke(name, payload) }),
     ensureFirebaseSession: async () => { await session(); return user; } });
   const dismissedKey = `community-connect/emulator/${user.uid}/dismissed-notifications`;
@@ -109,8 +110,8 @@ export function createDirectoryGateway({ db, user, assertOpen = () => {}, storag
       expected = admin ? 11 : 9;
       feed('categories', doc(db, 'settings', 'businessCategories'), snapshot => mergeDirectoryCategories(snapshot.exists() ? snapshot.data() : {}));
       const own = name => query(collection(db, name), where('ownerId', '==', user.uid));
-      // City administrators fetch only their city; super administrators fetch all.
-      const businessQuery = member.role === 'superAdmin' ? collection(db, 'businesses')
+      // Candidate promotion review follows native central admin permissions. Listing tools remain city-scoped.
+      const businessQuery = member.role === 'superAdmin' || admin && promotionAudienceEnabled ? collection(db, 'businesses')
         : admin ? query(collection(db, 'businesses'), where('location.city', '==', member.adminCity || member.defaultCity)) : own('businesses');
       feed('businesses', businessQuery);
       // Promotions have no city field. Own promotions are loaded for members;
@@ -352,7 +353,7 @@ export function createDirectoryGateway({ db, user, assertOpen = () => {}, storag
     }
     if (['promotion.approve', 'promotion.reject'].includes(type)) {
       const promotion = await read('businessPromotions', id);
-      requireDirectoryAdmin(profile, await read('businesses', promotion.businessId));
+      requireDirectoryAdmin(profile, promotionAudienceEnabled ? undefined : await read('businesses', promotion.businessId));
       return type === 'promotion.approve' ? businessService.approveBusinessPromotion(id, payload) : businessService.rejectBusinessPromotion(id, payload.reason);
     }
     throw new Error('This workflow still requires isolated backend integration. No changes were sent.');

@@ -1,3 +1,4 @@
+import { PROMOTION_AUDIENCE_ENABLED } from '../config/releaseGates.mjs';
 import { validateBusinessHours } from './businessHours.mjs';
 import { safeWebsite } from '../utils/publicBusinesses.mjs';
 import { BUSINESS_CATEGORIES } from './categories.mjs';
@@ -25,7 +26,7 @@ export function listingErrors(form) {
   if ([form.contact.website, ...Object.values(form.social)].some(value => value && !safeWebsite(value))) errors.links = 'Use valid http or https website and social links.';
   return errors;
 }
-export function promotionErrors(form) {
+export function promotionErrors(form, audienceEnabled = PROMOTION_AUDIENCE_ENABLED) {
   const errors = {};
   if (!form.businessId) errors.businessId = 'Choose an approved business.';
   if (form.title.trim().length < 3) errors.title = 'Enter a promotion title.';
@@ -33,6 +34,7 @@ export function promotionErrors(form) {
   if (form.fullDetails.trim().length < 20) errors.fullDetails = 'Add full terms and conditions (at least 20 characters).';
   const valid = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
   if (!valid(form.startDate) || !valid(form.endDate) || form.endDate < form.startDate) errors.dates = 'Choose valid dates with the end on or after the start.';
+  if (audienceEnabled && form.requestedAudience != null && !['local', 'australia'].includes(form.requestedAudience)) errors.requestedAudience = 'Choose local city or Australia-wide.';
   if (!form.declaration) errors.declaration = 'Confirm the promotion declaration.';
   return errors;
 }
@@ -58,8 +60,8 @@ export function listingSubmission(form, catalogue = BUSINESS_CATEGORIES) {
     location: pick(form.location,['fullAddress','suburb','state','postcode','city','latitude','longitude','publicDisplay']),
     referrer: pick(form.referrer,['name','phone','location','consentConfirmed']) };
 }
-export function promotionSubmission(form) {
-  return Object.fromEntries(['businessId','title','briefText','discountText','fullDetails','startDate','endDate','imageFile','imageUrl'].map(key => [key,form[key]]));
+export function promotionSubmission(form, audienceEnabled = PROMOTION_AUDIENCE_ENABLED) {
+  return { ...Object.fromEntries(['businessId','title','briefText','discountText','fullDetails','startDate','endDate','imageFile','imageUrl'].map(key => [key,form[key]])), ...(audienceEnabled ? { requestedAudience: form.requestedAudience ?? 'local' } : {}) };
 }
 export function scopedBusinesses(rows, profile) {
   return profile?.role === 'superAdmin' ? rows : rows.filter(row => row.location?.city === (profile?.adminCity || profile?.defaultCity));

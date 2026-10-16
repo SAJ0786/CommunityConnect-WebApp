@@ -1,10 +1,12 @@
 
+import { PROMOTION_AUDIENCE_ENABLED } from '../../config/releaseGates.mjs';
+import { promotionApprovalPayload } from '../../business/promotionAudience.mjs';
 import { cleanBusinessHours as cleanHours, validateBusinessHours } from '../../business/businessHours.mjs';
 
 
 // Ported from native services/businesses.js. Dependency injection keeps the test
 // workspace isolated. Production activation is deliberately a separate gate.
-export function createBusinessService({ db, functions, ensureFirebaseSession, sdk, httpsCallable = () => { throw new Error('The isolated Functions service is not connected.'); } }) {
+export function createBusinessService({ db, functions, ensureFirebaseSession, sdk, promotionAudienceEnabled = PROMOTION_AUDIENCE_ENABLED, httpsCallable = () => { throw new Error('The isolated Functions service is not connected.'); } }) {
 const { addDoc, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, where, writeBatch } = sdk;
 const COLLECTION_NAME = 'businesses';
 const PUBLIC_COLLECTION_NAME = 'publicBusinesses';
@@ -740,6 +742,7 @@ async function setBusinessVisibility(businessId, hidden) {
 
 function cleanPromotion(payload = {}) {
   return {
+    ...(promotionAudienceEnabled ? { requestedAudience: payload.requestedAudience ?? 'local' } : {}),
     title: clean(payload.title),
     briefText: clean(payload.briefText),
     discountText: clean(payload.discountText),
@@ -772,6 +775,7 @@ function publicPromotionFields(promotion = {}, boosted = false) {
 function validateBusinessPromotion(payload = {}) {
   const promotion = cleanPromotion(payload);
   const errors = {};
+  if (promotionAudienceEnabled && !['local', 'australia'].includes(promotion.requestedAudience)) errors.requestedAudience = 'Choose local city or Australia-wide.';
   if (promotion.title.length < 3) errors.title = 'Enter a promotion title.';
   if (promotion.briefText.length < 10) errors.briefText = 'Add a short promotion summary.';
   if (promotion.fullDetails.length < 20) errors.fullDetails = 'Add complete promotion terms and details.';
@@ -907,6 +911,10 @@ async function approveBusinessPromotion(promotionId, options = {}) {
   const snapshot = await getDoc(reference);
   if (!snapshot.exists()) throw new Error('This promotion could not be found.');
   const promotion = snapshot.data() || {};
+  if (promotionAudienceEnabled) {
+    const payload = promotionApprovalPayload(promotionId, promotion, options);
+    return (await httpsCallable(functions, 'approvePromotionAudience')(payload)).data;
+  }
   const businessSnapshot = await getDoc(doc(db, COLLECTION_NAME, promotion.businessId));
   const business = businessSnapshot.data() || {};
   if (business.status !== 'approved' || business.hidden === true) {

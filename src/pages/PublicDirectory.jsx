@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { PROMOTION_AUDIENCE_ENABLED } from '../config/releaseGates.mjs';
 import { Store, Tags, CalendarDays } from 'lucide-react';
 import BottomNav from '../components/BottomNav';
 import AccountMenu from '../components/AccountMenu';
@@ -36,7 +37,7 @@ export default function PublicDirectory({ route }) {
     <button className="cc-header-menu" onClick={() => setMenuOpen(true)}>Menu</button></header>
     {route.type === 'directory' ? <BusinessDirectoryView {...listings} selectedCity={city} setSelectedCity={setCity} />
       : route.type === 'promotions' ? <main className="business-directory" aria-labelledby="promotions-title">
-        <section className="directory-hero"><div><p className="directory-eyebrow">Local business offers</p><h1 id="promotions-title">Current promotions</h1><p>Explore offers in {cityLabel(city).replace(', Australia', '')}. Open a business to see full details and conditions.</p></div>
+        <section className="directory-hero"><div><p className="directory-eyebrow">{PROMOTION_AUDIENCE_ENABLED ? 'Local and Australia-wide offers' : 'Local business offers'}</p><h1 id="promotions-title">Current promotions</h1><p>Explore offers in {cityLabel(city).replace(', Australia', '')}{PROMOTION_AUDIENCE_ENABLED ? ' and approved Australia-wide promotions' : ''}. Open a business to see full details and conditions.</p></div>
           <div className="directory-city"><CitySelector label="Your city" value={city} onChange={setCity} /></div>
         </section>
         <section className="directory-promotions" aria-label="Business promotions"><PublicPromotionList {...promotionState} loading={offers.loading || listings.loading} error={offers.error || listings.error} onRetry={() => { offers.onRetry(); listings.onRetry(); }} returnQuery={directoryQuery({ city })}/></section>
