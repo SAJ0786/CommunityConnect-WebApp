@@ -1,5 +1,33 @@
 # Community Connect release status — 12 October 2026
 
+## Staged registration review and normal-form follow-up live - 17 October 2026
+
+Production https://communityconnect.siza.info serves Web source
+`9729f2f36757d6995a69e854a6fb45eee3c59b79`, Hosting `aa458d7a89f29384`,
+released 2026-10-16T19:21:35.543Z (06:21 Sydney). The coordinated staged-registration
+backend was deployed first; all 19 registration functions were ACTIVE with
+existing ENABLED=true, NOTICES=false and MAINTENANCE=true configuration.
+No default-codebase functions, rules, indexes or relay were changed in this release.
+
+Registrants appear as expandable name-only response cards. Submission returns
+directly to the expanded normal event card. Superadmin approval is available for
+new events and submitted changes; the last approved event/form/venue/poster stays
+published during review. Registration event details now reuse the normal event
+form options while retaining private registration contacts/posters and exact clocks.
+
+All 134 live file hashes match; `/`, `/app` and `/businesses` return expected entry
+artifacts. Signed-out phone/desktop checks pass. Thirteen safe rejection probes
+pass (ten auth401, three malformed registration payload400); no live registration
+mutation or real stream/message was used. Local evidence: 277 Node tests,
+18 React workflows, 95 responsive layouts and phone/desktop staged-review checks.
+Existing five production flags/SDK/Places/VAPID configuration and reminder/delivery
+holds are preserved. Actual authenticated/device acceptance remains outstanding.
+
+Previous Hosting `97f9f2dedf9923d5` is backed up in
+`registration-pre-staged-20261017`. Native installed app delivery must be verified
+separately; Native source/backend deployment alone does not establish an app
+update. See current root `COPILOT-HANDOVER.md` for Codex tasks and Native ownership.
+
 ## Unified registration live - 17 October 2026 Sydney
 
 Production https://communityconnect.siza.info now serves source

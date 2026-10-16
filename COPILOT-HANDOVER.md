@@ -13,15 +13,27 @@ See [release status](docs/RELEASE-STATUS-2026-10-12.md) and
 - Production URL: https://communityconnect.siza.info.
 - Web follow-up source: `9729f2f36757d6995a69e854a6fb45eee3c59b79`.
   The user explicitly authorized coordinated backend/Web deployment and a
-  side-by-side Native update on 17 October. Deployment results are recorded below
-  when verified; do not infer an installed Native update from a source commit.
+  side-by-side Native update on 17 October. This Web source is now LIVE as Hosting
+  `aa458d7a89f29384`, released 2026-10-16T19:21:35.543Z (17 October 06:21 Sydney).
+  All 134 hosted files match the production build; `/`, `/app` and `/businesses`
+  return the exact expected artifacts. Signed-out 390px/1440px entries render
+  without overflow or page errors. Thirteen safe empty-payload rejection probes
+  pass: ten return UNAUTHENTICATED/401 and three registration handlers validate
+  payload first with INVALID_ARGUMENT/400. These are not authenticated acceptance.
+  Do not infer an installed Native update from a source commit.
 - Native-owned staged registration backend/client source:
   `1848a204b318a2f5849540060c03a22382cbc470` in
   `SAJ0786/CommunityEvents-Native`. Native deployment/build status is maintained
   in that repository's root `COPILOT-HANDOVER.md`.
+  Read-only production metadata on 17 October confirms all 19 registration
+  functions ACTIVE; staged save/get/list/approve/poster handlers have new
+  2026-10-16T19:19Z revisions with ENABLED=true, NOTICES=false and MAINTENANCE=true.
 - Before this follow-up, live Hosting version was `97f9f2dedf9923d5` from Web
   `9f4170d`. The twelve canonical Web streaming/calendar functions were already
   deployed. This follow-up changes no canonical Web functions.
+  Previous Hosting is preserved in channel `registration-pre-staged-20261017`.
+  Ignored `.qa-registration-release/` holds build/hash/metadata verification and
+  deploy logs; no credentials are recorded.
 - Existing production flags remain true: directory workspace, ordinary event
   reminders, dynamic city catalogue, city management and registration.
   `.env.example` is a setup template, not proof of live flag state.

@@ -1,6 +1,15 @@
 # Event registration on web
 
-## Registration usability follow-up (not deployed)
+## Registration usability follow-up - live 17 October 2026 Sydney
+
+Source `9729f2f36757d6995a69e854a6fb45eee3c59b79` is live at
+https://communityconnect.siza.info as Hosting `aa458d7a89f29384`, released
+2026-10-16T19:21:35.543Z. All 134 hosted hashes and the three configured entry
+routes match the validated production build. Signed-out 390px/1440px entries
+render without overflow or page errors. Thirteen safe malformed/unauthenticated
+rejection probes pass; authenticated registration/device acceptance is separate.
+Previous version `97f9f2dedf9923d5` is retained in
+`registration-pre-staged-20261017`.
 
 Manager responses are collapsed, keyboard-accessible cards headed by the
 registrant's saved name answer, not the internal registration reference. Opening
@@ -35,9 +44,10 @@ requested explicitly with `getRegistrationPoster({eventId,view:'pending'})`.
 Default poster access still returns the published poster. Published bookings,
 form version, venue, schedule and stream state remain unchanged until promotion.
 
-Release of this candidate depends on the Native-owned staged changes/projection
-contract and metadata persistence; do not publish the expanded editor against an
-older backend that discards its additional fields. Neither registration reminders
+The Native-owned staged changes/projection contract and metadata persistence
+were deployed first: all 19 registration functions were ACTIVE, with new staged
+save/get/list/approve/poster revisions and existing true/false/true
+enabled/notices/maintenance gates. Neither registration reminders
 nor notification delivery is enabled by these changes. A read-only query of the
 reported event's public schedule confirmed its existing record
 has no saved clock/instant fields; no event time has been inferred or backfilled.
