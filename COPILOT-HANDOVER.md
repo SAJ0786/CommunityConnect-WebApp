@@ -84,6 +84,12 @@ See [release status](docs/RELEASE-STATUS-2026-10-12.md) and
 1. Confirm and record actual Android/iOS runtime delivery (OTA group or build/
    store identifiers and channel/runtime). Native source and Functions deployment
    alone do not update installed binaries; consult the Native handover.
+   Investigation confirmed no OTA support (`expo-updates`/runtime/channel absent;
+   Android updates disabled). The user explicitly authorized version 2.1.1
+   TestFlight and Android test APK builds with registration enabled on 17 October.
+   These tester builds are being handled by the Native session. No public-store
+   submission is authorized; delivery safeguards remain disabled. Do not call
+   Native runtime updated until build/distribution identifiers are recorded.
 2. Authenticated, separately authorized acceptance using real roles/devices:
    new registration, edit, host responses, staged event/form/poster review,
    Superadmin approval, private venue/poster access and stream resume/end.
