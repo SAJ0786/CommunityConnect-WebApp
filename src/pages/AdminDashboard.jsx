@@ -1577,7 +1577,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                     <button onClick={() => {
                       if (!confirm(`Delete account for ${u.fullName || u.email}?\nThis removes their login and profile.`)) return;
                       const doBan = confirm('Also BAN this user to prevent re-registration?\n\nOK = Ban + Delete\nCancel = Delete only');
-                      httpsCallable(fns, 'adminDeleteUser')({ targetUid: u.id, ban: doBan })
+                      httpsCallable(fns, 'adminDeleteUser')({ targetUid: u.id, ban: doBan, permanent: !doBan })
                         .then(() => { showMsg(`User deleted${doBan ? ' and banned' : ''}.`); setUsers(prev => prev.filter(x => x.id !== u.id)); })
                         .catch(e => showMsg('Delete failed: ' + e.message, 'error'));
                     }} style={{ fontSize:'0.75rem', padding:'5px 10px', borderRadius:8,
