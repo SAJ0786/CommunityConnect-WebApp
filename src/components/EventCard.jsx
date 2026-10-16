@@ -11,6 +11,7 @@ import { getHijriDisplay, hijriDisplayFromParts } from '../services/hijriService
 import { getHijriSettings } from '../services/settingsService';
 import { STORE_SHARE_LINES } from '../utils/storeLinks';
 import { useRegistration } from '../registration/RegistrationContext';
+import { REGISTRATION_REMINDERS_ENABLED } from '../config/releaseGates.mjs';
 
 const GoLiveButton = lazy(() => import('./LiveStream').then(module => ({ default: module.GoLiveButton })));
 const WatchLiveButton = lazy(() => import('./LiveStream').then(module => ({ default: module.WatchLiveButton })));
@@ -251,7 +252,8 @@ export default function EventCard({
   };
   const actions = eventActions({ event: { ...event, isRegistered: registrationDetail ? registrationDetail.ownRegistration?.status === 'registered' : event.isRegistered,
     canEditRegistration: registrationDetail?.canEditRegistration ?? event.canEditRegistration,
-    privateVenueAvailable: Boolean(registrationDetail?.privateDetails) }, member, manage, admin, registrationRemindersEnabled: import.meta.env.VITE_EVENT_REMINDERS_ENABLED === 'true',
+    privateVenueAvailable: Boolean(registrationDetail?.privateDetails) }, member, manage, admin,
+    registrationRemindersEnabled: REGISTRATION_REMINDERS_ENABLED && import.meta.env.VITE_EVENT_REMINDERS_ENABLED === 'true',
     arrangeNiaz: canArrangeEventNiaz(event, user, profile, isGuest), readOnly: readOnly || registrationBusy, handlers });
   const chip = dateChip(event.eventDate);
   const organiser = isPrivate ? 'Private' : (event.organisationType === 'org' || event.organiserCategory === 'org') ? 'Org' : 'Centre';

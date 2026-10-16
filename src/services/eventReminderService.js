@@ -1,6 +1,10 @@
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from '../firebase/firebase';
 import { enablePushNotifications } from './notificationService';
+import { REGISTRATION_REMINDERS_ENABLED, REGISTRATION_REMINDER_HOLD } from '../config/releaseGates.mjs';
+function requireReminderRelease(registrationOnly) {
+  if (registrationOnly && !REGISTRATION_REMINDERS_ENABLED) throw new Error(REGISTRATION_REMINDER_HOLD);
+}
 function context() {
   if (import.meta.env.VITE_READ_ONLY_PREVIEW === 'true') throw new Error('Disabled in the read-only preview.');
   if (import.meta.env.VITE_EVENT_REMINDERS_ENABLED !== 'true') throw new Error('Web push reminders are awaiting backend activation. No reminder has been scheduled.');
@@ -16,8 +20,12 @@ async function call(name, eventId, extra = {}, savedContext = context()) {
   return result;
 }
 const collection = registrationOnly => ({ eventCollection: registrationOnly ? 'registrationEvents' : 'events' });
-export async function getEventReminder(eventId, registrationOnly = false) { return (await call('getEventReminder', eventId, collection(registrationOnly))).reminder; }
+export async function getEventReminder(eventId, registrationOnly = false) {
+  requireReminderRelease(registrationOnly);
+  return (await call('getEventReminder', eventId, collection(registrationOnly))).reminder;
+}
 export async function setEventReminder(eventId, minutesBefore, registrationOnly = false) {
+  requireReminderRelease(registrationOnly);
   const member = context(), token = await enablePushNotifications(member.uid);
   if (!token) throw new Error('Browser notifications were not enabled. No reminder was scheduled.');
   const result = await call('setEventReminder', eventId, { minutesBefore, token, ...collection(registrationOnly) }, member);
@@ -25,5 +33,6 @@ export async function setEventReminder(eventId, minutesBefore, registrationOnly 
   return result.reminder;
 }
 export async function removeEventReminder(eventId, registrationOnly = false) {
+  requireReminderRelease(registrationOnly);
   if ((await call('removeEventReminder', eventId, collection(registrationOnly))).removed !== true) throw new Error('Removal could not be confirmed. Reopen Reminder to check.');
 }

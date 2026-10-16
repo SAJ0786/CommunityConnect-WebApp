@@ -1,4 +1,5 @@
 // UI availability is additional to server rules, never a replacement for them.
+import { REGISTRATION_REMINDER_HOLD } from '../config/releaseGates.mjs';
 export function eventActions({ event, member, manage, admin, arrangeNiaz = manage, readOnly, registrationRemindersEnabled = false, handlers = {} }) {
   const hostUid = event.createdByUserId || event.ownerUid || event.createdByUid || event.userId;
   const series = Boolean(event.isSeries || event.isRecurring || event.seriesId || event.recurringSeriesId);
@@ -20,7 +21,8 @@ export function eventActions({ event, member, manage, admin, arrangeNiaz = manag
       !watchLive,
       event.registrationOnly && event.status !== 'approved' ? 'Only approved registration events can stream.' : 'You do not have permission for this action.'),
     action('reminder', 'Reminder', member && (!event.registrationOnly || registrationRemindersEnabled && Boolean(event.startTime && event.startAt)), true,
-      event.registrationOnly ? !event.startTime || !event.startAt ? 'The host must provide an exact start time before a reminder can be scheduled.' : 'Web reminders are awaiting separate backend activation. No reminder has been scheduled.' : 'Sign in to set reminders.'),
+      event.registrationOnly ? !registrationRemindersEnabled ? REGISTRATION_REMINDER_HOLD
+        : !event.startTime || !event.startAt ? 'The host must provide an exact start time before a reminder can be scheduled.' : REGISTRATION_REMINDER_HOLD : 'Sign in to set reminders.'),
     action('calendar', 'Sync Calendar', member, false, 'Sign in to sync your calendar.'),
     action('niaz', 'Niaz Arrangement', member && arrangeNiaz),
     action('edit', 'Edit', member && manage, true),

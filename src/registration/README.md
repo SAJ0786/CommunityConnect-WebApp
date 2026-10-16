@@ -76,8 +76,12 @@ on clients and refused server-side, without altering ordinary-event delivery.
 **Reminder release hold:** the candidate Web reminder source now supports explicit
 `eventCollection: registrationEvents`, rechecking approval/deletion and exact
 server-projected starts before scheduling/dispatch; it never reads private venue
-or answers. Reminder remains visible but disabled while the existing
-`VITE_EVENT_REMINDERS_ENABLED` gate is off, or when no exact start is available.
+or answers. Registration Reminder remains visible but disabled independently of the ordinary
+`VITE_EVENT_REMINDERS_ENABLED=true` production flag. Its explicit
+`REGISTRATION_REMINDERS_ENABLED=false` release hold is enforced in both card and
+service before callable/token/notification work. The user-visible reason is:
+"Registration reminders are awaiting separate backend activation. No reminder has
+been scheduled." Future activation also requires an exact event start.
 No reminder endpoints, worker or delivery gate are activated by this change.
 Deploy/accept the candidate reminder backend separately before enabling it.
 Do not enable registration clients before the collection-aware streaming backend
