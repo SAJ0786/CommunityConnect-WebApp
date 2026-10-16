@@ -4,6 +4,7 @@ import AddRecurringEvent from './AddRecurringEvent';
 import { createEvent } from '../services/eventService';
 import { REGISTRATION_ENABLED } from '../config/releaseGates.mjs';
 import { isAdminRole } from '../utils/permissions';
+import '../styles/add-event.css';
 
 export default function AddEvent({ user, profile, onSaved, setPage, events = [], initialEvent = null }) {
   const [mode, setMode] = useState(initialEvent ? 'single' : '');
@@ -43,44 +44,24 @@ export default function AddEvent({ user, profile, onSaved, setPage, events = [],
           Choose how this event should be created.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-          <button type="button" onClick={() => setMode('single')}
-            style={{
-              textAlign: 'left',
-              background: 'var(--cc-surface)',
-              color: 'var(--text)',
-              border: '1px solid var(--border)',
-              borderRadius: 14,
-              padding: 16,
-              boxShadow: 'var(--shadow-sm)',
-            }}>
-            <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>📅</div>
-            <div style={{ fontWeight: 900, marginBottom: 4 }}>Single Event</div>
-            <div className="small" style={{ color: 'var(--muted)' }}>Create one event for one date and time.</div>
+          <button type="button" className="add-event-choice" onClick={() => setMode('single')}>
+            <span className="add-event-choice-icon" aria-hidden="true">📅</span>
+            <strong>Single Event</strong>
+            <span>Create one event for one date and time.</span>
           </button>
-          <button type="button" disabled={!canCreateRecurring}
+          <button type="button" className="add-event-choice" disabled={!canCreateRecurring}
             onClick={() => canCreateRecurring && setMode('recurring')}
-            title={canCreateRecurring ? 'Create repeating events' : 'Recurring events are available to admins only'}
-            style={{
-              textAlign: 'left',
-              background: canCreateRecurring ? 'var(--cc-surface)' : 'var(--cc-background)',
-              color: canCreateRecurring ? 'var(--text)' : 'var(--cc-muted)',
-              border: '1px solid var(--border)',
-              borderRadius: 14,
-              padding: 16,
-              boxShadow: 'var(--shadow-sm)',
-              opacity: canCreateRecurring ? 1 : 0.7,
-              cursor: canCreateRecurring ? 'pointer' : 'not-allowed',
-            }}>
-            <div style={{ fontSize: '1.5rem', marginBottom: 8 }}>🔁</div>
-            <div style={{ fontWeight: 900, marginBottom: 4 }}>Recurring Event</div>
-            <div className="small" style={{ color: canCreateRecurring ? 'var(--muted)' : 'var(--cc-muted)' }}>
-              Repeat by day, week, month or year with a preview before saving.
-            </div>
-            {!canCreateRecurring && (
-              <div className="small" style={{ marginTop: 8, fontWeight: 800 }}>Admin only</div>
-            )}
+            title={canCreateRecurring ? 'Create repeating events' : 'Recurring events are available to admins only'}>
+            <span className="add-event-choice-icon" aria-hidden="true">🔁</span>
+            <strong>Recurring Event</strong>
+            <span>Repeat by day, week, month or year with a preview before saving.</span>
+            {!canCreateRecurring && <em>Admin only</em>}
           </button>
-          {REGISTRATION_ENABLED && <button type="button" className="card" style={{ textAlign: 'left' }} onClick={() => setPage('registration-create')}><div>📋</div><h3>Registration only events</h3><p>Create an event that requires registration, customise your form and manage attendees.</p></button>}
+          {REGISTRATION_ENABLED && <button type="button" className="add-event-choice" onClick={() => setPage('registration-create')}>
+            <span className="add-event-choice-icon" aria-hidden="true">📋</span>
+            <strong>Registration only event</strong>
+            <span>For events where people must register to attend. Build a registration form, set a closing time and manage attendees. The full address and poster are shown only to registered attendees. Admin approval is required before it appears publicly.</span>
+          </button>}
         </div>
       </div>
     );

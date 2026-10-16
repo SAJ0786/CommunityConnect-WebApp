@@ -25,7 +25,7 @@ export default function RegistrationEditor({ initialDraft, eventTypes, templates
     reader.readAsDataURL(file);
   };
   const closeError = closingDateError(draft), notesError = publicNotesError(draft), suburbError = publicSuburbError(draft);
-  return <section><div className="registration-actions"><button type="button" disabled={busy} className="btn-light" onClick={onCancel}>Back to event</button>{step !== 'event' && <button type="button" disabled={busy} className="btn-light" onClick={() => setStep('event')}>Event details</button>}{step === 'preview' && <button type="button" onClick={() => setStep('form')}>Edit form</button>}</div>
+  return <section><div className="registration-actions">{onCancel && <button type="button" disabled={busy} className="btn-light" onClick={onCancel}>Back to event</button>}{step !== 'event' && <button type="button" disabled={busy} className="btn-light" onClick={() => setStep('event')}>Event details</button>}{step === 'preview' && <button type="button" onClick={() => setStep('form')}>Edit form</button>}</div>
     {error && <p role="alert">{error}</p>}<fieldset disabled={busy} className="registration-fields">
       {step === 'event' && <div className="card"><h2>Event details</h2>
         <label>Event title<input value={draft.title} maxLength={160} onChange={e => update('title', e.target.value)}/></label>
