@@ -24,7 +24,7 @@ function ShareBusiness({ business }) {
     catch (error) { if (error.name !== 'AbortError') await copy(); }
   };
   return <div className="directory-share">
-    <div className="directory-contacts"><button onClick={share}><Share2 size={19} aria-hidden="true" /><span>Share business</span></button><button className="btn-light" onClick={copy}><Link2 size={19} aria-hidden="true" /><span>Copy link</span></button></div>
+    <div className="directory-contacts"><button onClick={share}><span className="directory-contact-icon"><Share2 size={20} aria-hidden="true" /></span><span>Share business</span></button><button className="btn-light" onClick={copy}><span className="directory-contact-icon"><Link2 size={20} aria-hidden="true" /></span><span>Copy link</span></button></div>
     <p role="status" className="directory-scope">{message}</p>
     {manual && <label>Business link<input readOnly value={url} onFocus={event => event.target.select()} /></label>}
   </div>;
@@ -58,9 +58,11 @@ export default function PublicBusinessPage({ business, loading, error, fromCache
             <h1 id="business-title">{business.name}</h1><p>{business.address || 'Location details not supplied'}</p>
           </div></div>
         </section>
-        <BusinessContactLinks business={business} />
-        <ShareBusiness key={business.id} business={business}/>
-        {memberActions}
+        <div className="directory-business-actions">
+          <BusinessContactLinks business={business} />
+          <ShareBusiness key={business.id} business={business}/>
+          {memberActions}
+        </div>
         <div className="directory-grid directory-detail-grid">
           <section className="directory-card"><h2>About this business</h2><p className="directory-description">{business.description || 'Contact the business for more information.'}</p>
             {!!business.services.length && <><h3>Services</h3><ul className="directory-services">{business.services.map(service => <li key={service}>{service}</li>)}</ul></>}

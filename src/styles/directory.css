@@ -83,6 +83,18 @@
 .directory-member-actions button > span { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--cc-primary-soft); color: var(--cc-primary); }
 .directory-member-actions button:nth-child(2) > span { background: var(--cc-warning-soft); color: var(--cc-warning-strong); }
 .directory-member-actions button:nth-child(3) > span { background: var(--cc-rose-soft); color: var(--cc-rose); }
+.directory-business-actions .directory-contacts,
+.directory-business-actions .directory-member-actions { display: grid; grid-template-columns: repeat(auto-fill,88px); gap: 10px; max-width: none; margin: 14px 0; }
+.directory-business-actions .directory-share { max-width: none; }
+.directory-business-actions .directory-contacts :is(a,button),
+.directory-business-actions .directory-member-actions button { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px; width: 88px; height: 100px; padding: 10px 6px; border: 1px solid var(--cc-border); border-radius: 16px; background: var(--cc-surface); color: var(--cc-text); box-shadow: none; font: inherit; font-size: .8rem; font-weight: 500; line-height: 1.25; text-align: center; white-space: normal; text-decoration: none; }
+.directory-business-actions .directory-contact-icon,
+.directory-business-actions .directory-member-actions button > span { display: grid; place-items: center; flex: 0 0 40px; width: 40px; height: 40px; border-radius: 13px; background: var(--cc-primary-soft); color: var(--cc-primary); }
+.directory-business-actions .directory-contact-phone .directory-contact-icon,
+.directory-business-actions .directory-contact-whatsapp .directory-contact-icon { background: var(--cc-success-soft); color: var(--cc-success); }
+.directory-business-actions .directory-contact-location .directory-contact-icon,
+.directory-business-actions .directory-member-actions button:nth-child(2) > span { background: var(--cc-warning-soft); color: var(--cc-warning-strong); }
+.directory-business-actions .directory-member-actions button:nth-child(3) > span { background: var(--cc-rose-soft); color: var(--cc-rose); }
 .directory-footer { max-width: 1200px; margin: 0 auto; padding: 24px 20px; color: var(--cc-muted); font-size: .8rem; line-height: 1.6; }
 .business-browse-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:18px 0; }
 .business-browse-header h1 { margin:0; font-size:1.5rem; }

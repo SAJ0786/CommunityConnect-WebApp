@@ -63,6 +63,13 @@ try {
     assert.equal(new URL(page.url()).pathname, '/');
     assert.equal(new URL(page.url()).hash, '#/detail/example');
     const actions = page.getByRole('group', { name: 'Member business actions' });
+    const sizes = await page.locator('.directory-business-actions').evaluate(element =>
+      [...element.querySelectorAll('a,button')].map(control => {
+        const rect = control.getBoundingClientRect();
+        return [Math.round(rect.width), Math.round(rect.height)];
+      }));
+    assert.ok(sizes.length >= 7, 'Contact, share and member actions are present');
+    assert.ok(sizes.every(([width, height]) => width === 88 && height === 100), 'All business action tiles have identical dimensions');
     const placement = await actions.evaluate(element => {
       const buttons = [...element.querySelectorAll('button')].map(button => button.getBoundingClientRect());
       const share = document.querySelector('.directory-share').getBoundingClientRect();
