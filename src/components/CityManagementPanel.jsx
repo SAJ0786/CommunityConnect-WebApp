@@ -5,6 +5,7 @@ import { CITY_MANAGEMENT_ENABLED } from '../config/releaseGates.mjs';
 import { createCityManagement, validCityPreview } from '../utils/cityManagement.mjs';
 import { acceptCityCatalogue } from '../services/cityCatalogue';
 import { getCityDefinitions, cityCatalogueRevision, subscribeCityCatalogue } from '../utils/cities';
+import CitySelector from './CitySelector';
 import { suggestCityCode } from '../utils/airportCodes.mjs';
 
 const BUILT_IN = new Set(['adelaide', 'brisbane', 'canberra', 'hobart', 'melbourne', 'perth', 'rest-of-australia', 'sydney']);
@@ -15,9 +16,11 @@ export default function CityManagementPanel({ profile }) {
   const [input, setInput] = useState(''), [code, setCode] = useState('');
   const [suggestions, setSuggestions] = useState([]), [preview, setPreview] = useState(null);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState('');
-  const [suggested, setSuggested] = useState(false), [edits, setEdits] = useState({});
+  const [suggested, setSuggested] = useState(false), [managedId, setManagedId] = useState(''), [draft, setDraft] = useState(null);
   const revision = useSyncExternalStore(subscribeCityCatalogue, cityCatalogueRevision, cityCatalogueRevision);
   const cities = useMemo(() => getCityDefinitions(), [revision]);
+  const manageOptions = useMemo(() => [{ value: '', label: 'Select a city' }, ...cities.map(city => ({ value: city.id, label: city.label + (city.enabled ? '' : ' (deleted)') }))], [cities]);
+  const managed = cities.find(city => city.id === managedId);
   const lock = useRef(false);
   if (!allowed) return null;
   const run = async action => {
@@ -42,21 +45,25 @@ export default function CityManagementPanel({ profile }) {
           setPreview(null); setSuggestions([]); setInput(''); setCode(''); setMessage('City added with verified coordinates and timezone.');
         })}>Confirm and add city</button></div>}
     </fieldset>
-    <h3>Cities in the catalogue</h3>
-    <ul>{cities.map(city => { const draft = edits[city.id] ?? city.code; return <li key={city.id}>
-      <strong>{city.label}</strong>{!city.enabled && ' (hidden)'}
-      <div className="small">{city.latitude === null ? 'No coordinates' : `${city.latitude.toFixed(4)}, ${city.longitude.toFixed(4)}`} {city.timeZone}</div>
-      <fieldset disabled={busy}><label>Short code<input aria-label={`Short code for ${city.label}`} maxLength={6} value={draft} onChange={e => setEdits({ ...edits, [city.id]: e.target.value.toUpperCase() })}/></label>
-        <button type="button" disabled={draft === city.code || !/^[A-Z0-9]{2,6}$/.test(draft)} onClick={() => run(async () => {
-          const result = await api.update(city.id, { code: draft });
-          if (!acceptCityCatalogue(result.catalogue)) throw new Error('The server response could not be validated. Refresh before trying again.');
-          setEdits(({ [city.id]: _, ...rest }) => rest); setMessage(`${city.label} code saved.`);
-        })}>Save code</button>
-        {!BUILT_IN.has(city.id) && <button type="button" className="btn-light" onClick={() => run(async () => {
-          const result = await api.update(city.id, { enabled: !city.enabled });
-          if (!acceptCityCatalogue(result.catalogue)) throw new Error('The server response could not be validated. Refresh before trying again.');
-          setMessage(city.enabled ? `${city.label} hidden from city selectors. Members keep their saved city.` : `${city.label} is visible again.`);
-        })}>{city.enabled ? 'Remove from selectors' : 'Restore'}</button>}
-      </fieldset></li>; })}</ul>    {busy && <p role="status">Working…</p>}{message && <p role="status">{message}</p>}
+    <h3>Manage existing cities</h3>
+    <CitySelector label="City to manage" value={managed?.id || ''} options={manageOptions} showPin={false}
+      onChange={id => { setManagedId(id); setDraft(null); setMessage(''); }}/>
+    {managed && <fieldset disabled={busy}>
+      <p className="small">{managed.latitude === null ? 'No coordinates' : `${managed.latitude.toFixed(4)}, ${managed.longitude.toFixed(4)}`} {managed.timeZone}{!managed.enabled && ' (deleted: hidden from selectors)'}</p>
+      <label>Short code<input maxLength={6} value={draft ?? managed.code} onChange={e => setDraft(e.target.value.toUpperCase())}/></label>
+      <button type="button" disabled={(draft ?? managed.code) === managed.code || !/^[A-Z0-9]{2,6}$/.test(draft ?? managed.code)} onClick={() => run(async () => {
+        const result = await api.update(managed.id, { code: draft });
+        if (!acceptCityCatalogue(result.catalogue)) throw new Error('The server response could not be validated. Refresh before trying again.');
+        setDraft(null); setMessage(`${managed.label} code saved.`);
+      })}>Save short code</button>
+      {!BUILT_IN.has(managed.id) && <button type="button" className="btn-light" onClick={() => run(async () => {
+        if (managed.enabled && !window.confirm(`Delete ${managed.label}? It disappears from city selectors; members keep their saved city and you can restore it here.`)) return;
+        const result = await api.update(managed.id, { enabled: !managed.enabled });
+        if (!acceptCityCatalogue(result.catalogue)) throw new Error('The server response could not be validated. Refresh before trying again.');
+        setMessage(managed.enabled ? `${managed.label} deleted from city selectors.` : `${managed.label} restored.`);
+      })}>{managed.enabled ? 'Delete city' : 'Restore city'}</button>}
+      {BUILT_IN.has(managed.id) && <p className="small">Built-in cities cannot be deleted, but their short code can be changed.</p>}
+    </fieldset>}
+        {busy && <p role="status">Working…</p>}{message && <p role="status">{message}</p>}
   </section>;
 }
