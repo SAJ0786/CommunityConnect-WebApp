@@ -70,16 +70,21 @@ try {
       }));
     assert.ok(sizes.length >= 7, 'Contact, share and member actions are present');
     assert.ok(sizes.every(([width, height]) => width === 88 && height === 100), 'All business action tiles have identical dimensions');
-    const placement = await actions.evaluate(element => {
-      const buttons = [...element.querySelectorAll('button')].map(button => button.getBoundingClientRect());
-      const share = document.querySelector('.directory-share').getBoundingClientRect();
+    const placement = await page.locator('.directory-business-actions').evaluate(element => {
+      const buttons = [...element.querySelectorAll('a,button')].map(button => button.getBoundingClientRect());
+      const rows = [...new Set(buttons.map(button => Math.round(button.top)))];
+      const columns = [...new Set(buttons.map(button => Math.round(button.left)))];
       return {
-        belowShare: element.getBoundingClientRect().top >= share.bottom,
-        sameRow: buttons.every(button => Math.abs(button.top - buttons[0].top) <= 1),
-        compact: buttons.every(button => button.width <= 100 && button.height >= 44 && button.height <= 100),
+        rows: rows.length,
+        aligned: buttons.every((button, index) => Math.abs(button.left - columns[index % columns.length]) <= 1),
+        feedbackFullWidth: [...element.querySelectorAll('.directory-share > p, .directory-share > label')]
+          .filter(feedback => feedback.getBoundingClientRect().height > 0)
+          .every(feedback => Math.abs(feedback.getBoundingClientRect().width - element.getBoundingClientRect().width) <= 1),
       };
     });
-    assert.deepEqual(placement, { belowShare: true, sameRow: true, compact: true }, 'Member actions are compact tiles below the contact/share controls');
+    assert.equal(placement.aligned, true, 'Business actions wrap into aligned columns');
+    assert.equal(placement.feedbackFullWidth, true, 'Share feedback spans the full action area');
+    assert.ok(width === 1440 ? placement.rows === 1 : placement.rows > 1, 'Business actions share one desktop row and wrap on mobile');
     const saved = await actions.getByRole('button', { name: 'Unsave business', exact: true }).count() > 0;
     await actions.getByRole('button', { name: saved ? 'Unsave business' : 'Save business', exact: true }).click();
     await actions.getByRole('button', { name: saved ? 'Save business' : 'Unsave business', exact: true }).waitFor();
