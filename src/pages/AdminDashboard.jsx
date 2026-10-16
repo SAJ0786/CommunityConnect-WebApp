@@ -1577,7 +1577,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                       <button className="btn-light" style={{ fontSize:'0.75rem', padding:'5px 10px', fontWeight:700 }}
                         onClick={() => {
                           const banned = u.accountStatus === 'banned';
-                          if (!confirm(${banned ? 'Unban and restore' : 'Restore'} ? They will be able to sign in again.)) return;
+                          if (!confirm((banned ? 'Unban and restore ' : 'Restore ') + (u.fullName || u.email) + '? They will be able to sign in again.')) return;
                           const call = banned
                             ? httpsCallable(fns, 'adminUnbanUser')({ uid: u.id, bannedDocId: String(u.email || '').toLowerCase().replace(/\./g, '_') })
                             : httpsCallable(fns, 'adminRestoreUser')({ targetUid: u.id });
