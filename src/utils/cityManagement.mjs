@@ -13,6 +13,10 @@ export function createCityManagement(call, { enabled = false } = {}) {
   return {
     search: input => invoke('searchCatalogueCities', { input }),
     preview: placeId => invoke('previewCatalogueCity', { placeId }),
+    update: (cityId, change) => {
+      if (!cityId || (change.code !== undefined && !/^[A-Z0-9]{2,6}$/.test(change.code))) throw new Error('Enter a short code of 2-6 letters or digits.');
+      return invoke('updateCatalogueCity', { cityId, ...change });
+    },
     add: (preview, code) => {
       if (!validCityPreview(preview) || !/^[A-Z0-9]{2,6}$/.test(code)) throw new Error('Review valid coordinates, timezone and a short code before adding.');
       return invoke('addCatalogueCity', { placeId: preview.placeId, fingerprint: preview.fingerprint, code });

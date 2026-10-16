@@ -39,10 +39,11 @@ export function useCityCatalogueRefresh() {
   useEffect(() => {
     void refreshCityCatalogue();
     const refresh = () => { if (!document.hidden) void refreshCityCatalogue(); };
+    const retry = setInterval(() => { if (!document.hidden) void refreshCityCatalogue(); }, 30000);
     const stopAuth = onAuthStateChanged(auth, user => { if (user) void refreshCityCatalogue(); });
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('online', refresh);
-    return () => { stopAuth(); document.removeEventListener('visibilitychange', refresh); window.removeEventListener('online', refresh); };
+    return () => { clearInterval(retry); stopAuth(); document.removeEventListener('visibilitychange', refresh); window.removeEventListener('online', refresh); };
   }, []);
   return revision;
 }
