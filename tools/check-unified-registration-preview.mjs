@@ -9,9 +9,9 @@ await context.route('**/*', route => {
 });
 const page = await context.newPage(), errors = [];
 page.on('pageerror', error => errors.push(error.message));
-const start = async (width, screen = 'home') => {
+const start = async (width, screen = 'home', extra = '') => {
   await page.setViewportSize({ width, height:850 });
-  await page.goto(`http://127.0.0.1:5182/?registration=1&screen=${screen}`);
+  await page.goto(`http://127.0.0.1:5182/?registration=1&screen=${screen}${extra}`);
   await page.locator('.cc-page-panel').first().waitFor();
 };
 try {
@@ -36,10 +36,10 @@ try {
     assert.equal(await page.getByRole('button', { name:'Event list', exact:true }).count(), 0);
     await page.getByLabel('Your name').fill('Example attendee');
     await page.getByRole('button', { name:'Confirm registration', exact:true }).click();
-    await page.getByRole('heading', { name:'Registration confirmed', exact:true }).waitFor();
-    await page.getByRole('button', { name:'Back to Events', exact:true }).click();
-    await page.locator('#event-registration-approved').getByRole('button', { name:'Expand event details', exact:true }).last().click();
     await page.locator('#event-registration-approved').getByRole('button', { name:'Edit registrations', exact:true }).waitFor();
+    assert.equal(await page.getByRole('heading', { name:'Registration confirmed', exact:true }).count(), 0);
+    assert.equal(await page.locator('#event-registration-approved').getByRole('button', { name:'Collapse event details', exact:true }).count(), 1);
+    await page.locator('#event-registration-approved').getByText('18:00', {exact:false}).first().waitFor();
     await page.waitForFunction(() => window.__registrationCalls.some(call => call[0] === 'poster'));
 
     await start(width, 'my');
@@ -63,14 +63,23 @@ try {
     await page.getByText('Poster removed.', { exact:true }).waitFor();
     assert.equal(await page.getByRole('button', { name:'Delete existing poster', exact:true }).count(), 0);
     assert.ok(await page.getByLabel('Start time (optional, event city timezone)').inputValue() === '18:00');
+    await page.getByLabel('Host Name', {exact:false}).fill('Example host');
+    await page.getByLabel('Host Phone Number', {exact:false}).fill('0400000000');
+    await page.getByLabel('Event Type *', {exact:true}).selectOption('Majlis');
+    await page.getByLabel('Audience Type', {exact:false}).selectOption('Ladies only');
+    await page.getByLabel('Speaker', {exact:true}).fill('Example speaker');
+    await page.getByRole('button', {name:'Prayer Time (Variable)',exact:true}).click();
+    await page.getByLabel('Prayer Time *', {exact:true}).waitFor();
+    await page.getByRole('button', {name:'Fixed Time',exact:true}).click();
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2));
 
     await start(width, 'admin');
     await page.getByRole('button', { name:/^User Management/ }).click();
     const approvals = page.getByRole('region', { name:'Pending event approvals' });
     await approvals.getByText('UnApproved', { exact:true }).waitFor();
-    await approvals.getByRole('button', { name:'Review for approval', exact:true }).click();
-    await approvals.getByRole('button', { name:'Approve event', exact:true }).click();
+    await approvals.locator('.event-card').getByRole('button', { name:'Expand event details', exact:true }).last().click();
+    await approvals.locator('.event-card').getByRole('button', { name:'Approve event', exact:true }).click();
+    await approvals.getByRole('button', { name:'Approve event', exact:true }).last().click();
     await approvals.getByText('No events awaiting approval.', { exact:true }).waitFor();
     assert.equal(await page.evaluate(() => window.__registrationCalls.filter(call => call[0] === 'list' && call[1] === 'review').every(call => call[2] === undefined)), true);
     await page.getByLabel('Review screen').selectOption('home');
@@ -78,12 +87,36 @@ try {
     assert.equal(await page.getByText('UnApproved', { exact:true }).count(), 0);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2));
 
+    await start(width, 'admin', '&changes=1');
+    await page.getByRole('button', { name:/^User Management/ }).click();
+    const stagedApprovals = page.getByRole('region', { name:'Pending event approvals' });
+    const stagedCard = stagedApprovals.locator('#event-registration-approved');
+    await stagedCard.getByRole('button', {name:'Expand event details',exact:true}).last().click();
+    await stagedCard.getByRole('heading', {name:'Workshop - Registration Workshop',exact:true}).waitFor();
+    assert.equal(await stagedCard.getByText('Submitted question', {exact:true}).count(),0);
+    await stagedCard.getByRole('button', {name:'Approve event',exact:true}).click();
+    const submitted = stagedApprovals.getByRole('region', {name:'Submitted event details'});
+    await submitted.getByRole('heading', {name:'Submitted Registration Workshop',exact:true}).waitFor();
+    await submitted.getByText('Submitted question *', {exact:true}).waitFor();
+    await submitted.getByText('2 Fictional Street, Parramatta NSW', {exact:true}).waitFor();
+    await stagedApprovals.getByRole('button', {name:'Approve event',exact:true}).last().click();
+    await stagedCard.waitFor({state:'detached'});
+    await page.getByLabel('Review screen').selectOption('home');
+    await page.locator('#event-registration-approved').getByRole('heading', {name:'Workshop - Submitted Registration Workshop',exact:true}).waitFor();
+
     await start(width);
     const deletionCard = page.locator('#event-registration-approved');
     await deletionCard.getByRole('button', { name:'Expand event details', exact:true }).last().click();
     await deletionCard.getByRole('button', { name:'Registration responses', exact:true }).click();
     await page.getByRole('heading', { name:'Registration responses', exact:true }).first().waitFor();
     assert.equal(await page.evaluate(() => window.__registrationCalls.some(call => call[0] === 'responses')), true);
+    const response = page.locator('details.registration-response');
+    assert.equal(await response.getAttribute('open'), null);
+    assert.equal(await response.locator('summary').innerText(), 'Example attendee');
+    assert.equal(await page.getByText('opaque-response-reference', {exact:true}).count(), 0);
+    await response.locator('summary').click();
+    await response.getByRole('heading', {name:'Registration form',exact:true}).waitFor();
+    await response.getByText('Your name', {exact:true}).waitFor();
     await page.getByRole('button', { name:'Back to Events', exact:true }).click();
     await deletionCard.getByRole('button', { name:'Expand event details', exact:true }).last().click();
     page.once('dialog', dialog => dialog.accept());

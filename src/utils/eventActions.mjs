@@ -34,6 +34,8 @@ export function eventActions({ event, member, manage, admin, arrangeNiaz = manag
         !event.deletedAt && event.status === 'approved' && (!member || (event.isRegistered ? event.canEditRegistration !== false : event.canRegister !== false)), true, 'Registration is closed or unavailable.'),
       ...(manage ? [action('editForm', 'Edit Registration form', true, true),
         action('responses', 'Registration responses', true)] : []),
+      ...(event.showApproval ? [action('approve', 'Approve event', member && event.canApprove && (event.status === 'pending' || event.hasPendingChanges) && !event.deletedAt, true,
+        event.status === 'approved' && !event.hasPendingChanges ? 'This event is already approved.' : 'Only Superadmin can approve an event awaiting review.')] : []),
       ...(event.isRegistered || event.status === 'cancelled' ? [action('registrationHistory', 'My registration', member)] : []),
     ] : []),
     ...(series ? [action('deleteSeries', 'Delete Series', member && admin, true)] : []),

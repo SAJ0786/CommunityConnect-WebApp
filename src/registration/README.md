@@ -1,5 +1,47 @@
 # Event registration on web
 
+## Registration usability follow-up (not deployed)
+
+Manager responses are collapsed, keyboard-accessible cards headed by the
+registrant's saved name answer, not the internal registration reference. Opening
+a card shows the original submitted form and answers. Parent/guardian names are
+not substituted for participant names; forms without a name answer explicitly
+show "Registrant name unavailable". CSV exports retain their internal references.
+
+Successful attendee submission returns directly to the expanded normal Home
+event card. The refreshed private detail exposes the attendee's edit-registration
+shortcut, poster and full venue according to the existing server permissions.
+Admin event cards include an approval shortcut; already approved events show it
+disabled unless changes have been submitted. Initial pending events and submitted
+changes require the server's Superadmin capability.
+
+The registration event editor reuses `EventForm` for the normal organiser,
+on-behalf-of, host/contact, Gregorian/Hijri, fixed/prayer time, subject, audience,
+speaker and reciter options. Registration title, capacity, closing date and form
+builder remain registration-specific. Poster uploads still use private
+registration callables, never the normal public image upload. Phone/contact
+values are read from authorised private details. Both clock keys are explicitly
+sent on save, including empty strings for deliberate clearing. The card shows
+the saved clocks and labels overnight end times; a missing clock is described
+as not provided rather than inventing a time.
+
+The user selected keeping the last approved version live while submitted edits
+await approval. Top-level callable detail remains published, including when a host
+registers for their own event. Managers receive `event.hasPendingChanges` and a
+separate `pendingChanges:{event,form,privateDetails,submittedAt,submittedBy}`.
+Only editor/approval views select that snapshot. Normal cards and attendee forms
+never select it. Approval uses the current control revision; the staged poster is
+requested explicitly with `getRegistrationPoster({eventId,view:'pending'})`.
+Default poster access still returns the published poster. Published bookings,
+form version, venue, schedule and stream state remain unchanged until promotion.
+
+Release of this candidate depends on the Native-owned staged changes/projection
+contract and metadata persistence; do not publish the expanded editor against an
+older backend that discards its additional fields. Neither registration reminders
+nor notification delivery is enabled by these changes. A read-only query of the
+reported event's public schedule confirmed its existing record
+has no saved clock/instant fields; no event time has been inferred or backfilled.
+
 ## Production release - 17 October 2026 Sydney
 
 Hosting source `9f4170d681dc43ed722eb2cc87895a8361153478` is live at

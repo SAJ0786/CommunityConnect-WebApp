@@ -47,7 +47,7 @@ const dateChip = (d) => {
 
 export default function EventCard({
   event: sourceEvent, user, profile, onEdit, onDelete, onCopy,
-  isExpanded, onExpand, isGuest,
+  isExpanded, onExpand, isGuest, onApprove,
   savedIds = [], onSaveToggle, onStreamStart, onCalendar, onContactHost, onReminder, onNiazArrangement, onEditSeries, onDeleteSeries, imagePriority = false
 }) {
   const registration = useRegistration();
@@ -230,6 +230,7 @@ export default function EventCard({
     register: registration?.open && (() => registration.open(event, 'register')),
     editForm: registration?.open && (() => registration.open(event, 'form')),
     responses: registration?.open && (() => registration.open(event, 'responses')),
+    approve: onApprove ? () => onApprove(event) : registration?.open && (() => registration.open(event, 'approve')),
     registrationHistory: registration?.open && (() => registration.open(event, 'history')),
     copy: event.registrationOnly ? registration?.open && (() => registration.open(event, 'copy')) : onCopy && (() => onCopy(event)), calendar: onCalendar && (() => onCalendar(event)),
     contact: () => { if (!readOnly && member) { if (onContactHost) onContactHost(event); else setContactOpen(true); } },
@@ -251,6 +252,8 @@ export default function EventCard({
     deleteSeries: () => { if (!readOnly && member && admin && manage) { if (onDeleteSeries) onDeleteSeries(event); else setSeriesArchiveOpen(true); } },
   };
   const actions = eventActions({ event: { ...event, isRegistered: registrationDetail ? registrationDetail.ownRegistration?.status === 'registered' : event.isRegistered,
+    showApproval: member && ['admin', 'superAdmin'].includes(profile?.role),
+    canApprove: registrationDetail?.canApprove ?? event.canApprove,
     canEditRegistration: registrationDetail?.canEditRegistration ?? event.canEditRegistration,
     privateVenueAvailable: Boolean(registrationDetail?.privateDetails) }, member, manage, admin,
     registrationRemindersEnabled: REGISTRATION_REMINDERS_ENABLED && import.meta.env.VITE_EVENT_REMINDERS_ENABLED === 'true',
@@ -271,6 +274,7 @@ export default function EventCard({
         marginBottom: 8,
       }}>
       {event.registrationOnly && event.status === 'pending' && <p role="note" style={{ margin:'0 0 12px', padding:14, fontSize:'1.3rem', fontWeight:900, color:'var(--cc-warning-strong)', background:'var(--cc-warning-soft)', borderRadius:12 }}>UnApproved</p>}
+      {event.registrationOnly && manage && event.hasPendingChanges && <p role="status">Changes awaiting approval. The last approved version remains published.</p>}
       {event.registrationOnly && event.status === 'cancelled' && <p role="status">Event deleted or cancelled. No places reserved.</p>}
 
       <div className="event-native-summary">
@@ -285,9 +289,9 @@ export default function EventCard({
             : <span className="event-native-calendar"><CalendarDays size={15} aria-hidden="true" /></span>}
         </div>
         <div className="event-native-content">
-          <h3 className="event-native-title">{[displayType, event.hostName || event.organiserName || event.organizationName].filter(Boolean).join(' - ')}</h3>
+          <h3 className="event-native-title">{[displayType, event.registrationOnly ? event.title : event.hostName || event.organiserName || event.organizationName].filter(Boolean).join(' - ')}</h3>
           <div className="event-native-meta">
-            <span><Clock size={13} aria-hidden="true" /> {displayTime || 'TBC'}</span>
+            <span><Clock size={13} aria-hidden="true" /> {displayTime || (event.registrationOnly ? 'Time not provided' : 'TBC')}</span>
             <span><MapPin size={13} aria-hidden="true" /><span className="event-native-suburb">{suburb || 'TBC'}</span></span>
           </div>
           <div className="event-native-badges"><span>{displayType}</span><span className="event-organiser">{organiser}</span></div>
@@ -326,6 +330,9 @@ export default function EventCard({
             </Suspense>
           </div>}
           <p className="event-action-note">{fmtDate(event.eventDate)}</p>
+          {event.registrationOnly && <p className="event-action-note">{event.startTime
+            ? `Time: ${displayTime}${event.endTime && event.endTime < event.startTime ? ' (ends the following day)' : ''}`
+            : manage ? 'No event time has been saved. Use Edit to add the start and end times.' : 'The host has not provided an event time.'}</p>}
           {/* Hijri badge */}
           {hijriDisplay && (
             <div style={{ marginBottom:8 }}>
@@ -380,7 +387,7 @@ export default function EventCard({
           {/* On behalf */}
           {event.isOnBehalfOf && (
             <p style={{ margin:'0 0 4px', fontSize:'0.75rem', color:'var(--muted)', fontFamily:'var(--font)' }}>
-              Submitted by {event.submittedByName || event.createdByUserEmail}
+              {event.registrationOnly ? 'Added on behalf of the host' : <>Submitted by {event.submittedByName || event.createdByUserEmail}</>}
             </p>
           )}
 

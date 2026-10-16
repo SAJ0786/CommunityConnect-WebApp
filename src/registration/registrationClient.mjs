@@ -20,7 +20,10 @@ export function createRegistrationClient(call, { enabled = false } = {}) {
     deleteEvent: (eventId, expectedRevision) => invoke('deleteRegistrationEvent', { eventId, expectedRevision, confirmation: 'DELETE EVENT' }),
     responses: (eventId, cursor = null) => invoke('listEventRegistrations', { eventId, cursor }),
     deleteAnswers: (eventId, registrationId, expectedRevision, confirmation) => invoke('deleteRegistrationAnswers', { eventId, registrationId, expectedRevision, confirmation }),
-    poster: eventId => invoke('getRegistrationPoster', { eventId }),
+    poster: (eventId, view) => {
+      if (view !== undefined && view !== 'pending') throw new Error('Unsupported registration poster view.');
+      return invoke('getRegistrationPoster', { eventId, ...(view === 'pending' ? { view } : {}) });
+    },
     uploadPoster: (eventId, expectedRevision, mime, base64) => invoke('putRegistrationPoster', { eventId, expectedRevision, mime, base64 }),
     removePoster: (eventId, expectedRevision) => invoke('removeRegistrationPoster', { eventId, expectedRevision }),
     saveTemplate: template => invoke('saveRegistrationTemplate', template),

@@ -1,7 +1,7 @@
 export function registrationEventCard(row) {
   return { ...row, registrationOnly: true, metroArea: row.city, eventDate: row.date, eventType: row.customEventType || row.eventType,
-    eventSubject: row.title, hostName: row.title, createdByUserId: row.ownerUid,
-    organiserType: 'private', address: { suburb: row.suburb || '' }, imageUrl: '' };
+    eventSubject: row.eventSubject || row.title, hostName: row.hostName || row.title, createdByUserId: row.ownerUid,
+    organiserType: row.organiserType || 'private', address: { suburb: row.suburb || '' }, imageUrl: '' };
 }
 
 export async function registrationEventPages(api, options) {

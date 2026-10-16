@@ -3,19 +3,21 @@ import { EVENT_TYPES } from '../utils/constants';
 import { cityLabel } from '../utils/cities';
 import { createDraft, validateAnswers } from './prototypeModel.mjs';
 import { createSubmission, registrationsCsv } from './registrationClient.mjs';
-import { eventDraftFromDetail, answersForReview, mergeRegistrationPage } from './registrationViewModel.mjs';
+import { eventDraftFromDetail, answersForReview, mergeRegistrationPage, registrantName, registrationReviewDetail } from './registrationViewModel.mjs';
 import { privateVenueLinks } from './privateVenue.mjs';
 import RegistrationEditor from './RegistrationEditor';
 import AnswerField from './AnswerField';
+import RegistrationReview from './RegistrationReview';
 import './workspace.css';
 
 const reference = () => crypto.randomUUID();
 const answerText = value => Array.isArray(value) ? value.join(', ') : value === true ? 'Agreed' : String(value ?? '');
 // api is injected: no direct Firestore reads, persistence, capacity or permission authority here.
-export default function RegistrationWorkspace({ api, enabled = false, user, profile, city, onBack, onRequireSignIn, initialCreate = false, initialEventId, initialAction = 'register', operationsOnly = false, eventTypes = EVENT_TYPES }) {
+export default function RegistrationWorkspace({ api, enabled = false, user, profile, city, onBack, onSubmitted, onRequireSignIn, initialCreate = false, initialEventId, initialAction = 'register', operationsOnly = false, eventTypes = EVENT_TYPES }) {
   const [stage, setStage] = useState('list'), [scope, setScope] = useState('public');
   const [items, setItems] = useState([]), [cursor, setCursor] = useState(null);
   const [detail, setDetail] = useState(null), [draft, setDraft] = useState(null), [poster, setPoster] = useState(null);
+  const [reviewPoster, setReviewPoster] = useState(null);
   const [templates, setTemplates] = useState([]), [templateCursor, setTemplateCursor] = useState(null);
   const [responses, setResponses] = useState([]), [responseCursor, setResponseCursor] = useState(null);
   const [answers, setAnswers] = useState({}), [places, setPlaces] = useState('1'), [errors, setErrors] = useState({});
@@ -31,7 +33,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     try { await work(valid); } catch (error) { if (valid()) setNotice(`${error?.message || 'The request could not be confirmed.'} Reload current status before repeating a change.`); }
     finally { if (valid()) { lock.current = false; setBusy(false); } }
   };
-  const clearPrivate = () => { setDetail(null); setPoster(null); setResponses([]); setAnswers({}); setConfirm(null); };
+  const clearPrivate = () => { setDetail(null); setPoster(null); setReviewPoster(null); setResponses([]); setAnswers({}); setConfirm(null); };
   const list = (nextScope = scope, next = null) => run(async valid => {
     clearPrivate(); currentId.current = null; setDraft(null); setStage('list');
     const result = await api.list({ scope: nextScope, city, cursor: next });
@@ -56,6 +58,11 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     } else if (action === 'responses') {
       const result = await api.responses(id);
       if (valid()) { setResponses(result.registrations || []); setResponseCursor(result.nextCursor); setStage('responses'); }
+    } else if (action === 'approve') {
+      if (!fresh.canApprove || !(fresh.event.status === 'pending' || fresh.event.hasPendingChanges)) throw new Error('This event is no longer awaiting your approval. Reload current status.');
+      ask('Approve event', 'Confirm you have reviewed the venue, poster and registration form below.', async valid => {
+        await api.approve(fresh.event.id, fresh.event.revision); await reloadAfter(valid, 'Event approved.');
+      });
     }
   });
   const loadTemplates = async (valid, next = null) => {
@@ -70,7 +77,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       if (isNew) { createKey.current = reference(); currentId.current = null; setDetail(null); }
       else setDetail(fresh);
       setDraft(isNew ? { ...createDraft(), startTime: '', endTime: '', title: '', address: '', suburb: '', eventType: eventTypes[0], customEventType: '' } : eventDraftFromDetail(fresh, eventTypes));
-      setStage('editor'); setPendingPoster(null); setPoster(null); await loadTemplates(valid);
+      setStage('editor'); setPendingPoster(null); setPoster(null); setReviewPoster(null); await loadTemplates(valid);
     });
   };
   useEffect(() => {
@@ -95,7 +102,8 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     const fresh = await api.load(saved.eventId);
     if (!valid()) return;
     setDetail(fresh); setDraft(null); setStage('host-confirmation');
-    setNotice(posterError || (fresh.event.status === 'approved' ? 'Changes saved; your event remains approved. Eligible attendee notices are queued when questions, date or venue change.' : 'Saved for initial administrator approval.'));
+    setNotice(posterError || (fresh.event.hasPendingChanges ? 'Changes submitted for administrator approval. The last approved version remains published.'
+      : fresh.event.status === 'approved' ? 'Changes saved; your event remains approved.' : 'Saved for administrator approval.'));
   });
   const startEntry = () => {
     if (!requireMember()) return;
@@ -122,6 +130,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       const fresh = await api.load(detail.event.id);
       if (!valid()) return;
       setDetail(fresh); setStage('confirmation'); setAnswers({}); submission.current = null; setRetrySubmission(false);
+      if (operationsOnly) (onSubmitted || onBack)?.(fresh.event);
     });
   };
   const responsePage = (next = null) => run(async valid => {
@@ -131,6 +140,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
   const ask = (title, description, action) => setConfirm({ title, description, action });
   const reloadAfter = async (valid, message) => { clearPrivate(); const fresh = await api.load(currentId.current); if (valid()) { setDetail(fresh); setStage('card'); setNotice(message); } };
   const links = detail?.privateDetails ? privateVenueLinks(detail.privateDetails) : null;
+  const reviewDetail = registrationReviewDetail(detail);
   if (!enabled) return <section className="card"><p>Registration is not enabled for this release.</p><button onClick={onBack}>Back</button></section>;
   if (obscured) return <section className="card"><p>Private registration details are hidden while the app is inactive.</p></section>;
   return <main className="registration-workspace" aria-label="Event registration"><h1>{operationsOnly ? initialCreate ? 'Create registration event' : ['edit', 'form', 'copy'].includes(initialAction) ? 'Edit event and registration form' : initialAction === 'responses' ? 'Registration responses' : 'Event registration' : 'Registration only events'}</h1><p>{cityLabel(city)}</p>
@@ -140,10 +150,10 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     {stage === 'list' && !operationsOnly && <><nav className="registration-actions" aria-label="Registration lists"><button disabled={busy} onClick={() => list('public')}>Browse events</button>{member && <><button disabled={busy} onClick={() => list('attending')}>My registrations</button><button disabled={busy} onClick={() => list('mine')}>My hosted events</button></>}{admin && <button disabled={busy} onClick={() => list('review')}>Review city events</button>}<button disabled={busy} onClick={() => edit(true)}>Create registration event</button></nav>
       {!items.length && !busy && <p>No events on this page.{cursor ? ' Load more to continue.' : ''}</p>}{items.map(event => <article className="card" key={event.id}><h2>{event.title}</h2><p>{event.eventType} · {event.date} · {event.suburb}</p><p>{event.status === 'cancelled' ? 'Event cancelled' : event.status} · Registration required</p><button disabled={busy} onClick={() => open(event.id)}>View event</button></article>)}{cursor && <button disabled={busy} onClick={() => list(scope, cursor)}>Load more events</button>}
     </>}
-    {stage === 'editor' && draft && <RegistrationEditor initialDraft={draft} initialStep={initialAction === 'form' ? 'form' : 'event'} hasPoster={Boolean(detail?.privateDetails?.hasPoster)} onRemovePoster={() => ask('Remove poster', 'Delete the existing private poster? Unsaved event and form fields will stay in this editor.', async valid => {
+    {stage === 'editor' && draft && <RegistrationEditor initialDraft={draft} user={user} profile={profile} initialStep={initialAction === 'form' ? 'form' : 'event'} hasPoster={Boolean(reviewDetail?.privateDetails?.hasPoster)} onRemovePoster={() => ask('Remove poster', 'Remove the private poster? Changes to an approved event require approval; its published poster stays visible until then. Unsaved editor fields will stay in this editor.', async valid => {
       await api.removePoster(detail.event.id, detail.event.revision);
       const fresh = await api.load(detail.event.id);
-      if (valid()) { setDetail(fresh); setNotice('Poster removed.'); }
+      if (valid()) { setDetail(fresh); setNotice(fresh.event.hasPendingChanges ? 'Poster removal submitted for approval. The published poster is unchanged.' : 'Poster removed.'); }
     })} eventTypes={eventTypes} templates={templates} templateCursor={templateCursor} onMoreTemplates={() => run(valid => loadTemplates(valid, templateCursor))} busy={busy} onSave={save} onCancel={detail ? () => setStage('card') : undefined} onSaveTemplate={template => run(async valid => {
       const content = JSON.stringify(template);
       if (templateRequest.current?.content !== content) templateRequest.current = { content, id: reference() };
@@ -159,17 +169,25 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
         {(detail.canRegister || detail.canEditRegistration) && <button disabled={busy} onClick={startEntry}>{detail.ownRegistration?.status === 'registered' ? 'Edit registration' : 'Register for event'}</button>}
         {detail.canCancel && <button disabled={busy} onClick={() => ask('Delete registration', 'Your answers will be deleted and your places released. You will lose private venue and poster access.', async valid => { await api.cancel(detail.event.id, detail.ownRegistration.revision); await reloadAfter(valid, 'Your registration and submitted answers were deleted.'); })}>Delete my registration</button>}
         {detail.canManage && <><button disabled={busy || detail.event.status === 'cancelled'} onClick={() => edit()}>Edit event and form</button><button disabled={busy} onClick={() => responsePage()}>Registration responses</button>
-          {detail.privateDetails?.hasPoster && <button disabled={busy} onClick={() => ask('Remove poster', 'The private poster will be removed. Approved events remain approved.', async valid => { await api.removePoster(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Poster removed.'); })}>Remove private poster</button>}
+          {reviewDetail.privateDetails?.hasPoster && <button disabled={busy} onClick={() => ask('Remove poster', 'Remove the private poster? An approved event keeps its published poster until this change is approved.', async valid => { await api.removePoster(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Poster removal saved. Changes to an approved event require administrator approval.'); })}>Remove private poster</button>}
           {pendingPoster && <button disabled={busy} onClick={() => run(async valid => { const fresh = await api.load(detail.event.id); await api.uploadPoster(fresh.event.id, fresh.event.revision, pendingPoster.mime, pendingPoster.base64); if (valid()) setPendingPoster(null); await reloadAfter(valid, 'Poster uploaded.'); })}>Retry selected poster upload</button>}
         </>}
-        {!operationsOnly && detail.canApprove && detail.event.status === 'pending' && <button disabled={busy} onClick={() => ask('Approve event', 'Confirm you have reviewed the venue, poster and registration form.', async valid => { await api.approve(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Event approved.'); })}>Approve event</button>}
+        {detail.canApprove && (detail.event.status === 'pending' || detail.event.hasPendingChanges) && <button disabled={busy} onClick={() => ask('Approve event', 'Confirm you have reviewed the submitted event details, venue, poster and registration form below.', async valid => { await api.approve(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Event approved.'); })}>Approve event</button>}
       </div>
-      {detail.canManage && detail.form && <details><summary>Review registration form</summary><p>{detail.form.purpose}</p>{detail.form.fields.map(field => <section key={field.id}><h3>{field.label}{field.required ? ' *' : ''}</h3><p>{field.description}</p><p>{field.terms || field.options?.join(', ')}</p></section>)}</details>}
+      {detail.canManage && reviewDetail.form && <details open={initialAction === 'approve'}><summary>{detail.pendingChanges ? 'Review submitted changes' : 'Review registration form'}</summary>
+        <RegistrationReview detail={reviewDetail} poster={reviewPoster} busy={busy} onPoster={() => run(async valid => {
+          const result = await api.poster(detail.event.id, detail.pendingChanges ? 'pending' : undefined);
+          if (!['image/jpeg','image/png','image/webp'].includes(result.mime)) throw new Error('Unsupported event poster format.');
+          if (valid()) setReviewPoster(`data:${result.mime};base64,${result.base64}`);
+        })}/></details>}
     </article>}
     {stage === 'entry' && detail?.form && <form noValidate onSubmit={submit} className="card"><h2>{detail.ownRegistration?.status === 'registered' ? 'Edit registration' : 'Register'} · {detail.event.title}</h2><p>{detail.form.purpose}</p><fieldset disabled={busy || retrySubmission} className="registration-fields"><label>Number of attendees<input type="number" min="1" max={detail.canRegister ? detail.event.capacity : detail.ownRegistration?.places} value={places} onChange={e => setPlaces(e.target.value)}/></label>{errors.places && <p role="alert">{errors.places}</p>}{detail.form.fields.map(field => <AnswerField key={field.id} field={field} value={answers[field.id]} error={errors[field.id]} onChange={value => setAnswers(current => ({ ...current, [field.id]: value }))}/>)}</fieldset><p>Availability is confirmed by the server when you submit.</p>{retrySubmission && !busy && <p>The last request is unconfirmed. Retry the same submission, or reload current status before editing.</p>}<button disabled={busy} type="submit">{retrySubmission ? 'Retry same submission' : 'Confirm registration'}</button></form>}
     {stage === 'responses' && detail?.canManage && <section className="card"><h2>Registration responses</h2><p>Answers retain their original question labels. Only loaded responses are included in the download.</p><button disabled={busy || !responses.length} onClick={() => {
       const url = URL.createObjectURL(new Blob(['\ufeff' + registrationsCsv(responses)], { type: 'text/csv;charset=utf-8' }));
       const a = document.createElement('a'); a.href = url; a.download = 'registration-responses.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }}>Download loaded responses CSV</button>{responses.map(row => <article className="card" key={row.registrationId}><h3>{row.registrationId}</h3><p>{row.status} · {row.places} places</p><dl>{(row.fields || []).map(field => <div key={field.id}><dt>{field.label}</dt><dd>{answerText(row.answers?.[field.id])}</dd></div>)}</dl>{row.answersDeletedAt ? <p>Answers deleted.</p> : <button disabled={busy} onClick={() => ask('Delete answers', 'This permanently deletes the form answers without changing the reserved places.', async valid => { await api.deleteAnswers(detail.event.id, row.registrationId, row.revision, 'DELETE ANSWERS'); if (valid()) { setResponses(current => current.filter(item => item.registrationId !== row.registrationId)); setNotice('Answers deleted. Reserved places are unchanged.'); } })}>Permanently delete answers only</button>}</article>)}{responseCursor && <button disabled={busy} onClick={() => responsePage(responseCursor)}>Load more responses</button>}</section>}
+    }}>Download loaded responses CSV</button>{responses.map(row => <details className="card registration-response" key={row.registrationId}>
+      <summary>{registrantName(row)}</summary>
+      <section aria-label="Submitted registration form"><h3>Registration form</h3><p>{row.status} · {row.places} {row.places === 1 ? 'place' : 'places'}</p><dl>{(row.fields || []).map(field => <div key={field.id}><dt>{field.label}</dt><dd>{answerText(row.answers?.[field.id])}</dd></div>)}</dl>{row.answersDeletedAt ? <p>Answers deleted.</p> : <button disabled={busy} onClick={() => ask('Delete answers', 'This permanently deletes the form answers without changing the reserved places.', async valid => { await api.deleteAnswers(detail.event.id, row.registrationId, row.revision, 'DELETE ANSWERS'); if (valid()) { setResponses(current => current.filter(item => item.registrationId !== row.registrationId)); setNotice('Answers deleted. Reserved places are unchanged.'); } })}>Permanently delete answers only</button>}</section>
+    </details>)}{responseCursor && <button disabled={busy} onClick={() => responsePage(responseCursor)}>Load more responses</button>}</section>}
   </main>;
 }

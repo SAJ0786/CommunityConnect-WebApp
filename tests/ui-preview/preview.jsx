@@ -80,15 +80,15 @@ function Preview() {
   const [status,setStatus] = useState('ready');
   const [editingEvent,setEditingEvent] = useState(events[0]);
   const [eventRows,setEventRows] = useState(events);
-  const [registrationRevision,setRegistrationRevision] = useState(0), [operation,setOperation] = useState(null);
+  const [registrationRevision,setRegistrationRevision] = useState(0), [operation,setOperation] = useState(null), [focusEventId,setFocusEventId] = useState(null);
   auth.currentUser = guest ? null : persona === 'member' ? {...user,uid:'synthetic-viewer'} : user;
   const registrationReview = new URLSearchParams(location.search).has('registration');
   const fixture = useMemo(() => registrationReview ? registrationFixture(date, auth.currentUser || user, profile.role, guest,
-    new URLSearchParams(location.search).has('registered')) : null, [registrationReview, guest, persona]);
+    new URLSearchParams(location.search).has('registered'), new URLSearchParams(location.search).has('changes')) : null, [registrationReview, guest, persona]);
   if (fixture) window.__registrationCalls = fixture.calls;
   window.__uiReviewStatus = status;
   const Screen = screens[page] || Home;
-  const props = { events: status==='empty'?[]:[...eventRows,...(fixture ? fixture.publicRows().map(registrationEventCard) : [])], user:auth.currentUser || user, profile, setProfile, setPage, setEditingEvent, handleDelete:noop, handleCopy:noop, isGuest:guest, loadEvents:async()=>setEventRows([...window.__uiEvents]), savedIds:['fixture-0'], onSaveToggle:noop, onStreamStart:noop, selectedCity:city, setSelectedCity:setCity, onSaved:()=>{setEventRows([...window.__uiEvents]);setPage('my');}, eventsLoading:status==='loading', offlineMode:status==='cached', editingEvent, event:events[0], role:'host', nativeStream:{mode:'external'}, onClose:()=>setPage('home'), onCancel:()=>setPage('home') };
+  const props = { events: status==='empty'?[]:[...eventRows,...(fixture ? fixture.publicRows().map(registrationEventCard) : [])], user:auth.currentUser || user, profile, setProfile, setPage, setEditingEvent, handleDelete:noop, handleCopy:noop, isGuest:guest, loadEvents:async()=>setEventRows([...window.__uiEvents]), savedIds:['fixture-0'], onSaveToggle:noop, onStreamStart:noop, selectedCity:city, setSelectedCity:setCity, focusEventId, setFocusEventId, onSaved:()=>{setEventRows([...window.__uiEvents]);setPage('my');}, eventsLoading:status==='loading', offlineMode:status==='cached', editingEvent, event:events[0], role:'host', nativeStream:{mode:'external'}, onClose:()=>setPage('home'), onCancel:()=>setPage('home') };
   return <>
     <aside className="ui-review-bar"><strong>Offline UI review</strong><span>Synthetic data · no Firebase · no sign-in</span>
       <label>Screen <select aria-label="Review screen" value={page} onChange={e=>setPage(e.target.value)}>{[...Object.keys(screens),'directory'].map(p=><option key={p}>{p}</option>)}</select></label>
@@ -105,7 +105,7 @@ function Preview() {
         open:(event,action)=>{ if(guest) { window.__registrationGuestPrompt=true; return; } setOperation({id:event.id,action}); setPage('registration'); } } : null}>
       {page !== 'directory' && <PagePanel page={page}/>}
       {page === 'registration' && operation ? <RegistrationWorkspace api={fixture.api} enabled operationsOnly initialEventId={operation.id} initialAction={operation.action}
-        user={props.user} profile={profile} city={city} onBack={()=>{setOperation(null);setRegistrationRevision(value=>value+1);setPage('home');}}/>
+        user={props.user} profile={profile} city={city} onSubmitted={event=>{setFocusEventId(event.id);setOperation(null);setRegistrationRevision(value=>value+1);setPage('home');}} onBack={()=>{setOperation(null);setRegistrationRevision(value=>value+1);setPage('home');}}/>
         :
       page==='directory'?<BusinessDirectoryView businesses={status==='empty'?[]:businesses} loading={status==='loading'} error={status==='error'} fromCache={status==='cached'} selectedCity={city} setSelectedCity={setCity} onRetry={()=>setStatus('ready')} requestLocation={async()=>{if(status==='error')throw new Error('Location denied in the synthetic review.');return {latitude:-33.81,longitude:151};}}/>:<Screen {...props}/>
       }

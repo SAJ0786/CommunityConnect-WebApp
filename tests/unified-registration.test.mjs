@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { registrationEventCard, registrationEventPages, mergePublicEvents } from '../src/registration/eventFeed.mjs';
 import { createRegistrationClient } from '../src/registration/registrationClient.mjs';
 import { eventActions } from '../src/utils/eventActions.mjs';
-import { eventDraftFromDetail, validateRegistrationDraft } from '../src/registration/registrationViewModel.mjs';
+import { eventDraftFromDetail, validateRegistrationDraft, registrantName, registrationEventForm, registrationDraftFromEventForm, registrationReviewDetail } from '../src/registration/registrationViewModel.mjs';
 import { createDraft } from '../src/registration/prototypeModel.mjs';
 import { eventExploreItems } from '../src/utils/navigation.mjs';
 
@@ -64,4 +64,49 @@ test('registration editor preserves exact optional schedule including overnight 
   assert.ok(validateRegistrationDraft({ ...valid, startTime:'' }).some(error => error.includes('End time')));
   assert.ok(validateRegistrationDraft({ ...valid, endTime:'23:00' }).some(error => error.includes('End time')));
   assert.ok(validateRegistrationDraft({ ...valid, startTime:'25:00' }).some(error => error.includes('HH:mm')));
+});
+test('response names come from participant answers, never booking IDs or guardian contact fields', () => {
+  const row = { registrationId:'opaque-reference', fields:[
+    { id:'guardian', type:'text', label:'Parent/ Guardian Name' },
+    { id:'participant', type:'text', label:'Name of Participant' },
+  ], answers:{ guardian:'Example guardian', participant:'Example participant' } };
+  assert.equal(registrantName(row), 'Example participant');
+  assert.equal(registrantName({ ...row, fields:row.fields.slice(0, 1) }), 'Registrant name unavailable');
+  assert.equal(registrantName({ fields:[], answers:{} }), 'Registrant name unavailable');
+});
+test('shared normal-event fields round trip through registration drafts without public poster paths or forged instants', () => {
+  const draft = { ...createDraft(), title:'Workshop', hostName:'Example host', hostPhone:'0400000000', hostContactOptional:'host@example.test',
+    date:'2026-12-01', startTime:'18:30', endTime:'', eventSubject:'Example subject', audienceType:'Ladies only',
+    organiserType:'centre', organiserName:'Example centre', isOnBehalfOf:true, speakerName:'Speaker', reciters:[{ type:'Reciter', name:'Reader' }],
+    venue:{ fullAddress:'Private venue', suburb:'Parramatta', latitude:-33.8, longitude:151 }, timeMode:'manual' };
+  const form = registrationEventForm(draft);
+  const restored = registrationDraftFromEventForm(draft, { ...form, imageUrl:'public-url-not-allowed', imagePath:'public-path', startAt:'forged' });
+  for (const key of ['hostName','hostPhone','hostContactOptional','startTime','endTime','eventSubject','audienceType','organiserType','speakerName']) assert.equal(restored[key], draft[key], key);
+  assert.deepEqual(restored.reciters, draft.reciters);assert.equal(restored.imageUrl, undefined);assert.equal(restored.startAt, undefined);
+  const card = registrationEventCard({ ...draft, id:'event', city:'sydney' });
+  assert.equal(card.startTime,'18:30');assert.equal(card.hostName,'Example host');assert.equal(card.organiserType,'centre');
+});
+test('card approval shortcut is visible to admin surfaces and enabled only by pending server capability', () => {
+  const base = { registrationOnly:true, showApproval:true, status:'pending', canApprove:true };
+  const approval = event => eventActions({ event, member:true, manage:true, admin:true, handlers:{approve(){}} }).find(action => action.id === 'approve');
+  assert.equal(approval(base).disabled,false);
+  assert.equal(approval({ ...base, status:'approved', canApprove:false }).disabled,true);
+  assert.equal(approval({ ...base, status:'approved', hasPendingChanges:true }).disabled,false);
+  assert.match(approval({ ...base, status:'approved', canApprove:false }).reason,/already approved/);
+  assert.equal(approval({ ...base, canApprove:false }).disabled,true);
+  assert.equal(approval({ ...base, deletedAt:'now' }).disabled,true);
+});
+test('pending snapshot selection is manager-only and never mutates published detail', () => {
+  const published={event:{title:'Published',revision:3},form:{version:1},privateDetails:{address:'Published venue'},
+    pendingChanges:{event:{title:'Submitted',revision:3},form:{version:1},privateDetails:{address:'Submitted venue'}}};
+  assert.equal(registrationReviewDetail(published).event.title,'Published');
+  const manager={...published,canManage:true};
+  assert.equal(registrationReviewDetail(manager).event.title,'Submitted');assert.equal(manager.event.title,'Published');
+});
+test('poster API only opts into pending view explicitly; default remains published', async () => {
+  const calls=[];
+  const api=createRegistrationClient(async(name,data)=>{calls.push({name,data});return {data:{}};},{enabled:true});
+  await api.poster('event');await api.poster('event','pending');
+  assert.throws(()=>api.poster('event','draft'),/Unsupported/);
+  assert.deepEqual(calls,[{name:'getRegistrationPoster',data:{eventId:'event'}},{name:'getRegistrationPoster',data:{eventId:'event',view:'pending'}}]);
 });

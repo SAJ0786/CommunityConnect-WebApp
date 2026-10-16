@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import ReciterFields from './ReciterFields';
 import HijriDatePicker from './HijriDatePicker';
 import AddressAutocomplete from './AddressAutocomplete';
@@ -14,12 +14,15 @@ const BUILT_IN_CENTRE_NAMES = {
   imamhasan: 'Imam Hasan Centre',
   alamdar: 'Alamdar Granville',
 };
+const EMPTY_EVENTS = [];
 
 export default function EventForm({
   initialEvent, onSubmit, submitLabel = null,
-  user, profile, existingEvents = [],
-  seriesMode = false, saving = false, onCancel = null, initialDate = ''
+  user, profile, existingEvents = EMPTY_EVENTS,
+  seriesMode = false, saving = false, onCancel = null, initialDate = '',
+  registrationMode = false, posterControls = null, notesMaxLength = 500
 }) {
+  const id = useId();
   const userName  = profile?.fullName  || user?.displayName || user?.email?.split('@')[0] || '';
   const userPhone = profile?.phone     || '';
 
@@ -48,13 +51,15 @@ export default function EventForm({
     hijriDate:           ''
   });
 
-  const [form, setForm]             = useState(initialEvent || blank());
+  const [form, setForm]             = useState(() => ({ ...blank(), ...initialEvent }));
   const [overrides, setOverrides]   = useState([]);
   const [dynamicOrgs, setDynamicOrgs] = useState([]);
   const [duplicates, setDuplicates] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
-  const [calendarMode, setCalendarMode] = useState('gregorian'); // 'gregorian' | 'hijri'
-  const [hijriInput, setHijriInput]     = useState({});
+  const [calendarMode, setCalendarMode] = useState(registrationMode && initialEvent?.enteredAsHijri ? 'hijri' : 'gregorian'); // 'gregorian' | 'hijri'
+  const [hijriInput, setHijriInput]     = useState(() => registrationMode ? {
+    hDay:initialEvent?.hijriDay, hMonth:initialEvent?.hijriMonth, hYear:initialEvent?.hijriYear,
+  } : {});
   // Photo upload
   const [imagePreview, setImagePreview] = useState(initialEvent?.imageUrl || '');
   const [uploadingImg,  setUploadingImg] = useState(false);
@@ -261,8 +266,11 @@ export default function EventForm({
     if (!seriesMode && !form.eventDate) errors.eventDate = 'Please select the event date.';
     if (form.timeMode === 'prayer' && !form.prayerName) {
       errors.startTime = 'Please select the prayer time for this event.';
-    } else if (!form.startTime) {
+    } else if (!form.startTime && !registrationMode) {
       errors.startTime = 'Please select the event start time.';
+    }
+    if (registrationMode && form.endTime && (!form.startTime || form.endTime === form.startTime)) {
+      errors.startTime = 'End time requires a different start time. Earlier end times mean the following day.';
     }
     if (addressText.length < 5) errors.address = 'Please enter the full event address.';
     if (Object.keys(errors).length) {
@@ -281,7 +289,7 @@ export default function EventForm({
     // Upload the photo first if a new one was picked
     let imageUrl = form.imageUrl || '';
     let imagePath = form.imagePath || '';
-    if (pendingFile) {
+    if (pendingFile && !registrationMode) {
       setUploadingImg(true);
       try {
         const eventId = initialEvent?.id || `${user?.uid || 'anon'}_${Date.now()}`;
@@ -309,7 +317,7 @@ export default function EventForm({
 
   return (
     <form className="card event-form" onSubmit={submit} noValidate>
-      <h2>{initialEvent?.__editSeries ? 'Shared Series Details' : initialEvent ? 'Edit Event' : 'Add Event'}</h2>
+      <h2>{registrationMode ? 'Event details' : initialEvent?.__editSeries ? 'Shared Series Details' : initialEvent ? 'Edit Event' : 'Add Event'}</h2>
       {Object.keys(validationErrors).length > 0 && (
         <div className="event-validation-summary" role="alert">
           <strong>Complete the highlighted mandatory fields:</strong>
@@ -323,7 +331,7 @@ export default function EventForm({
       )}
 
       {/* ── Event Poster ── */}
-      <label>Upload Event Poster <span className="small" style={{ fontWeight: 400 }}>(optional)</span></label>
+      {registrationMode ? posterControls : <><label>Upload Event Poster <span className="small" style={{ fontWeight: 400 }}>(optional)</span></label>
       {imagePreview ? (
         <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden',
           marginBottom: 14, marginTop: 4 }}>
@@ -351,7 +359,7 @@ export default function EventForm({
           <input type="file" accept="image/*" onChange={handlePhotoPick}
             style={{ display: 'none' }} />
         </label>
-      )}
+      )}</>}
 
       {/* On behalf of */}
       <label className="checkbox" style={{ marginBottom: 10 }}>
@@ -362,13 +370,13 @@ export default function EventForm({
 
       {/* Organiser Type — private or specific organisation */}
       <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', marginBottom: 6 }}>
+        <label htmlFor={id + '-organiser'} style={{ display: 'block', marginBottom: 6 }}>
           Organiser Type
           <span className="small" style={{ marginLeft: 6, fontWeight: 400 }}>
             (Used to show the correct logo when no poster is uploaded)
           </span>
         </label>
-        <select value={getSelectedOrganiserValue()}
+        <select id={id + '-organiser'} value={getSelectedOrganiserValue()}
           onChange={e => handleOrganiserChange(e.target.value)}>
           <option value="private">🔒 Private (individual host)</option>
           <option value="muhammadi">🏛 Muhammadi Welfare Association</option>
@@ -382,16 +390,17 @@ export default function EventForm({
       </div>
 
       {/* Host name */}
-      <label>Host Name *</label>
-      <input required
+      <label htmlFor={id + '-host'}>Host Name *</label>
+      <input id={id + '-host'} required maxLength={registrationMode ? 80 : undefined}
         placeholder={form.isOnBehalfOf ? "Enter the host's name" : 'Your name'}
         value={form.hostName} onChange={e => update('hostName', e.target.value)}
         readOnly={!!getCentreName(form.organiserType)} />
 
       {/* Host phone — shown for all events */}
-      <label>Host Phone Number <span className="small">(optional)</span></label>
-      <input
+      <label htmlFor={id + '-phone'}>Host Phone Number <span className="small">(optional)</span></label>
+      <input id={id + '-phone'}
         type="tel"
+        maxLength={registrationMode ? 80 : undefined}
         placeholder="e.g. 0412 345 678"
         value={form.hostPhone || ''}
         onChange={e => update('hostPhone', e.target.value)}
@@ -399,8 +408,8 @@ export default function EventForm({
 
       {form.isOnBehalfOf && (
         <>
-          <label>Host Contact Email <span className="small">(optional)</span></label>
-          <input value={form.hostContactOptional || ''}
+          <label htmlFor={id + '-email'}>Host Contact Email <span className="small">(optional)</span></label>
+          <input id={id + '-email'} maxLength={registrationMode ? 254 : undefined} value={form.hostContactOptional || ''}
             onChange={e => update('hostContactOptional', e.target.value)}
             placeholder="Email of host (if different from phone above)" />
         </>
@@ -409,7 +418,7 @@ export default function EventForm({
       {/* Date + time — hidden in series mode, date is controlled by AddSeriesEvents */}
       {!seriesMode && (
       <div style={{ marginBottom: 8 }}>
-        <label style={{ display: 'block', marginBottom: 6 }}>Date *</label>
+        <label htmlFor={id + '-date'} style={{ display: 'block', marginBottom: 6 }}>Date *</label>
         <div style={{ display: 'inline-flex', borderRadius: 10, border: '1px solid var(--border)', overflow: 'hidden', background: 'var(--bg,var(--cc-background))', marginBottom: 8 }}>
           {['gregorian', 'hijri'].map(mode => (
             <button key={mode} type="button"
@@ -428,7 +437,7 @@ export default function EventForm({
 
         {calendarMode === 'gregorian' ? (
           <>
-            <input type="date" required value={form.eventDate}
+            <input id={id + '-date'} type="date" required value={form.eventDate}
               aria-invalid={!!validationErrors.eventDate}
               onChange={e => {
                 update('eventDate', e.target.value);
@@ -470,7 +479,7 @@ export default function EventForm({
       )}
 
       <div style={{ marginTop: 8, marginBottom: 12 }}>
-        <label style={{ display: 'block', marginBottom: 6 }}>Time Selection *</label>
+        <label style={{ display: 'block', marginBottom: 6 }}>Time Selection{registrationMode ? ' (optional, event city timezone)' : ' *'}</label>
         <div style={{
           display: 'grid',
           gridTemplateColumns: '1fr 1fr',
@@ -498,19 +507,21 @@ export default function EventForm({
       {form.timeMode !== 'prayer' && (
         <div className="row" style={{ marginTop: 4 }}>
           <div>
-            <label>Start Time *</label>
-            <input type="time" required value={form.startTime}
+            <label htmlFor={id + '-start-time'}>{registrationMode ? 'Start time (optional, event city timezone)' : 'Start Time *'}</label>
+            <input id={id + '-start-time'} type="time" required={!registrationMode} value={form.startTime}
               aria-invalid={!!validationErrors.startTime}
               onChange={e => setManualStartTime(e.target.value)} />
             {validationErrors.startTime && <p className="field-error">{validationErrors.startTime}</p>}
           </div>
           <div>
-            <label>End Time <span className="small">(optional)</span></label>
-            <input type="time" value={form.endTime || ''}
+            <label htmlFor={id + '-end-time'}>End Time <span className="small">(optional)</span></label>
+            <input id={id + '-end-time'} type="time" value={form.endTime || ''}
               onChange={e => update('endTime', e.target.value)} />
           </div>
         </div>
       )}
+
+      {registrationMode && <p>Leave times blank for a date-only event. An end time earlier than the start time means the following day. No default time or duration will be added.</p>}
 
       {/* Duplicate warning */}
       {duplicates.length > 0 && (
@@ -531,7 +542,7 @@ export default function EventForm({
 
 
       {/* Address */}
-      <label>Address *</label>
+      <label>{registrationMode ? 'Private venue address *' : 'Address *'}</label>
       <AddressAutocomplete
         value={form.address}
         onChange={addr => {
@@ -540,13 +551,15 @@ export default function EventForm({
         }}
         required
         invalid={!!validationErrors.address}
+        label={registrationMode ? 'Private venue address' : undefined}
       />
       {validationErrors.address && <p className="field-error">{validationErrors.address}</p>}
 
       {form.timeMode === 'prayer' && (
         <div className="notice" style={{ marginTop: 10, marginBottom: 14 }}>
-          <label style={{ marginTop: 0 }}>Prayer Time *</label>
+          <label htmlFor={id + '-prayer'} style={{ marginTop: 0 }}>Prayer Time *</label>
           <select
+            id={id + '-prayer'}
             value={form.prayerName || ''}
             onChange={e => applyPrayerTime(e.target.value)}
             disabled={!canUsePrayerTime}
@@ -606,17 +619,18 @@ export default function EventForm({
       )}
 
       {/* Event type */}
-      <label>Event Type *</label>
-      <select value={form.eventType} onChange={e => handleEventTypeChange(e.target.value)}>
+      <label htmlFor={id + '-type'}>Event Type *</label>
+      <select id={id + '-type'} value={form.eventType} onChange={e => handleEventTypeChange(e.target.value)}>
         {EVENT_TYPES.map(t => <option key={t}>{t}</option>)}
       </select>
 
       {/* Custom event type text box */}
       {isCustom && (
         <>
-          <label>Custom Event Type *</label>
-          <input
+          <label htmlFor={id + '-custom-type'}>Custom Event Type *</label>
+          <input id={id + '-custom-type'}
             required
+            maxLength={registrationMode ? 100 : undefined}
             placeholder="e.g. Aqeeqa, Nikah, Dua, Commemoration…"
             value={form.customEventType || ''}
             onChange={e => update('customEventType', e.target.value)}
@@ -625,29 +639,30 @@ export default function EventForm({
       )}
 
       {/* Subject — optional, shown for all event types */}
-      <label>
+      <label htmlFor={id + '-subject'}>
         Subject <span className="small">(optional)</span>
       </label>
-      <input
+      <input id={id + '-subject'}
+        maxLength={registrationMode ? 160 : undefined}
         placeholder="e.g. Shahadat of Imam Hussain (A.S.), Birthday of…"
         value={form.eventSubject || ''}
         onChange={e => update('eventSubject', e.target.value)}
       />
 
-      <label>
+      <label htmlFor={id + '-notes'}>
         Notes <span className="small">(optional)</span>
       </label>
-      <textarea
+      <textarea id={id + '-notes'}
         rows={3}
-        maxLength={500}
+        maxLength={notesMaxLength}
         placeholder="Add instructions or information to include when this event is shared"
         value={form.notes || ''}
         onChange={e => update('notes', e.target.value)}
       />
 
       {/* Audience */}
-      <label>Audience Type *</label>
-      <select value={form.audienceType} onChange={e => update('audienceType', e.target.value)}>
+      <label htmlFor={id + '-audience'}>Audience Type *</label>
+      <select id={id + '-audience'} value={form.audienceType} onChange={e => update('audienceType', e.target.value)}>
         {AUDIENCE_TYPES.map(t => <option key={t}>{t}</option>)}
       </select>
 
@@ -657,8 +672,8 @@ export default function EventForm({
           <p className="small" style={{ margin: '0 0 10px' }}>
             Speaker and reciters available for <strong>{isCustom ? (form.customEventType || 'Custom') : form.eventType}</strong> events.
           </p>
-          <label>Speaker</label>
-          <input value={form.speakerName || ''} onChange={e => update('speakerName', e.target.value)} placeholder="Speaker name" />
+          <label htmlFor={id + '-speaker'}>Speaker</label>
+          <input id={id + '-speaker'} maxLength={registrationMode ? 160 : undefined} value={form.speakerName || ''} onChange={e => update('speakerName', e.target.value)} placeholder="Speaker name" />
           <ReciterFields reciters={form.reciters || []} setReciters={r => update('reciters', r)} />
         </div>
       )}
