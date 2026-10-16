@@ -8,6 +8,7 @@ const testConfig = { ...config, configFile: false, root, envDir: root, publicDir
   plugins: [{ name: 'offline-directory-workspace', enforce: 'pre', resolveId(id, importer) {
     if (!importer) return;
     if (/\/services\/public(Business|Promotion)Service$/.test(id)) return path.join(root,'services.mjs');
+    if (/\/services\/cityCatalogue$/.test(id)) return path.join(root,'services.mjs');
     if (id === './App.jsx') return path.resolve('tests/public-preview/legacy.jsx');
     if (id.startsWith('firebase/')) throw new Error('Firebase must not enter the offline workspace preview');
   } }, ...config.plugins.slice(0,1)],

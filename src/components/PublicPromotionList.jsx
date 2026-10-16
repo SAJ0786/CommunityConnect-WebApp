@@ -9,7 +9,7 @@ export function PublicImage({ src, alt = '', className = '', fallback = null }) 
   return src && !failed ? <img src={src} alt={alt} className={className} loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} /> : fallback;
 }
 
-export default function PublicPromotionList({ rows, loading, error, fromCache, onRetry, details = false, returnQuery = '', audienceEnabled = PROMOTION_AUDIENCE_ENABLED }) {
+export default function PublicPromotionList({ rows, loading, error, fromCache, onRetry, onOpenBusiness, details = false, returnQuery = '', audienceEnabled = PROMOTION_AUDIENCE_ENABLED }) {
   if (loading) return <p role="status" className="directory-state">Loading promotions…</p>;
   if (error) return <div role="alert" className="directory-state directory-error"><h2>Promotions unavailable</h2><p>We couldn’t load offers. Please try again.</p><button onClick={onRetry}>Retry promotions</button></div>;
   return <>
@@ -23,7 +23,12 @@ export default function PublicPromotionList({ rows, loading, error, fromCache, o
         {promotion.discountText && <p className="directory-offer">{promotion.discountText}</p>}
         <p className="directory-description">{promotion.briefText}</p>
         {details ? <><h4>Details and conditions</h4><p className="directory-description">{promotion.fullDetails || 'Contact the business for conditions.'}</p></>
-          : <a className="directory-link" href={businessPath(promotion.businessId) + returnQuery + '#promotions'}><Tag size={18} aria-hidden="true" /><span>View offer at {promotion.business.name}</span></a>}
+          : <a className="directory-link" href={onOpenBusiness ? `#/detail/${encodeURIComponent(promotion.businessId)}` : businessPath(promotion.businessId) + returnQuery + '#promotions'}
+              onClick={onOpenBusiness ? event => {
+                if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                onOpenBusiness(promotion.businessId);
+              } : undefined}><Tag size={18} aria-hidden="true" /><span>View offer at {promotion.business.name}</span></a>}
         <p className="directory-scope">{promotion.startDate ? `From ${promotion.startDate}` : 'Start date not supplied'} · {promotion.endDate ? `Ends ${promotion.endDate}` : 'No end date supplied'}</p>
       </article>)}</div>}
   </>;
