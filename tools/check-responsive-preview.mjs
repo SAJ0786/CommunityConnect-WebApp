@@ -62,6 +62,26 @@ try {
     await page.getByRole('heading', { name: 'Example Community Catering', exact: true }).waitFor();
     assert.equal(new URL(page.url()).pathname, '/');
     assert.equal(new URL(page.url()).hash, '#/detail/example');
+    const actions = page.getByRole('group', { name: 'Member business actions' });
+    const placement = await actions.evaluate(element => {
+      const buttons = [...element.querySelectorAll('button')].map(button => button.getBoundingClientRect());
+      const share = document.querySelector('.directory-share').getBoundingClientRect();
+      return {
+        belowShare: element.getBoundingClientRect().top >= share.bottom,
+        sameRow: buttons.every(button => Math.abs(button.top - buttons[0].top) <= 1),
+        compact: buttons.every(button => button.width <= 100 && button.height >= 44 && button.height <= 100),
+      };
+    });
+    assert.deepEqual(placement, { belowShare: true, sameRow: true, compact: true }, 'Member actions are compact tiles below the contact/share controls');
+    const saved = await actions.getByRole('button', { name: 'Unsave business', exact: true }).count() > 0;
+    await actions.getByRole('button', { name: saved ? 'Unsave business' : 'Save business', exact: true }).click();
+    await actions.getByRole('button', { name: saved ? 'Save business' : 'Unsave business', exact: true }).waitFor();
+    await actions.getByRole('button', { name: 'Contact business', exact: true }).click();
+    await page.waitForURL('**/#/enquiry/example');
+    await page.goto('http://127.0.0.1:5184/#/detail/example');
+    await page.getByRole('button', { name: 'Report a problem', exact: true }).click();
+    await page.waitForURL('**/#/support/example');
+    await page.goto('http://127.0.0.1:5184/#/detail/example');
     await page.getByRole('link', { name: 'Back to businesses' }).click();
     await page.waitForURL('**/#/home/');
     assert.match(await page.locator('.bw-workspace-header').textContent(), /Example Member/);
@@ -75,7 +95,7 @@ try {
     assert.match(await publicOffer.getAttribute('href'), /^\/businesses\/view\/example\?.*#promotions$/);
   }
   assert.deepEqual(errors, [], 'Browser errors during navigation');
-  console.log(`Passed ${layouts} responsive layouts and member/public promotion navigation at phone and desktop widths.`);
+  console.log(`Passed ${layouts} responsive layouts, compact member actions and member/public promotion navigation at phone and desktop widths.`);
 } finally {
   await context.close();
   await browser.close();

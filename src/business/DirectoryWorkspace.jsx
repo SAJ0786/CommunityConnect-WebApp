@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Home, Tags, Heart, Inbox, Bell, Store, CircleHelp, ShieldCheck, Plus } from 'lucide-react';
+import { Home, Tags, Heart, Inbox, Bell, Store, CircleHelp, ShieldCheck, Plus, MessageSquare, Flag } from 'lucide-react';
 import { BUSINESS_ADMIN_GROUPS } from '../utils/adminNavigation.mjs';
 import BottomNav from '../components/BottomNav';
 import AccountMenu from '../components/AccountMenu';
@@ -101,7 +101,21 @@ export default function DirectoryWorkspace({ onOpenNotification, data, profile, 
             {route.page === 'home' && renderHome && renderHome({ city, setCity, navigate })}
             {route.page === 'home' && !renderHome && (publicRows.length ? <div className="bw-grid">{publicRows.map(row => <Panel key={row.id} title={row.name}><p>{row.categories.join(' · ')}</p><p>{row.description}</p><p className="bw-muted">{row.address}</p><div className="bw-actions"><button onClick={() => navigate('detail',row.id)}>View business</button>{profile && <button className="btn-light" onClick={() => run(data.savedIds.includes(row.id) ? 'saved.remove' : 'saved.add', { id: row.id }).catch(() => {})}>{data.savedIds.includes(row.id) ? 'Unsave business' : 'Save business'}</button>}</div></Panel>)}</div> : <Empty title="No matching businesses"/>)}
             {route.page === 'promotions' && <><PublicPromotionList rows={currentOffers} onOpenBusiness={id => navigate('detail',id)}/><p className="bw-muted">Open a business from the directory to start an enquiry.</p></>}
-            {route.page === 'detail' && <>{business && profile && <div className="bw-actions"><button onClick={() => navigate('enquiry',business.id)}>Contact business</button><button className="btn-light" onClick={() => navigate('support',business.id)}>Report a problem</button><button className="btn-light" onClick={() => run(data.savedIds.includes(business.id) ? 'saved.remove' : 'saved.add', { id: business.id }).catch(() => {})}>{data.savedIds.includes(business.id) ? 'Unsave business' : 'Save business'}</button></div>}<PublicBusinessPage embedded business={business} onBack={() => navigate('home')} promotionState={{ rows: currentOffers }}/></>}
+            {route.page === 'detail' && <PublicBusinessPage embedded business={business} onBack={() => navigate('home')} promotionState={{ rows: currentOffers }}
+              memberActions={business && profile && <div className="directory-member-actions" role="group" aria-label="Member business actions">
+                <button type="button" aria-label="Contact business" title="Contact business" onClick={() => navigate('enquiry',business.id)}>
+                  <span><MessageSquare size={23} aria-hidden="true"/></span>Contact
+                </button>
+                <button type="button" aria-label="Report a problem" title="Report a problem" onClick={() => navigate('support',business.id)}>
+                  <span><Flag size={23} aria-hidden="true"/></span>Report
+                </button>
+                <button type="button" aria-label={data.savedIds.includes(business.id) ? 'Unsave business' : 'Save business'}
+                  title={data.savedIds.includes(business.id) ? 'Unsave business' : 'Save business'} aria-pressed={data.savedIds.includes(business.id)}
+                  onClick={() => run(data.savedIds.includes(business.id) ? 'saved.remove' : 'saved.add', { id: business.id }).catch(() => {})}>
+                  <span><Heart size={23} aria-hidden="true" fill={data.savedIds.includes(business.id) ? 'currentColor' : 'none'}/></span>
+                  {data.savedIds.includes(business.id) ? 'Saved' : 'Save'}
+                </button>
+              </div>}/>}
             {route.page === 'profile' && renderProfile?.()}
             {route.page === 'saved' && <SavedBusinesses businesses={data.publicBusinesses} savedIds={data.savedIds} onOpen={id => navigate('detail',id)} onAction={run}/>}
             {route.page === 'notifications' && <Notifications notifications={data.notifications} onAction={run} onOpen={async row => { try { await run('notification.read', { id: row.id }); if (onOpenNotification?.(row) === true) return; navigate(row.destination || 'owner',row.targetId || ''); } catch {} }}/>}

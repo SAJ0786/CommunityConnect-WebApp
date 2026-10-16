@@ -30,7 +30,7 @@ function ShareBusiness({ business }) {
   </div>;
 }
 
-export default function PublicBusinessPage({ business, loading, error, fromCache, onRetry, onBack, promotionState, returnQuery = '', embedded = false }) {
+export default function PublicBusinessPage({ business, loading, error, fromCache, onRetry, onBack, memberActions, promotionState, returnQuery = '', embedded = false }) {
   const Container = embedded ? 'section' : 'main';
   useEffect(() => {
     const previous = document.title;
@@ -60,6 +60,7 @@ export default function PublicBusinessPage({ business, loading, error, fromCache
         </section>
         <BusinessContactLinks business={business} />
         <ShareBusiness key={business.id} business={business}/>
+        {memberActions}
         <div className="directory-grid directory-detail-grid">
           <section className="directory-card"><h2>About this business</h2><p className="directory-description">{business.description || 'Contact the business for more information.'}</p>
             {!!business.services.length && <><h3>Services</h3><ul className="directory-services">{business.services.map(service => <li key={service}>{service}</li>)}</ul></>}

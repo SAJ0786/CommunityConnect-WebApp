@@ -78,6 +78,11 @@
 .directory-promotion-image { width: 100%; max-height: 240px; object-fit: cover; border-radius: 12px; margin-bottom: 16px; }
 .directory-share { max-width: 680px; }
 .directory-share button { min-height: 44px; }
+.directory-member-actions { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; max-width: 300px; margin: 14px 0; }
+.directory-member-actions button { display: grid; justify-items: center; gap: 6px; min-width: 0; padding: 10px 6px; border: 1px solid var(--cc-border); border-radius: 16px; background: var(--cc-surface); color: var(--cc-text); box-shadow: none; font: inherit; font-size: .8rem; font-weight: 500; }
+.directory-member-actions button > span { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: var(--cc-primary-soft); color: var(--cc-primary); }
+.directory-member-actions button:nth-child(2) > span { background: var(--cc-warning-soft); color: var(--cc-warning-strong); }
+.directory-member-actions button:nth-child(3) > span { background: var(--cc-rose-soft); color: var(--cc-rose); }
 .directory-footer { max-width: 1200px; margin: 0 auto; padding: 24px 20px; color: var(--cc-muted); font-size: .8rem; line-height: 1.6; }
 .business-browse-header { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:18px 0; }
 .business-browse-header h1 { margin:0; font-size:1.5rem; }
