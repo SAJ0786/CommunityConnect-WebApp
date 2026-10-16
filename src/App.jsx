@@ -131,6 +131,13 @@ export default function App() {
     }
   });
   const registrationFeed = useRegistrationFeed(registrationApi, 'public', selectedCity, registrationRevision);
+  useEffect(() => {
+    if (!registrationApi) return;
+    const refresh = () => { if (!document.hidden) setRegistrationRevision(value => value + 1); };
+    const timer = window.setInterval(refresh, 60000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refresh); };
+  }, [registrationApi]);
   const [activeStream,   setActiveStream]   = useState(null); // { event, role }
   const [streamRecovery, setStreamRecovery] = useState(null);
 
@@ -145,11 +152,13 @@ export default function App() {
   }, [activeStream, page]);
   const onStreamStart = useCallback((event, channel, role, hostUrl, nativeStream) => {
     setActiveStream({ event, role, hostUrl, nativeStream, show: true });
+    if (event.registrationOnly) setRegistrationRevision(value => value + 1);
     setStreamRecovery(null);
     if (role === 'host' && nativeStream?.sessionId) {
       try {
         localStorage.setItem('communityActiveStream', JSON.stringify({
           eventId: event.id,
+          eventCollection:event.registrationOnly ? 'registrationEvents' : 'events',
           sessionId: nativeStream.sessionId,
           watchUrl: nativeStream.watchUrl || null,
           savedAt: Date.now(),
@@ -251,11 +260,12 @@ export default function App() {
   // stream cannot survive that reload, but this marker restores a prominent
   // route back to the same resumable YouTube session.
   useEffect(() => {
-    if (authMode !== 'user' || activeStream || !events.length) return;
+    if (authMode !== 'user' || activeStream || eventsLoading || registrationFeed.loading) return;
     try {
       const saved = JSON.parse(localStorage.getItem('communityActiveStream') || 'null');
       if (!saved?.eventId || !saved?.sessionId) return;
-      const liveEvent = events.find(event =>
+      if (saved.eventCollection === 'registrationEvents' && (!registrationApi || registrationFeed.error)) return;
+      const liveEvent = (saved.eventCollection === 'registrationEvents' ? registrationFeed.events : events).find(event =>
         event.id === saved.eventId && event.isLive && event.liveUrl === saved.sessionId
       );
       if (liveEvent) {
@@ -267,7 +277,7 @@ export default function App() {
     } catch {
       localStorage.removeItem('communityActiveStream');
     }
-  }, [authMode, activeStream, events]);
+  }, [authMode, activeStream, events, eventsLoading, registrationApi, registrationFeed.events, registrationFeed.loading, registrationFeed.error]);
 
   useEffect(() => {
     if (authMode !== 'guest') return undefined;
@@ -615,12 +625,17 @@ export default function App() {
             try { localStorage.removeItem('communityActiveStream'); } catch {}
             setActiveStream(null);
             setStreamRecovery(null);
+            if (activeStream.event.registrationOnly) setRegistrationRevision(value => value + 1);
             loadEvents();
           }}
           onMinimise={() => setActiveStream(s => ({ ...s, show: false }))}
           onEnded={async (endedId) => {
             try { localStorage.removeItem('communityActiveStream'); } catch {}
             setStreamRecovery(null);
+            if (activeStream.event.registrationOnly) {
+              setRegistrationRevision(value => value + 1);
+              return;
+            }
             // Optimistically flip the card to "not live" instantly so the UI
             // updates immediately, without waiting for Firestore to propagate.
             setEvents(prev => prev.map(ev =>

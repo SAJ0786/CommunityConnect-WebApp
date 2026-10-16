@@ -146,6 +146,10 @@ function adminCanAccessEvent(adminUser, event) {
   );
 }
 
+const { streamEventCollection, streamEventData, assertStreamSession, createStreamEventResolver, createStreamEventPublisher } = require('./stream-events.cjs');
+const resolveStreamEvent = createStreamEventResolver({ db, HttpsError, adminCanAccessEvent });
+const publishStreamEvent = createStreamEventPublisher({ db, HttpsError });
+
 function adminCanAccessUser(adminUser, targetUser) {
   return adminUser?.role === "superAdmin" || (
     adminUser?.role === "admin" && getUserCity(targetUser) === getUserCity(adminUser)
@@ -3791,17 +3795,19 @@ exports.listStreamVideos = onCall(
     const missing = eligibleLegacy.filter((docSnap, index) => !existing[index]?.exists);
     if (missing.length) {
       const eventDocs = await Promise.all(missing.map(docSnap => {
-        const eventId = docSnap.data()?.eventId;
-        return eventId ? db.collection('events').doc(eventId).get() : Promise.resolve(null);
+        const { eventId, eventCollection } = docSnap.data();
+        return eventId ? db.collection(streamEventCollection(eventCollection)).doc(eventId).get() : Promise.resolve(null);
       }));
       const batch = db.batch();
       missing.forEach((docSnap, index) => {
         const session = docSnap.data();
-        const eventData = eventDocs[index]?.exists ? eventDocs[index].data() : {};
+        const eventCollection = streamEventCollection(session.eventCollection);
+        const eventData = streamEventData(eventDocs[index]?.exists ? eventDocs[index].data() : {}, eventCollection);
         batch.set(db.collection('streamVideos').doc(session.broadcastId), {
           videoId: session.broadcastId,
           watchUrl: session.watchUrl || `https://www.youtube.com/watch?v=${session.broadcastId}`,
           eventId: session.eventId || null,
+          eventCollection,
           eventTitle: eventData.eventSubject || eventData.eventTypeDisplay || eventData.eventType || 'Community Event Stream',
           eventDate: eventData.eventDate || '',
           eventType: eventData.eventType || '',
@@ -3817,7 +3823,8 @@ exports.listStreamVideos = onCall(
           ownerUid: eventData.createdByUserId || session.uid || '',
           startedByUid: session.uid || '',
           source: 'native',
-          privacyStatus: 'public',
+          privacyStatus: session.privacyStatus || 'public',
+          appVisibility: session.appVisibility || (session.privacyStatus === 'unlisted' ? 'private' : 'public'),
           status: ['stopped', 'ended'].includes(session.status) ? 'completed' : (session.status || 'completed'),
           startedAt: session.createdAt || '',
           endedAt: session.stoppedAt || session.endedAt || null,
@@ -3850,6 +3857,7 @@ exports.listStreamVideos = onCall(
     const item = {
       id: docSnap.id,
       eventId: data.eventId || null,
+      eventCollection: streamEventCollection(data.eventCollection),
       eventTitle: data.youtubeTitle || data.eventTitle || 'Community Event Stream',
       eventDate: data.eventDate || '',
       hostName: data.hostName || '',
@@ -3899,10 +3907,11 @@ exports.refreshStreamVideoThumbnails = onCall(
       const data = docSnap.data();
       let eventData = eventDataFromStreamRecord(data);
       if (data.eventId) {
-        const eventSnap = await db.collection('events').doc(data.eventId).get();
+        const collection = streamEventCollection(data.eventCollection);
+        const eventSnap = await db.collection(collection).doc(data.eventId).get();
         if (eventSnap.exists) {
-          eventData = eventSnap.data();
-        } else {
+          eventData = streamEventData(eventSnap.data(), collection);
+        } else if (collection === 'events') {
           const archivedSnap = await db.collection('archivedEvents').doc(data.eventId).get();
           if (archivedSnap.exists) eventData = archivedSnap.data();
         }
@@ -3931,22 +3940,32 @@ exports.refreshStreamVideoThumbnails = onCall(
 let publicEventsCache = { expiresAt: 0, events: [] };
 
 async function runStaleLiveCleanup() {
-  const snap = await db.collection('events').where('isLive', '==', true).get();
-  if (snap.empty) return 0;
+  const snapshots = await Promise.all(['events', 'registrationEvents'].map(collection =>
+    db.collection(collection).where('isLive', '==', true).get()));
   let ended = 0;
-  for (const docSnap of snap.docs) {
+  for (const docSnap of snapshots.flatMap(snapshot => snapshot.docs)) {
     const data = docSnap.data();
+    const unavailableRegistration = docSnap.ref.parent.id === 'registrationEvents'
+      && (data.status !== 'approved' || data.deletedAt || data.hidden);
     const sessionId = data.liveUrl; // liveUrl stores the nativeStream sessionId
     const startedAt = data.liveStartedAt ? new Date(data.liveStartedAt) : null;
     const hoursLive = startedAt ? (Date.now() - startedAt.getTime()) / 3600000 : 999;
 
     // Safety net â€” force end if live for more than 3 hours, or no session at all
-    if (!sessionId || hoursLive > 3) {
+    if ((!sessionId && data.liveSource !== 'external-youtube') || hoursLive > 3 || unavailableRegistration) {
+      if (sessionId) {
+        const session = await db.collection('nativeStreamSessions').doc(sessionId).get();
+        if (session.exists) {
+          await completeYouTubeBroadcastIfLive(session.data().broadcastId);
+          await session.ref.update({ status:'stopped', stoppedAt:new Date().toISOString() });
+        }
+      }
       await markStreamVideoCompleted(data.liveVideoRecordId);
       await docSnap.ref.update({ isLive: false, liveUrl: null, liveWatchUrl: null, liveAppVisibility: null,
         liveVideoRecordId: null, liveEndedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
       ended++; continue;
     }
+    if (data.liveSource === 'external-youtube') continue;
 
     try {
       const sessDoc = await db.collection('nativeStreamSessions').doc(sessionId).get();
@@ -4007,15 +4026,19 @@ exports.nativeStreamStart = onCall(
     const { useOAuth, manualRtmpKey, eventTitle, eventId, qualityProfile, audioMode, testMode, protocolVersion, directNative } = request.data || {};
     const privacyStatus = request.data?.privacyStatus === 'unlisted' ? 'unlisted' : 'public';
     const appVisibility = privacyStatus === 'unlisted' ? 'private' : 'public';
+    let eventCollection;
+    try { eventCollection = streamEventCollection(request.data?.eventCollection); }
+    catch (error) { throw new HttpsError('invalid-argument', error.message); }
     let eventData = null;
+    let eventRef = null;
     if (eventId) {
-      const eventSnap = await db.collection('events').doc(eventId).get();
-      if (!eventSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-      eventData = eventSnap.data();
+      const resolved = await resolveStreamEvent(request);
+      eventData = resolved.data;
+      eventRef = resolved.ref;
+    } else if (eventCollection === 'registrationEvents') {
+      throw new HttpsError('invalid-argument', 'A registration eventId is required.');
     }
-    const requiresAdminCheck = eventData
-      ? eventData.createdByUserId !== request.auth.uid
-      : protocolVersion === 2;
+    const requiresAdminCheck = !eventData && protocolVersion === 2;
     if (requiresAdminCheck) {
       const userSnap = await db.collection('users').doc(request.auth.uid).get();
       const callerData = userSnap.data() || {};
@@ -4032,7 +4055,7 @@ exports.nativeStreamStart = onCall(
     let broadcastId = null;
 
     // â”€â”€ Get RTMP target â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    const resolvedStreamTitle = eventTitle || eventData?.eventSubject || eventData?.eventTypeDisplay || eventData?.eventType || 'Community Events Live Stream';
+    const resolvedStreamTitle = (eventCollection === 'events' ? eventTitle : null) || eventData?.eventSubject || eventData?.eventTypeDisplay || eventData?.eventType || 'Community Events Live Stream';
 
     if (useOAuth) {
       try {
@@ -4071,6 +4094,7 @@ exports.nativeStreamStart = onCall(
       await db.collection('nativeStreamSessions').doc(sessionId).set({
         uid:        request.auth.uid,
         eventId: eventId || null,
+        eventCollection,
         rtmpUrl,
         broadcastId: broadcastId || null,
         watchUrl:    watchUrl || null,
@@ -4090,7 +4114,7 @@ exports.nativeStreamStart = onCall(
       // next attempt resumes this session instead of creating another
       // YouTube broadcast.
       if (eventId) {
-        await db.collection('events').doc(eventId).update({
+        await publishStreamEvent(eventRef, eventCollection, {
           isLive: true,
           liveUrl: sessionId,
           liveRoomCode: sessionId,
@@ -4108,6 +4132,7 @@ exports.nativeStreamStart = onCall(
           videoId: broadcastId,
           watchUrl,
           eventId: eventId || null,
+          eventCollection,
           eventTitle: resolvedStreamTitle,
           youtubeTitle: resolvedStreamTitle,
           eventDate: eventData?.eventDate || '',
@@ -4140,7 +4165,24 @@ exports.nativeStreamStart = onCall(
         });
       }
     } catch (e) {
+      if (eventCollection === 'registrationEvents') {
+        try {
+          const sessionRef = db.collection('nativeStreamSessions').doc(sessionId);
+          const session = await sessionRef.get();
+          if (session.exists) await sessionRef.update({ status:'stopped', stoppedAt:new Date().toISOString() });
+          if (broadcastId) await completeYouTubeBroadcastIfLive(broadcastId);
+          if (eventRef) await db.runTransaction(async transaction => {
+            const event = await transaction.get(eventRef);
+            if (event.data()?.liveUrl === sessionId) transaction.update(eventRef, {
+              isLive:false, liveUrl:null, liveWatchUrl:null, liveAppVisibility:null, liveSource:null, liveVideoRecordId:null,
+            });
+          });
+        } catch (cleanupError) {
+          console.error('[NativeStream] Failed registration start cleanup:', cleanupError.message);
+        }
+      }
       console.error('[NativeStream] Firestore session write failed:', e.message, e.code);
+      if (e instanceof HttpsError) throw e;
       throw new HttpsError('internal', 'Failed to create session in Firestore: ' + e.message);
     }
 
@@ -4165,22 +4207,16 @@ exports.nativeStreamResume = onCall(
     const { eventId, sessionId, directNative } = request.data || {};
     if (!eventId || !sessionId) throw new HttpsError('invalid-argument', 'eventId and sessionId required.');
 
-    const [eventSnap, sessionSnap] = await Promise.all([
-      db.collection('events').doc(eventId).get(),
+    const [resolved, sessionSnap] = await Promise.all([
+      resolveStreamEvent(request),
       db.collection('nativeStreamSessions').doc(sessionId).get(),
     ]);
-    if (!eventSnap.exists || !sessionSnap.exists) throw new HttpsError('not-found', 'Stream session not found.');
-    const eventData = eventSnap.data();
+    if (!sessionSnap.exists) throw new HttpsError('not-found', 'Stream session not found.');
+    const eventData = resolved.data;
     const session = sessionSnap.data();
-    if (session.eventId !== eventId || eventData.liveUrl !== sessionId) {
+    assertStreamSession(session, eventId, resolved.collection, HttpsError);
+    if (eventData.liveUrl !== sessionId) {
       throw new HttpsError('failed-precondition', 'This session does not belong to the selected event.');
-    }
-    if (eventData.createdByUserId !== request.auth.uid) {
-      const userSnap = await db.collection('users').doc(request.auth.uid).get();
-      const callerData = userSnap.data() || {};
-      if (!adminCanAccessEvent(callerData, eventData || {})) {
-        throw new HttpsError('permission-denied', 'Not authorised to resume this event.');
-      }
     }
     if (session.status === 'stopped') throw new HttpsError('failed-precondition', 'This stream was ended explicitly.');
     const leaseExpiry = new Date(session.leaseExpiresAt || 0).getTime();
@@ -4232,8 +4268,10 @@ exports.sendPrivateStreamLinkEmail = onCall(
 
     let eventData = {};
     if (session.eventId) {
-      const eventSnap = await db.collection('events').doc(session.eventId).get();
-      if (eventSnap.exists) eventData = eventSnap.data();
+      const resolved = await resolveStreamEvent({
+        ...request, data: { eventId:session.eventId, eventCollection:session.eventCollection },
+      }, { allowInactive:true });
+      eventData = resolved.data;
     }
 
     if (session.uid !== request.auth.uid) {
@@ -4243,6 +4281,7 @@ exports.sendPrivateStreamLinkEmail = onCall(
         throw new HttpsError('permission-denied', 'Not authorised to email this private stream link.');
       }
     }
+    if (session.eventCollection === 'registrationEvents') return { sent:false, reason:'registration-delivery-disabled' };
 
     if (session.appVisibility !== 'private' && session.privacyStatus !== 'unlisted') {
       return { sent: false, reason: 'not-private' };
@@ -4296,18 +4335,7 @@ exports.startExternalYouTubeStream = onCall(
   const appVisibility = privacyStatus === 'unlisted' ? 'private' : 'public';
   if (!eventId || !rawUrl) throw new HttpsError('invalid-argument', 'Event and YouTube URL are required.');
 
-  const eventRef = db.collection('events').doc(eventId);
-  const eventSnap = await eventRef.get();
-  if (!eventSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-  const eventData = eventSnap.data();
-  const isOwner = eventData.createdByUserId === request.auth.uid;
-  if (!isOwner) {
-    const userSnap = await db.collection('users').doc(request.auth.uid).get();
-    const callerData = userSnap.data() || {};
-    if (!adminCanAccessEvent(callerData, eventData || {})) {
-      throw new HttpsError('permission-denied', 'Not authorised to stream this event.');
-    }
-  }
+  const { ref:eventRef, data:eventData, collection:eventCollection } = await resolveStreamEvent(request);
   if (eventData.isLive) throw new HttpsError('failed-precondition', 'This event is already live.');
 
   let parsed;
@@ -4338,8 +4366,8 @@ exports.startExternalYouTubeStream = onCall(
   }
 
   const now = new Date().toISOString();
-  const videoRecordId = `external_${videoId}_${eventId}`;
-  await eventRef.update({
+  const videoRecordId = `external_${videoId}_${eventCollection === 'registrationEvents' ? 'registration_' : ''}${eventId}`;
+  await publishStreamEvent(eventRef, eventCollection, {
     isLive:true,
     liveUrl:null,
     liveWatchUrl:appVisibility === 'public' ? watchUrl : null,
@@ -4354,6 +4382,7 @@ exports.startExternalYouTubeStream = onCall(
     videoId,
     watchUrl,
     eventId,
+    eventCollection,
     eventTitle:eventData.eventSubject || eventData.eventTypeDisplay || eventData.eventType || 'Community Event Stream',
     youtubeTitle:videoTitle,
     eventDate:eventData.eventDate || '',
@@ -4377,7 +4406,7 @@ exports.startExternalYouTubeStream = onCall(
     endedAt:null,
     createdAt:admin.firestore.FieldValue.serverTimestamp(),
   }, { merge:true });
-  if (appVisibility === 'private') {
+  if (appVisibility === 'private' && eventCollection === 'events') {
     try {
       await sendPrivateStreamLinkToHost({
         secrets: { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, EMAIL_FROM },
@@ -4401,23 +4430,28 @@ exports.startExternalYouTubeStream = onCall(
   return { ok:true, watchUrl, videoId };
 });
 
+exports.getEventStream = onCall({ region: REGION }, async (request) => {
+  const { data:event, collection } = await resolveStreamEvent(request, { allowInactive:true });
+  if (!event.isLive) throw new HttpsError('failed-precondition', 'This event is not live.');
+  const recordRef = event.liveSource === 'external-youtube'
+    ? db.collection('streamVideos').doc(event.liveVideoRecordId || 'missing')
+    : db.collection('nativeStreamSessions').doc(event.liveUrl || 'missing');
+  const record = await recordRef.get();
+  if (!record.exists) throw new HttpsError('not-found', 'Stream record not found.');
+  assertStreamSession(record.data(), request.data.eventId, collection, HttpsError);
+  if (collection === 'registrationEvents' && !/^https:\/\/(?:www\.youtube\.com\/watch\?v=|youtu\.be\/)[A-Za-z0-9_-]{11}$/.test(record.data().watchUrl || '')) {
+    throw new HttpsError('failed-precondition', 'This stream has no valid video link. End the stream or retry its setup.');
+  }
+  return { watchUrl:record.data().watchUrl || null, sessionId:event.liveUrl, source:event.liveSource,
+    appVisibility:event.liveAppVisibility };
+});
+
 exports.endExternalYouTubeStream = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
   const eventId = String(request.data?.eventId || '').trim();
   if (!eventId) throw new HttpsError('invalid-argument', 'eventId required.');
 
-  const eventRef = db.collection('events').doc(eventId);
-  const eventSnap = await eventRef.get();
-  if (!eventSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-  const eventData = eventSnap.data();
-  const isOwner = eventData.createdByUserId === request.auth.uid;
-  if (!isOwner) {
-    const userSnap = await db.collection('users').doc(request.auth.uid).get();
-    const callerData = userSnap.data() || {};
-    if (!adminCanAccessEvent(callerData, eventData || {})) {
-      throw new HttpsError('permission-denied', 'Not authorised to end this live event.');
-    }
-  }
+  const { ref:eventRef, data:eventData } = await resolveStreamEvent(request, { allowInactive:true });
   if (eventData.liveSource !== 'external-youtube') {
     throw new HttpsError('failed-precondition', 'This event is not using an external YouTube stream.');
   }
@@ -4450,6 +4484,9 @@ exports.nativeStreamCheckHealth = onCall(
 
     const sess = await db.collection('nativeStreamSessions').doc(sessionId).get();
     if (!sess.exists) throw new HttpsError('not-found', 'Session not found.');
+    if (sess.data().eventCollection === 'registrationEvents') {
+      await resolveStreamEvent({ ...request, data:{ eventId:sess.data().eventId, eventCollection:'registrationEvents' } });
+    }
     const { broadcastId } = sess.data();
     if (!broadcastId) return { error: 'No broadcastId â€” manual key mode, cannot check health' };
 
@@ -4537,29 +4574,22 @@ exports.nativeStreamEndEvent = onCall(
   { region: REGION, secrets: [YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET] },
   async (request) => {
     if (!request.auth) throw new HttpsError('unauthenticated', 'Login required.');
-    const { eventId, sessionId } = request.data || {};
+    const { eventId } = request.data || {};
     if (!eventId) throw new HttpsError('invalid-argument', 'eventId required.');
 
-    const eventRef = db.collection('events').doc(eventId);
-    const eventSnap = await eventRef.get();
-    if (!eventSnap.exists) throw new HttpsError('not-found', 'Event not found.');
-
-    const eventData = eventSnap.data();
-    const isOwner = eventData.createdByUserId === request.auth.uid;
-    if (!isOwner) {
-      const userDoc = await db.collection('users').doc(request.auth.uid).get();
-      const callerData = userDoc.data() || {};
-      if (!adminCanAccessEvent(callerData, eventData || {})) {
-        throw new HttpsError('permission-denied', 'Not your event.');
-      }
-    }
+    const { ref:eventRef, data:eventData, collection:eventCollection } = await resolveStreamEvent(request, { allowInactive:true });
+    const sessionId = request.data?.sessionId || eventData.liveUrl;
 
     // 1. Get broadcastId from session so we can end the YouTube broadcast cleanly
     let broadcastId = null;
     if (sessionId) {
       const sessRef = db.collection('nativeStreamSessions').doc(sessionId);
-      const sessSnap = await sessRef.get().catch(() => null);
+      const sessSnap = await sessRef.get();
       if (sessSnap?.exists) {
+        assertStreamSession(sessSnap.data(), eventId, eventCollection, HttpsError);
+        if (eventData.liveUrl && eventData.liveUrl !== sessionId) {
+          throw new HttpsError('failed-precondition', 'A different session is active for this event.');
+        }
         broadcastId = sessSnap.data().broadcastId || null;
         // Mark session stopped
         await sessRef.update({ status: 'stopped', stoppedAt: new Date().toISOString() })
@@ -4648,4 +4678,3 @@ exports.nativeStreamEndEvent = onCall(
     return { ok: true };
   }
 );
-

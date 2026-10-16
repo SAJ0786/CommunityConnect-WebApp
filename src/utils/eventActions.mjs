@@ -2,6 +2,7 @@
 export function eventActions({ event, member, manage, admin, arrangeNiaz = manage, readOnly, registrationRemindersEnabled = false, handlers = {} }) {
   const hostUid = event.createdByUserId || event.ownerUid || event.createdByUid || event.userId;
   const series = Boolean(event.isSeries || event.isRecurring || event.seriesId || event.recurringSeriesId);
+  const watchLive = Boolean(event.isLive && event.liveWatchUrl && event.liveAppVisibility !== 'private' && !(event.registrationOnly && manage));
   const action = (id, label, allowed, writes = false, reason = 'You do not have permission for this action.') => {
     const unavailable = !allowed ? reason : writes && readOnly ? 'Disabled in the read-only preview.'
       : typeof handlers[id] !== 'function' ? 'This workflow is not connected in the web preview yet.' : '';
@@ -13,10 +14,11 @@ export function eventActions({ event, member, manage, admin, arrangeNiaz = manag
       !member ? 'Sign in to use directions.' : 'No location is available.'),
     action('contact', 'Contact Host', member && Boolean(hostUid) && hostUid !== handlers.uid, true,
       !member ? 'Sign in to contact the host.' : !hostUid ? 'This event has no linked host inbox.' : 'You are the host of this event.'),
-    action('live', event.isLive && event.liveWatchUrl && event.liveAppVisibility !== 'private' ? 'Watch on YouTube' : event.isLive ? 'Manage Live' : 'Go Live',
-      !event.registrationOnly && member && (manage || Boolean(event.isLive && event.liveWatchUrl && event.liveAppVisibility !== 'private')),
-      !(event.isLive && event.liveWatchUrl && event.liveAppVisibility !== 'private'),
-      event.registrationOnly ? 'Registration streaming is awaiting its privacy and backend release. No broadcast will be started.' : 'You do not have permission for this action.'),
+    action('live', watchLive ? 'Watch on YouTube' : event.isLive ? 'Manage Live' : 'Go Live',
+      member && (!event.registrationOnly || event.status === 'approved' && !event.deletedAt)
+        && (manage || Boolean(event.isLive && event.liveWatchUrl && event.liveAppVisibility !== 'private')),
+      !watchLive,
+      event.registrationOnly && event.status !== 'approved' ? 'Only approved registration events can stream.' : 'You do not have permission for this action.'),
     action('reminder', 'Reminder', member && (!event.registrationOnly || registrationRemindersEnabled && Boolean(event.startTime && event.startAt)), true,
       event.registrationOnly ? !event.startTime || !event.startAt ? 'The host must provide an exact start time before a reminder can be scheduled.' : 'Web reminders are awaiting separate backend activation. No reminder has been scheduled.' : 'Sign in to set reminders.'),
     action('calendar', 'Sync Calendar', member, false, 'Sign in to sync your calendar.'),

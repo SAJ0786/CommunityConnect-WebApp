@@ -201,9 +201,17 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
     const sessionId = nativeStream?.sessionId;
     try {
       const functionName = isExternal ? 'endExternalYouTubeStream' : 'nativeStreamEndEvent';
-      await httpsCallable(functions, functionName)({ eventId: event.id, sessionId });
+      await httpsCallable(functions, functionName)({ eventId: event.id, sessionId,
+        eventCollection:event.registrationOnly ? 'registrationEvents' : 'events' });
     } catch (e) {
       console.error('nativeStreamEndEvent failed:', e.message);
+      if (event.registrationOnly) {
+        setErrMsg(`${isExternal ? 'The external stream' : 'The camera is stopped, but the stream'} has not been confirmed ended by the server. Retry End Stream.`);
+        setPhase('error');
+        setEnding(false);
+        endingRef.current = false;
+        return;
+      }
       // Fallback 1: client-side endLive (rules allow owner/admin)
       try {
         await endLive(event.id);
@@ -334,6 +342,7 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
           </div>
         </div>
         {confirm && <EndStreamConfirmation ending={ending} external onConfirm={handleEnd} onCancel={() => setConfirm(false)} />}
+        {errMsg && <p role="alert" style={{ padding:'12px 24px', color:'var(--cc-media-danger)' }}>{errMsg}</p>}
         <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
           padding:24, textAlign:'center', gap:16 }}>
           <div style={{ width:72, height:72, borderRadius:'50%', background:'var(--cc-accent-strong)', display:'grid',

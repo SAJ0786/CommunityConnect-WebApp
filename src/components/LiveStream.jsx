@@ -71,7 +71,7 @@ function StreamMethodDialog({
             <fieldset style={{ margin:'0 0 18px', padding:0, border:0 }}>
               <legend style={{ fontSize:'0.75rem', fontWeight:900, marginBottom:8 }}>Who can watch on YouTube?</legend>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                {[['public', 'Public'], ['unlisted', 'Private']].map(([value, label]) => (
+                {[['public', 'Public'], ['unlisted', 'Unlisted']].map(([value, label]) => (
                   <label key={value} style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 12px',
                     border:`2px solid ${visibility === value ? 'var(--cc-accent-strong)' : 'var(--border)'}`,
                     borderRadius:10, cursor:'pointer', fontSize:'0.8125rem', fontWeight:800,
@@ -83,7 +83,7 @@ function StreamMethodDialog({
                 ))}
               </div>
               <p style={{ margin:'7px 0 0', color:'var(--muted)', fontSize:'0.6875rem', lineHeight:1.4 }}>
-                Private streams do not appear in the app's public stream list or YouTube search. Anyone who receives the YouTube link can still watch.
+                Unlisted streams do not appear in the app's public stream list or YouTube search. Anyone who receives the YouTube link can still watch.
               </p>
             </fieldset>
             {isNativeDevice && (
@@ -246,12 +246,14 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
       const startRes = resumingExisting
         ? await httpsCallable(functions, 'nativeStreamResume')({
             eventId:event.id,
+            eventCollection:event.registrationOnly ? 'registrationEvents' : 'events',
             sessionId:event.liveUrl,
             directNative: !!streamer.isNativeBridge,
           })
         : await httpsCallable(functions, 'nativeStreamStart')({
             useOAuth:true,
             eventId:event.id,
+            eventCollection:event.registrationOnly ? 'registrationEvents' : 'events',
             eventTitle,
             qualityProfile:streamer.qualityProfile,
             audioMode:streamer.audioMode,
@@ -278,13 +280,16 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
       // 4) Mark the event live and mount StreamCard immediately. YouTube can
       // take 20-30 seconds to report "live" on mobile networks; waiting here
       // left the camera running without a persistent stream frame.
-      if (!resumingExisting) await goLive(event.id, sessionId);
-      if (watchUrl && streamVisibility !== 'unlisted') {
+      if (!resumingExisting && !event.registrationOnly) await goLive(event.id, sessionId);
+      if (!event.registrationOnly && watchUrl && streamVisibility !== 'unlisted') {
         await updateDoc(doc(db, 'events', event.id), { liveWatchUrl: watchUrl }).catch(() => {});
       }
 
       setStreaming(true);
-      if (onLiveStarted) onLiveStarted(event, event.id, 'host', null, { streamer, sessionId, watchUrl });
+      const visibility = resumingExisting ? event.liveAppVisibility : streamVisibility === 'unlisted' ? 'private' : 'public';
+      if (onLiveStarted) onLiveStarted({ ...event, isLive:true, liveUrl:sessionId, liveSource:'native',
+        liveWatchUrl:visibility === 'public' ? watchUrl : null, liveAppVisibility:visibility },
+      event.id, 'host', null, { streamer, sessionId, watchUrl });
       setShowPreCheck(false);
 
       // Health verification now runs in the background while StreamCard owns
@@ -293,7 +298,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
         .then(result => {
           const isYouTubeLive = result?.broadcastStatus === 'live' || result?.streamStatus === 'active';
           const isPrivateStream = streamVisibility === 'unlisted' || event.liveAppVisibility === 'private';
-          if (isPrivateStream && isYouTubeLive) {
+          if (!event.registrationOnly && isPrivateStream && isYouTubeLive) {
             httpsCallable(functions, 'sendPrivateStreamLinkEmail')({ sessionId })
               .catch(e => console.warn('[NativeStream] Private stream email failed:', e.message));
           }
@@ -301,7 +306,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
         .catch(e => console.warn('[NativeStream] YouTube health check failed:', e.message));
 
       // 5) Push notification to subscribers (fire-and-forget — doesn't block going live)
-      if (!resumingExisting) {
+      if (!resumingExisting && !event.registrationOnly) {
         httpsCallable(functions, 'notifyEventLive')({
           eventId:    event.id,
           eventTitle: event.eventTypeDisplay || event.eventType || 'Event',
@@ -314,6 +319,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
       if (startedSessionId && !resumingExisting) {
         await httpsCallable(functions, 'nativeStreamEndEvent')({
           eventId: event.id,
+          eventCollection:event.registrationOnly ? 'registrationEvents' : 'events',
           sessionId: startedSessionId,
         }).catch(err => console.warn('[NativeStream] failed start cleanup:', err.message));
       }
@@ -360,6 +366,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
     try {
       const result = await httpsCallable(functions, 'startExternalYouTubeStream')({
         eventId: event.id,
+        eventCollection:event.registrationOnly ? 'registrationEvents' : 'events',
         youtubeUrl: externalUrl.trim(),
         privacyStatus: streamVisibility,
       });
@@ -375,7 +382,7 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
       setStreaming(true);
       setMethodStep(null);
       onLiveStarted?.(liveEvent, event.id, 'host', watchUrl, { mode:'external', watchUrl });
-      httpsCallable(functions, 'notifyEventLive')({
+      if (!event.registrationOnly) httpsCallable(functions, 'notifyEventLive')({
         eventId:event.id,
         eventTitle:event.eventTypeDisplay || event.eventType || 'Event',
         hostName:event.hostName || '',
@@ -397,9 +404,19 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
           display:'flex', alignItems:'center', gap:5 }}>
           <span style={{ animation:'liveBlink 1s infinite' }}>{LIVE_DOT_ICON}</span> LIVE NOW
         </span>
-        <button onClick={() => {
+        <button onClick={async () => {
           if (isExternal) {
-            onLiveStarted?.(event, event.id, 'host', event.liveWatchUrl, { mode:'external', watchUrl:event.liveWatchUrl });
+            setLoading(true);
+            try {
+              const result = await httpsCallable(functions, 'getEventStream')({
+                eventId:event.id, eventCollection:event.registrationOnly ? 'registrationEvents' : 'events',
+              });
+              if (event.registrationOnly && !result.data?.watchUrl) throw new Error('No video link is available. Retry loading stream controls.');
+              onLiveStarted?.(event, event.id, 'host', result.data.watchUrl, { mode:'external', watchUrl:result.data.watchUrl });
+            } catch (error) {
+              setErrMsg(error.message || 'Could not load stream controls. Retry Manage Live.');
+              setPopup('error');
+            } finally { setLoading(false); }
           } else if (hasAndroidNativeBridge()) {
             startThisDeviceStream();
           } else {
@@ -415,6 +432,8 @@ export function GoLiveButton({ event, onLiveStarted, onLiveEnded }) {
           <PreCheckCard event={event} onConfirm={startStream} onCancel={handlePreCheckCancel} />
         )}
         <style>{`@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
+        {popup === 'error' && <Popup icon={WARNING_ICON} title="Could Not Load Stream"
+          message={errMsg} confirmLabel="OK" infoOnly onClose={() => setPopup(null)} />}
       </div>
     );
   }

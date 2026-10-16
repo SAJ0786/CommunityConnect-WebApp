@@ -318,7 +318,7 @@ export default function EventCard({
           })}
           {showLiveControls && !actions.find(action => action.id === 'live').disabled && <div onClick={click => click.stopPropagation()}>
             <Suspense fallback={<span className="small">Loading live controls…</span>}>
-              {event.isLive && event.liveWatchUrl && event.liveAppVisibility !== 'private'
+              {event.isLive && event.liveWatchUrl && event.liveAppVisibility !== 'private' && !(event.registrationOnly && manage)
                 ? <WatchLiveButton event={event} isGuest={!member} onWatchStarted={onStreamStart} />
                 : manage && !readOnly && <GoLiveButton event={event} onLiveStarted={onStreamStart} onLiveEnded={() => {}} />}
             </Suspense>

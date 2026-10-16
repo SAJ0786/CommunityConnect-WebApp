@@ -37,30 +37,61 @@ registration events using public title/suburb only: date-only events are all-day
 timed events use server UTC instants and omit DTEND when no end is provided.
 
 **Coordinated release prerequisites:** deploy the Native-owned registration
-callables contract from `bdd1030d159f5fba98063328d62a67417bc1ed77` or its successor
-(list flags/scopes, global review, safe delete, schedule projection), then the
+callables contract from `a6a6af083be82ee38bf6463d3bce5ebc91350ac3` or its successor
+(list flags/scopes, global review, safe delete, schedule and safe live projection,
+stored stream-state preservation), then the
 Web-owned `calendarFeed` from `functions/index.js` with
 `functions/registration-calendar.cjs`, before publishing this Web build.
 Existing feature gates and notice/delivery switches are unchanged. No deployment
 was performed by this change.
 
-**Parity holds:** Go Live remains visible but disabled with an explicit reason
-for registration events until streaming privacy and collection-aware endpoints
-are approved. The candidate Web reminder source now supports explicit
+**Streaming decision:** the user approved normal Public/Unlisted YouTube options.
+Unlisted links can be shared outside the app; this is not registrant-only video.
+Registration posters, private venue and answers retain their separate restrictions.
+Stream thumbnails and archive records use only an allowlisted
+public registration projection (title/type/date/clocks/city/suburb/owner UID).
+
+Deploy the Web-owned `nativeStreamStart`, `nativeStreamResume`,
+`nativeStreamEndEvent`, `startExternalYouTubeStream`, `endExternalYouTubeStream`,
+`getEventStream`, `nativeStreamCheckHealth`, `sendPrivateStreamLinkEmail`, `cleanupStaleLiveEvents`,
+`cleanupStaleLiveEventsNow`, `listStreamVideos` and
+`refreshStreamVideoThumbnails` with `functions/stream-events.cjs` before publishing
+streaming clients. Event-ID calls explicitly pass
+`eventCollection: 'registrationEvents'`; omitted collection remains legacy
+`events`. Sessions and archive records retain collection identity; resume/end
+reject cross-event or cross-collection sessions. Starts require an active owner
+or authorised city admin/Superadmin and an approved, available event. Publication
+transactionally rechecks availability and existing streams. Cancelled/deleted
+events can still be ended by their managers; stale cleanup includes registrations.
+The relay is session-only and needs no collection-specific change.
+
+The matching Native-owned registration list/detail projection must include safe
+live state. Unlisted watch URLs are never public: managers retrieve their own
+existing external stream link through `getEventStream`; native resume already
+returns its authorised session URL. Web registration streaming never calls
+legacy direct-write `goLive`/`endLive` fallbacks or `notifyEventLive`. No new
+notification delivery is activated: registration private-link emails are skipped
+on clients and refused server-side, without altering ordinary-event delivery.
+
+**Reminder release hold:** the candidate Web reminder source now supports explicit
 `eventCollection: registrationEvents`, rechecking approval/deletion and exact
 server-projected starts before scheduling/dispatch; it never reads private venue
 or answers. Reminder remains visible but disabled while the existing
 `VITE_EVENT_REMINDERS_ENABLED` gate is off, or when no exact start is available.
 No reminder endpoints, worker or delivery gate are activated by this change.
 Deploy/accept the candidate reminder backend separately before enabling it.
-Do not send registration IDs to legacy-only streaming/reminder endpoints or
-mirror private registrations into `events`.
+Do not enable registration clients before the collection-aware streaming backend
+and safe callable live projection are deployed. Do not send registration IDs to
+legacy-only reminder endpoints or mirror private registrations into `events`.
 
 Focused offline browser checks:
 `node tools/check-ui-preview.mjs` (5182) then
 `node tools/check-unified-registration-preview.mjs`; this covers phone/desktop
 filtering, guest sign-in, attendee edit, poster/address privacy, host form/poster
-editing and global approval. No Firebase or real records are used.
+editing, global approval and Public/Unlisted stream controls. No Firebase or real
+records are used. `tests/registration-streams.test.mjs` exercises the canonical
+streaming callable bodies with in-memory Firestore/YouTube; the renderer suite
+also exercises real React native/external start and failed-end retry paths.
 
 ## Earlier candidate integration (historical)
 

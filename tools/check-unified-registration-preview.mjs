@@ -48,6 +48,12 @@ try {
     assert.equal(await page.getByText('UnApproved', { exact:true }).count(), 0);
     const ownerCard = page.locator('#event-registration-approved');
     await ownerCard.getByRole('button', { name:'Expand event details', exact:true }).last().click();
+    await ownerCard.getByRole('button', { name:'Go Live', exact:true }).click();
+    await ownerCard.getByRole('button', { name:/Go Live$/ }).last().click();
+    await page.getByRole('heading', { name:'How do you want to stream?', exact:true }).waitFor();
+    await page.getByRole('radio', { name:'Unlisted', exact:true }).check();
+    await page.getByText(/Anyone who receives the YouTube link can still watch/).waitFor();
+    await page.getByRole('button', { name:'Cancel', exact:true }).click();
     await ownerCard.getByRole('button', { name:'Edit Registration form', exact:true }).click();
     await page.getByText('Add a question', { exact:true }).waitFor();
     assert.equal(await page.getByRole('button', { name:'Cancel whole event', exact:true }).count(), 0);
