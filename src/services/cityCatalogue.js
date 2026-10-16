@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 import { doc, getDocFromServer } from 'firebase/firestore';
-import { db } from '../firebase/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, db } from '../firebase/firebase';
 import { CITY_CATALOGUE_ENABLED } from '../config/releaseGates.mjs';
 import { cityCatalogueRevision, subscribeCityCatalogue, installCityCatalogue, validateCityCatalogue } from '../utils/cities';
 const KEY = 'community-connect/city-catalogue/v1';
@@ -38,9 +39,10 @@ export function useCityCatalogueRefresh() {
   useEffect(() => {
     void refreshCityCatalogue();
     const refresh = () => { if (!document.hidden) void refreshCityCatalogue(); };
+    const stopAuth = onAuthStateChanged(auth, user => { if (user) void refreshCityCatalogue(); });
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('online', refresh);
-    return () => { document.removeEventListener('visibilitychange', refresh); window.removeEventListener('online', refresh); };
+    return () => { stopAuth(); document.removeEventListener('visibilitychange', refresh); window.removeEventListener('online', refresh); };
   }, []);
   return revision;
 }

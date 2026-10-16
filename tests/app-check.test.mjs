@@ -11,8 +11,8 @@ test('App Check key is public, validated, and defaults to unconfigured', async (
   assert.match(read('../.env.example'), /^VITE_APP_CHECK_RECAPTCHA_V3_SITE_KEY=$/m);
 });
 
-test('city management requires App Check and stays initialised only with a key', () => {
-  assert.match(read('../src/config/releaseGates.mjs'), /CITY_CATALOGUE_ENABLED && APP_CHECK_CONFIGURED/);
+test('App Check initialises only with a key and does not gate city management', () => {
+  assert.doesNotMatch(read('../src/config/releaseGates.mjs'), /APP_CHECK_CONFIGURED/);
   const firebase = read('../src/firebase/firebase.js');
   assert.match(firebase, /if \(APP_CHECK_CONFIGURED\)[\s\S]*initializeAppCheck/);
   assert.doesNotMatch(firebase, /FIREBASE_APPCHECK_DEBUG_TOKEN/);
