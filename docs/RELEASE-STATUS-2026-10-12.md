@@ -1,5 +1,37 @@
 # Community Connect release status — 12 October 2026
 
+## Unified registration live - 17 October 2026 Sydney
+
+Production https://communityconnect.siza.info now serves source
+`9f4170d681dc43ed722eb2cc87895a8361153478`, Hosting version
+`97f9f2dedf9923d5` (2026-10-16T13:16:02.045Z). Approved registration events use
+normal cards, Quick Access filtering, private poster/venue access, host/attendee
+tools, global Superadmin approval and normal Public/Unlisted streaming.
+
+Only the twelve approved Web-owned default-codebase calendar/stream functions
+were deployed. All are ACTIVE; deployed source hashes match the canonical source
+and both helpers, with existing runtime environment and secret bindings retained.
+Native separately deployed the registration contract and its owned email guard.
+No rules, indexes, relay, Native build or store release was performed.
+
+All 133 hosted files and configured entry routes match the production build.
+Eight protected callable unauthenticated probes pass; signed-out phone/desktop
+entries render without overflow or browser errors. Local checks passed 272 tests,
+13 React workflow tests, 95 responsive layouts and production builds. These do
+not establish authenticated/device registration or streaming acceptance.
+
+Existing production configuration/flags were preserved. Registration reminders
+are explicitly disabled independently of the ordinary-reminder flag: "Registration
+reminders are awaiting separate backend activation. No reminder has been scheduled."
+The candidate registration reminder backend remains unexported/undeployed.
+Registration notices/email/push were not enabled; no real-data QA mutations,
+messages or streams were initiated. Prior Hosting version `d655bf43f4cce86c` is
+preserved in `registration-rollback-20261017`.
+
+See `src/registration/README.md` for exact ownership, function list and release
+details. Ignored `.qa-registration-release/` contains source/hash/configuration
+fingerprint verification evidence without credential values.
+
 ## LIVE Hosting replacement - 13 October 2026, 7:29 pm Sydney
 
 Production is now https://communityconnect.siza.info, version `c21e1ca7ed9d707d`, promoted from the verified web-final-review channel at 2026-10-13T08:29:24.454Z. The user explicitly requested replacement after the menu fix. This current status supersedes the historical production holds below.

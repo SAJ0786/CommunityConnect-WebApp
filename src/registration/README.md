@@ -1,5 +1,38 @@
 # Event registration on web
 
+## Production release - 17 October 2026 Sydney
+
+Hosting source `9f4170d681dc43ed722eb2cc87895a8361153478` is live at
+https://communityconnect.siza.info, version `97f9f2dedf9923d5`, released
+2026-10-16T13:16:02.045Z. All 133 hosted files match the built hashes. The
+configured `/`, `/app` and `/businesses` entries return their expected artifacts;
+signed-out 390px/1440px entries render without overflow or browser errors.
+
+The twelve Web-owned canonical functions listed below are ACTIVE in codebase
+`default` on Node 22. Their deployed source generations match `index.js`,
+`stream-events.cjs` and `registration-calendar.cjs` exactly. Existing runtime
+environment values and secret bindings were preserved. Eight protected callable
+endpoints reject unauthenticated probes. No signed-in mutation or real stream was
+used for verification.
+
+The Native owner confirmed registration codebase deployment from `a6a6af0` and
+the separately owned `events-email:sendPrivateStreamLinkEmail` delivery guard
+from `dfe9c57` (revision `sendprivatestreamlinkemail-00014-zek`). No codebase
+ownership was transferred. Registration notices and registration stream email/
+push delivery remain disabled. Existing ordinary-event delivery is unchanged.
+
+The five existing production flags (directory workspace, ordinary event reminders,
+dynamic city catalogue, city management and event registration) remain true.
+Existing SDK, Places and VAPID configuration was reused; no App Check site key was
+added. Registration reminders remain explicitly held as described below. Actual
+authenticated/device streaming, registration writes and reminder delivery were
+not exercised by the deployment checks.
+
+Prior Hosting version `d655bf43f4cce86c` is preserved in channel
+`registration-rollback-20261017`. Local release hashes, sanitized function
+metadata/configuration fingerprints and verification reports are ignored artifacts
+under `.qa-registration-release/`; no credentials are recorded in these reports.
+
 ## Unified event cards - 16 October 2026
 
 Registration events now share Home, date/city/category/search filters, calendar,
@@ -42,8 +75,8 @@ callables contract from `a6a6af083be82ee38bf6463d3bce5ebc91350ac3` or its succes
 stored stream-state preservation), then the
 Web-owned `calendarFeed` from `functions/index.js` with
 `functions/registration-calendar.cjs`, before publishing this Web build.
-Existing feature gates and notice/delivery switches are unchanged. No deployment
-was performed by this change.
+Existing feature gates and notice/delivery switches are unchanged; the production
+release above records the subsequently authorised deployment.
 
 **Streaming decision:** the user approved normal Public/Unlisted YouTube options.
 Unlisted links can be shared outside the app; this is not registrant-only video.
@@ -53,7 +86,7 @@ public registration projection (title/type/date/clocks/city/suburb/owner UID).
 
 Deploy the Web-owned `nativeStreamStart`, `nativeStreamResume`,
 `nativeStreamEndEvent`, `startExternalYouTubeStream`, `endExternalYouTubeStream`,
-`getEventStream`, `nativeStreamCheckHealth`, `sendPrivateStreamLinkEmail`, `cleanupStaleLiveEvents`,
+`getEventStream`, `nativeStreamCheckHealth`, `cleanupStaleLiveEvents`,
 `cleanupStaleLiveEventsNow`, `listStreamVideos` and
 `refreshStreamVideoThumbnails` with `functions/stream-events.cjs` before publishing
 streaming clients. Event-ID calls explicitly pass
@@ -84,6 +117,12 @@ service before callable/token/notification work. The user-visible reason is:
 been scheduled." Future activation also requires an exact event start.
 No reminder endpoints, worker or delivery gate are activated by this change.
 Deploy/accept the candidate reminder backend separately before enabling it.
+Live ownership verification identifies these twelve canonical functions as
+codebase `default`. `sendPrivateStreamLinkEmail` belongs to Native's
+`events-email` codebase and must not be transferred or deployed from Web:
+the Native owner separately releases its registration-delivery-disabled guard.
+Hosting publication waits for the registration, canonical and owned email-guard
+deployments, with all existing ordinary-event delivery settings preserved.
 Do not enable registration clients before the collection-aware streaming backend
 and safe callable live projection are deployed. Do not send registration IDs to
 legacy-only reminder endpoints or mirror private registrations into `events`.
