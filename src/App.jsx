@@ -323,6 +323,9 @@ export default function App() {
     }
   }, [loadEvents]);
 
+  const authHandlersRef = useRef({});
+  authHandlersRef.current = { loadEvents, processAuthenticatedUser, resetAuthState };
+
   const finishMemberProfile = async details => {
     const account = auth.currentUser;
     if (!account || account.uid !== user?.uid) throw new Error('Please sign in again.');
@@ -384,7 +387,7 @@ export default function App() {
 
         // Always clear state and show login page
         try { localStorage.removeItem('socialLoginStarted'); } catch (_) {}
-        resetAuthState();
+        authHandlersRef.current.resetAuthState();
         setLoading(false);
         return;
       }
@@ -399,12 +402,12 @@ export default function App() {
         setAuthMode('guest');
         setAuthError('');
         setLoading(false);
-        await loadEvents(true);
+        await authHandlersRef.current.loadEvents(true);
         console.log('Login complete — authMode=guest');
         return;
       }
 
-      await processAuthenticatedUser(u);
+      await authHandlersRef.current.processAuthenticatedUser(u);
     });
 
     // Social login redirect handling removed — app now uses phone-only auth
@@ -414,7 +417,7 @@ export default function App() {
       console.warn('Firebase auth startup timed out; releasing splash screen.');
       const current = auth.currentUser;
       if (current && !current.isAnonymous) {
-        processAuthenticatedUser(current).catch((err) => {
+        authHandlersRef.current.processAuthenticatedUser(current).catch((err) => {
           console.warn('Timed startup user processing failed:', err);
           setLoading(false);
         });
@@ -426,7 +429,7 @@ export default function App() {
         setAuthMode('guest');
         setAuthError('');
       } else {
-        resetAuthState();
+        authHandlersRef.current.resetAuthState();
       }
       setLoading(false);
     }, 8000);
@@ -436,7 +439,7 @@ export default function App() {
       window.clearTimeout(startupTimer);
       unsubscribe();
     };
-  }, [loadEvents, processAuthenticatedUser, redirectChecked, resetAuthState]);
+  }, [redirectChecked]);
 
   const enterAsGuest = async () => {
     setLoading(true);
