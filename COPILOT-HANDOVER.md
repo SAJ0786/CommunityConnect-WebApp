@@ -98,10 +98,18 @@ See [release status](docs/RELEASE-STATUS-2026-10-12.md) and
    2027), but EAS requires a matching provisioning profile and interactive Apple
    Developer login/2FA. The coordinator owns the user-authentication action.
    No certificate/profile creation, replacement or revocation was completed.
-   Android 2.1.1/build 97 is independently IN_PROGRESS using the existing keystore,
-   source `05686cd`, internal `registration-apk` profile:
+   Android 2.1.1/build 97 FINISHED using the existing keystore, source `05686cd`,
+   internal `registration-apk` profile:
    [EAS build c1b96322-25ce-49ca-a2e2-0214fa78e25f](https://expo.dev/accounts/siza-apps/projects/community-events-australia-native/builds/c1b96322-25ce-49ca-a2e2-0214fa78e25f).
-   A queued/running build is not an available APK or device acceptance.
+   [Download tester APK](https://expo.dev/artifacts/eas/-Hrp4ReIrDwVyReXSm7TSzFg39rg4WD3TV8D4EaiFck.apk).
+   Native downloaded and verified actual package/version 2.1.1/code 97/SDK 36,
+   valid v2 signature, and packaged registration=true, city=false,
+   promotion=false and debug App Check configuration. APK SHA256:
+   `95c7b199301923cd5cacb14300844bfedd9a175d7d0bcba3511e9ce9e28609f3`.
+   Canonical Native handover is pushed at
+   `34f46c866fb637bd4853c13203554f8cde4caf9d`.
+   APK availability does not establish installation or device acceptance.
+   iOS/TestFlight remains incomplete pending the authentication action above.
 2. Authenticated, separately authorized acceptance using real roles/devices:
    new registration, edit, host responses, staged event/form/poster review,
    Superadmin approval, private venue/poster access and stream resume/end.
