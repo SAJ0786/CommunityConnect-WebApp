@@ -1,4 +1,15 @@
-# PWA candidate integration handover - 16 October 2026
+# PWA integration handover - historical 16 October checkpoint
+
+**Current status, 17 October:** the descriptions below are retained as historical
+implementation evidence, not current release instructions. Registration,
+dynamic-city catalogue and city management were subsequently released with
+existing production flags enabled. Unified registration cards and streaming are
+implemented; a staged-change review/normal-form usability follow-up is recorded
+in [the current Codex handover](../COPILOT-HANDOVER.md),
+[release status](RELEASE-STATUS-2026-10-12.md) and
+[registration contract](../src/registration/README.md). Browser checks now pass.
+Registration reminders and notification delivery remain held. Native installed
+app delivery must be confirmed separately from source/backend deployment.
 
 Canonical repository: SAJ0786/CommunityConnect-WebApp, main. Native source is read-only reference in the sibling sdk51-package-backup checkout. Do not deploy Firebase or enable candidate gates as part of this work.
 

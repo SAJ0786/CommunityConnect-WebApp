@@ -1,30 +1,113 @@
-# Community Connect Web App handover
+# Community Connect Web App - Codex handover
 
 Canonical repository: https://github.com/SAJ0786/CommunityConnect-WebApp, branch main. Read AGENTS.md first. Fetch incoming changes, preserve local work, test completed changes, commit/publish and verify local/remote HEAD and tree equality. Never push to the former deployer.
 
-Current implementation and acceptance evidence: [PWA integration handover](docs/PWA-INTEGRATION-HANDOVER-2026-10-16.md).
+Updated 17 October 2026 Sydney. This current-state summary supersedes the
+disabled-candidate descriptions in the historical sections of the
+[PWA integration handover](docs/PWA-INTEGRATION-HANDOVER-2026-10-16.md).
+See [release status](docs/RELEASE-STATUS-2026-10-12.md) and
+[registration contract](src/registration/README.md) for detailed evidence.
 
-## Current scope
+## Release state
 
-The live PWA was replaced on 13 October. The new registration and dynamic-city work is a **disabled candidate**, not another live deployment. All three candidate environment flags in .env.example remain false. Do not deploy Firebase, modify security configuration, enable flags or publish store builds without separate release authority. Native/backend candidate code belongs to the sibling native checkout and must not be modified by web work.
+- Production URL: https://communityconnect.siza.info.
+- Web follow-up source: `9729f2f36757d6995a69e854a6fb45eee3c59b79`.
+  The user explicitly authorized coordinated backend/Web deployment and a
+  side-by-side Native update on 17 October. Deployment results are recorded below
+  when verified; do not infer an installed Native update from a source commit.
+- Native-owned staged registration backend/client source:
+  `1848a204b318a2f5849540060c03a22382cbc470` in
+  `SAJ0786/CommunityEvents-Native`. Native deployment/build status is maintained
+  in that repository's root `COPILOT-HANDOVER.md`.
+- Before this follow-up, live Hosting version was `97f9f2dedf9923d5` from Web
+  `9f4170d`. The twelve canonical Web streaming/calendar functions were already
+  deployed. This follow-up changes no canonical Web functions.
+- Existing production flags remain true: directory workspace, ordinary event
+  reminders, dynamic city catalogue, city management and registration.
+  `.env.example` is a setup template, not proof of live flag state.
+- Existing Firebase SDK, Places and VAPID configuration is reused without
+  committing private environment files. No App Check site key or preview flag
+  is introduced.
+- Registration reminders remain explicitly disabled independently of the
+  ordinary-event reminder flag. User-visible reason: "Registration reminders are
+  awaiting separate backend activation. No reminder has been scheduled."
+  Candidate `functions/web-event-reminders.cjs` remains unexported/undeployed.
+- Registration notices, stream email and push delivery remain disabled. Native
+  owns `events-email:sendPrivateStreamLinkEmail`; do not deploy the same-named
+  source export from Web's default codebase.
 
-Registration includes builder/templates, discovery/approval, attending list, attendee edit/cancel/confirmation, organiser responses/deletion/cancellation, private venue/poster lifecycle and account-deletion/notification surfaces. Dynamic cities include bundled and remote schema, disabled-ID retention, cache, routing/timezone usage and Super Admin search/preview/coordinate confirmation/Add. Details and limitations are in the linked handover.
+## Completed implementation
 
-## Next acceptance work
+1. Registration events share normal Home/event cards, city/date/search filters,
+   calendars and host My Events. Quick Access toggles registration-only/all
+   events; there is no standalone registration menu/browser in production.
+2. Attendee registration returns directly to the expanded event card with
+   Edit registrations. Manager response cards show only the saved participant
+   name until opened, then show the original submitted form/answers.
+3. Admin cards have an approval shortcut. Superadmin can approve initial pending
+   events and submitted changes; approved events without changes show a disabled
+   shortcut. Initial pending events remain private and prominently UnApproved.
+4. User chose keeping the last approved version live during change review.
+   Published callable detail/form/venue/poster/schedule and booking formVersion
+   remain stable; only manager editor/review selects `pendingChanges`.
+   Promotion is revision-checked and preserves live state/current booking counts.
+5. Registration event details reuse normal EventForm options: organiser,
+   on-behalf-of, host/contact, Gregorian/Hijri, fixed/prayer clocks, audience,
+   subject, speaker and reciters. Capacity, closing date and form builder remain
+   registration-specific. Contacts/posters/venue remain private callable data.
+6. Exact city-local clocks, overnight end and server UTC instants are supported.
+   No default time/duration is invented. Read-only investigation confirmed the
+   user's reported existing event lacked all saved clock/instant fields; nothing
+   was backfilled or changed. The host must enter and submit its schedule.
+7. Normal Public/Unlisted streaming is collection-aware and preserves private
+   registration metadata. Registration clients skip legacy writes and delivery.
+8. Business detail actions are aligned 88x100 tiles with desktop single-row and
+   even phone wrapping. Native-style decorative page headers are implemented.
+9. Dynamic cities, Superadmin Add City and related timezone/catalogue wiring are
+   implemented. Promotion audience parity exists in code but its release flag
+   remains disabled; do not silently enable it.
 
-1. Browser layout and iPhone/PC workflow review when browser control is available; the tool could not start in the implementation session.
-2. Candidate backend/rules/App Check, real roles, private storage and notification end-to-end acceptance under separately approved release work. Component fixtures are synthetic and do not replace these checks.
-3. Align PWA promotion audience controls/feed with the native candidate contract; this remains a separate parity task.
+## Remaining tasks / acceptance (do not mark complete prematurely)
+
+1. Confirm and record actual Android/iOS runtime delivery (OTA group or build/
+   store identifiers and channel/runtime). Native source and Functions deployment
+   alone do not update installed binaries; consult the Native handover.
+2. Authenticated, separately authorized acceptance using real roles/devices:
+   new registration, edit, host responses, staged event/form/poster review,
+   Superadmin approval, private venue/poster access and stream resume/end.
+   Local synthetic workflows and signed-out probes do not establish this.
+3. Separately decide/authorize registration reminder backend activation, then
+   validate collection identity, permission, timing and device delivery before
+   removing the explicit Web hold. Ordinary reminders must remain unaffected.
+4. Registration notice/email/push activation and live delivery acceptance remain
+   separate work. Do not send test messages or mutate real registrations as an
+   incidental release check.
+5. Promotion-audience release activation and live acceptance remain separate;
+   the implementation is not a reason to enable the flag.
+6. Preserve backend/codebase ownership and existing rules/App Check/indexes.
+   No rules/index migration or data backfill is part of this release.
+
+## Verification evidence
+
+At Web source `9729f2f`: 277 root Node tests, 18 actual React workflows,
+95 responsive layouts, phone/desktop unified registration scenarios (including
+staged approval and response-name cards), unified Web build and whitespace
+checks pass. Browser checks are now available and passed; older notes saying
+the browser runtime was unavailable describe a previous checkpoint only.
 
 ## Verification commands
 
 ```powershell
-node --test tests/*.test.mjs
-npm ci --prefix tests/registration-renderer
-npm test --prefix tests/registration-renderer
-node tools/check-unified-web.mjs
-node tools/check-candidate-integrations.mjs
+node --test tests\*.test.mjs
+npm test --prefix tests\registration-renderer
+node tools\check-unified-web.mjs
 git diff --check
 ```
 
-The ordinary build uses disabled gates. The candidate build compiles enabled routes into .qa-integration-candidate for validation only; it does not deploy or change saved release flags. The workflow review at port 5198 uses a fictional in-memory API and refuses Firebase imports.
+Restore dependencies only if missing or lockfiles change. Default builds use
+setup-template gates and are not deployable production configuration. Release
+builds must preserve the existing five live flags/configuration and explicit
+registration reminder hold. The offline previews use synthetic in-memory APIs
+and refuse live Firebase access. QA artifacts, dependency folders, environment
+files and builds remain ignored. No Native build/store publication should be
+claimed without concrete delivery evidence.
