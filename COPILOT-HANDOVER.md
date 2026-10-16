@@ -94,8 +94,14 @@ See [release status](docs/RELEASE-STATUS-2026-10-12.md) and
    registration gate). The first iOS noninteractive/frozen-credentials attempt
    failed before queueing: "Credentials are not set up." There is no iOS artifact
    or TestFlight submission; only the remote build number advanced. The Native
-   owner is checking existing production signing credentials without creating,
-   replacing or revoking them. Android test APK build is independently in progress.
+   owner selected the existing production certificate (valid until 1 September
+   2027), but EAS requires a matching provisioning profile and interactive Apple
+   Developer login/2FA. The coordinator owns the user-authentication action.
+   No certificate/profile creation, replacement or revocation was completed.
+   Android 2.1.1/build 97 is independently IN_PROGRESS using the existing keystore,
+   source `05686cd`, internal `registration-apk` profile:
+   [EAS build c1b96322-25ce-49ca-a2e2-0214fa78e25f](https://expo.dev/accounts/siza-apps/projects/community-events-australia-native/builds/c1b96322-25ce-49ca-a2e2-0214fa78e25f).
+   A queued/running build is not an available APK or device acceptance.
 2. Authenticated, separately authorized acceptance using real roles/devices:
    new registration, edit, host responses, staged event/form/poster review,
    Superadmin approval, private venue/poster access and stream resume/end.
