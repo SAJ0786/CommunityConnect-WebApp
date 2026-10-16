@@ -1573,6 +1573,20 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                       </button>
                     ))}
 
+                    {u.isActive === false && !u.migratedToUid && (
+                      <button className="btn-light" style={{ fontSize:'0.75rem', padding:'5px 10px', fontWeight:700 }}
+                        onClick={() => {
+                          const banned = u.accountStatus === 'banned';
+                          if (!confirm(${banned ? 'Unban and restore' : 'Restore'} ? They will be able to sign in again.)) return;
+                          const call = banned
+                            ? httpsCallable(fns, 'adminUnbanUser')({ uid: u.id, bannedDocId: String(u.email || '').toLowerCase().replace(/\./g, '_') })
+                            : httpsCallable(fns, 'adminRestoreUser')({ targetUid: u.id });
+                          call.then(() => { showMsg('User restored.'); setUsers(prev => prev.map(x => x.id === u.id ? { ...x, isActive: true, accountStatus: 'active' } : x)); })
+                            .catch(e => showMsg('Restore failed: ' + e.message, 'error'));
+                        }}>
+                        ♻ Restore
+                      </button>
+                    )}
                     {/* Delete user */}
                     <button onClick={() => {
                       if (!confirm(`Delete account for ${u.fullName || u.email}?\nThis removes their login and profile.`)) return;
