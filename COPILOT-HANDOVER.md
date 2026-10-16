@@ -90,6 +90,12 @@ See [release status](docs/RELEASE-STATUS-2026-10-12.md) and
    These tester builds are being handled by the Native session. No public-store
    submission is authorized; delivery safeguards remain disabled. Do not call
    Native runtime updated until build/distribution identifiers are recorded.
+   Native tester configuration is pushed at `05686cd` (2.1.1, dedicated tester
+   registration gate). The first iOS noninteractive/frozen-credentials attempt
+   failed before queueing: "Credentials are not set up." There is no iOS artifact
+   or TestFlight submission; only the remote build number advanced. The Native
+   owner is checking existing production signing credentials without creating,
+   replacing or revoking them. Android test APK build is independently in progress.
 2. Authenticated, separately authorized acceptance using real roles/devices:
    new registration, edit, host responses, staged event/form/poster review,
    Superadmin approval, private venue/poster access and stream resume/end.
