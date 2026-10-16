@@ -1,4 +1,6 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaV3Provider } from 'firebase/app-check';
+import { APP_CHECK_CONFIGURED, APP_CHECK_SITE_KEY } from '../config/appCheck.mjs';
 import { getAuth, GoogleAuthProvider, browserLocalPersistence, setPersistence } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
@@ -25,6 +27,13 @@ export const firebaseConfigured =
   !!firebaseConfig.apiKey && firebaseConfig.apiKey.length > 10;
 
 const app = initializeApp(firebaseConfig);
+
+// Initialised only when a public site key is configured; otherwise behaviour is unchanged.
+if (APP_CHECK_CONFIGURED) {
+  try {
+    initializeAppCheck(app, { provider: new ReCaptchaV3Provider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+  } catch (e) { console.warn('App Check unavailable:', e.message); }
+}
 
 export const auth           = getAuth(app);
 export const db             = getFirestore(app);
