@@ -4,7 +4,7 @@
 .city-picker svg { flex-shrink:0; }
 .city-picker > svg:first-child { color:var(--cc-danger); }
 .city-chevron-open { transform:rotate(180deg); }
-.city-picker-menu { position:fixed; z-index:10000; box-sizing:border-box; padding:6px; margin:0; overflow:auto; overscroll-behavior:contain; list-style:none; background:var(--cc-surface); color:var(--cc-text); border:1px solid var(--cc-border); border-radius:14px; box-shadow:0 12px 36px color-mix(in srgb,var(--cc-shadow-base) 22%,transparent); }
+.city-picker-menu { position:fixed; z-index:13000; box-sizing:border-box; padding:6px; margin:0; overflow:auto; overscroll-behavior:contain; list-style:none; background:var(--cc-surface); color:var(--cc-text); border:1px solid var(--cc-border); border-radius:14px; box-shadow:0 12px 36px color-mix(in srgb,var(--cc-shadow-base) 22%,transparent); }
 .city-picker-menu li { display:flex; align-items:center; gap:10px; padding:12px; min-height:46px; box-sizing:border-box; border-radius:9px; font-size:.9rem; font-weight:650; cursor:pointer; }
 .city-picker-menu li span { flex:1; }
 .city-picker-menu li[aria-selected="true"] { color:var(--cc-accent-strong); font-weight:600; }

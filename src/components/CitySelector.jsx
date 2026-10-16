@@ -1,10 +1,11 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, MapPin } from 'lucide-react';
-import { CITY_OPTIONS, cityLabel } from '../utils/cities';
+import { CITY_OPTIONS, cityLabel, cityCatalogueRevision, subscribeCityCatalogue } from '../utils/cities';
 import '../styles/browse.css';
 
 export default function CitySelector({ value, onChange, compact = false, label = 'Events location', options = CITY_OPTIONS, showPin = true }) {
+  useSyncExternalStore(subscribeCityCatalogue, cityCatalogueRevision, cityCatalogueRevision);
   const id = useId();
   const trigger = useRef(null);
   const menu = useRef(null);
