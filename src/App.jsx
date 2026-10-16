@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { auth, firebaseConfigured, functions } from './firebase/firebase';
@@ -7,6 +7,11 @@ import { deleteEvent, getActiveEvents, listenLiveEvents } from './services/event
 import { saveNativePushToken, startForegroundPushNotifications, syncGrantedNotificationToken } from './services/notificationService';
 import { REGISTRATION_ENABLED } from './config/releaseGates.mjs';
 import { registrationEntry } from './registration/registrationLinks.mjs';
+import { createRegistrationClient } from './registration/registrationClient.mjs';
+import { accountBoundTransport } from './registration/sessionTransport.mjs';
+import { RegistrationContext, useRegistrationFeed } from './registration/RegistrationContext';
+import { mergePublicEvents } from './registration/eventFeed.mjs';
+import PagePanel from './components/PagePanel';
 import Header from './components/Header';
 import EventsSidebar from './components/EventsSidebar';
 import ExperienceSwitch from './components/ExperienceSwitch';
@@ -99,7 +104,12 @@ export default function App() {
   const [user, setUser]                 = useState(null);
   const [profile, setProfile]           = useState(null);
   const [registrationTarget, setRegistrationTarget] = useState(null);
+  const [registrationAction, setRegistrationAction] = useState('register');
+  const [registrationRevision, setRegistrationRevision] = useState(0);
   const [profileVerified, setProfileVerified] = useState(false);
+  const registrationApi = useMemo(() => !REGISTRATION_ENABLED || !user?.uid ? null : createRegistrationClient(
+    accountBoundTransport((name, data) => httpsCallable(functions, name)(data), user.uid, () => auth.currentUser?.uid),
+    { enabled: true }), [user?.uid, profileVerified, profile?.role, profile?.adminCity]);
   const [profileLoading, setProfileLoading] = useState(false);
   const profileRequestRef = useRef(0);
   useEffect(() => {
@@ -120,6 +130,7 @@ export default function App() {
       return DEFAULT_CITY;
     }
   });
+  const registrationFeed = useRegistrationFeed(registrationApi, 'public', selectedCity, registrationRevision);
   const [activeStream,   setActiveStream]   = useState(null); // { event, role }
   const [streamRecovery, setStreamRecovery] = useState(null);
 
@@ -574,10 +585,15 @@ export default function App() {
     if (!REGISTRATION_ENABLED || row.module !== 'registration') return false;
     const target = registrationEntry('?registration=' + encodeURIComponent(row.eventId || row.targetId || '') + '&recipient=' + encodeURIComponent(row.recipientUid || user.uid), user.uid);
     if (!target) return false;
-    selectExperience('events'); setRegistrationTarget(target); setPage('registration'); return true;
+    selectExperience('events'); setFocusEventId(target); setPage('home'); return true;
   };
   const isGuest    = authMode === 'guest';
-  const shared     = { user, profile, events, eventsLoading, offlineMode, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId, selectedCity, setSelectedCity };
+  const openRegistration = (event, action = 'register') => {
+    if (isGuest) { signOut(auth).catch(error => window.showToast?.(error.message, 'error')); return; }
+    setRegistrationTarget(event.id); setRegistrationAction(action); setPage('registration');
+  };
+  const unifiedEvents = mergePublicEvents(events, registrationFeed.events);
+  const shared     = { user, profile, events: unifiedEvents, eventsLoading: eventsLoading || registrationFeed.loading, offlineMode, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId, selectedCity, setSelectedCity };
   const guestPage  = ['home','businesses','search','calendar','hijri-calendar','streams', ...(REGISTRATION_ENABLED ? ['registration'] : [])].includes(page) ? page : 'home';
   const activePage = isGuest ? guestPage : (page === 'series' ? 'add' : page);
 
@@ -665,7 +681,7 @@ export default function App() {
         user={user} profile={profile}
         page={activePage} setPage={setPage}
         isGuest={isGuest}
-        events={events}
+        events={unifiedEvents}
         onDirectoryCommand={activePage === 'businesses' && !isGuest && import.meta.env.VITE_DIRECTORY_WORKSPACE_ENABLED === 'true' && import.meta.env.VITE_READ_ONLY_PREVIEW !== 'true' ? command => directoryNavigation.current?.(command) : undefined}
         onOpenEvent={(id) => { setFocusEventId(id); setPage('home'); }}
       />
@@ -717,6 +733,9 @@ export default function App() {
             </div>
           )}
 
+          <RegistrationContext.Provider key={[user.uid, profile?.role, profile?.adminCity].join(':')} value={{ api: registrationApi, open: openRegistration, revision: registrationRevision, refresh: () => setRegistrationRevision(value => value + 1) }}>
+          {activePage !== 'businesses' ? <PagePanel page={activePage}/> : isGuest && <PagePanel title="Business Directory" subtitle="Discover and support your local community."/>}
+          {registrationFeed.error && activePage === 'home' && <div className="card" role="alert">{registrationFeed.error} <button onClick={() => setRegistrationRevision(value => value + 1)}>Retry registration events</button></div>}
           <Suspense fallback={<PageLoadingFallback />}>
           {activePage === 'businesses' && (!isGuest && import.meta.env.VITE_DIRECTORY_WORKSPACE_ENABLED === 'true' && import.meta.env.VITE_READ_ONLY_PREVIEW !== 'true'
             ? <MemberDirectory key={user.uid} user={user} profile={profile} onRegisterNavigation={registerDirectoryNavigation} onOpenNotification={openRegistrationUpdate} renderProfile={() => <Profile user={user} profile={profile} setProfile={setProfile}/>} onSignOut={logoutFromDirectory}/>
@@ -737,7 +756,7 @@ export default function App() {
               : <CalendarView {...shared} />
           )}
 
-          {REGISTRATION_ENABLED && ['registration', 'registration-create'].includes(activePage) && <RegistrationRoute key={[user?.uid, profile?.role, profile?.adminCity, selectedCity, activePage, registrationTarget].join(':')} user={user} profile={profile} city={selectedCity} initialCreate={activePage === 'registration-create'} initialEventId={activePage === 'registration' ? registrationTarget : null} onBack={() => { setRegistrationTarget(null); setPage('home'); }} onRequireSignIn={() => { setAuthMode(null); setPage('home'); }}/>}
+          {REGISTRATION_ENABLED && ['registration', 'registration-create'].includes(activePage) && <RegistrationRoute key={[user?.uid, profile?.role, profile?.adminCity, selectedCity, activePage, registrationTarget, registrationAction].join(':')} user={user} profile={profile} city={selectedCity} operationsOnly initialAction={registrationAction} initialCreate={activePage === 'registration-create'} initialEventId={activePage === 'registration' ? registrationTarget : null} onBack={() => { setRegistrationTarget(null); setRegistrationRevision(value => value + 1); setPage('home'); }} onRequireSignIn={() => signOut(auth).catch(error => window.showToast?.(error.message, 'error'))}/>}
           {!isGuest && activePage === 'add'        && <AddEvent      user={user} profile={profile} onSaved={afterSave} setPage={setPage} events={events} initialEvent={editingEvent?.id === undefined ? editingEvent : null} />}
           {!isGuest && activePage === 'edit'       && <EditEvent     editingEvent={editingEvent} onSaved={afterSave} user={user} profile={profile} events={events} />}
           {!isGuest && activePage === 'my'         && <MyEvents      {...shared} />}
@@ -755,6 +774,7 @@ export default function App() {
           {!isGuest && activePage === 'install'    && <InstallApp />}
           {activePage === 'hijri-calendar' && <HijriCalendar profile={profile} selectedCity={selectedCity} />}
           </Suspense>
+          </RegistrationContext.Provider>
 
           {isGuest && !['home','businesses','search','calendar','hijri-calendar','streams', ...(REGISTRATION_ENABLED ? ['registration'] : [])].includes(page) && (
             <div className="card center" style={{ margin: '40px 16px' }}>

@@ -26,6 +26,7 @@
 .event-action-panel .event-action { display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:5px; min-width:0; min-height:76px; padding:4px 2px; border:0; border-radius:12px; background:transparent; color:var(--cc-text); box-shadow:none; font:inherit; cursor:pointer; }
 .event-action-bubble { display:grid; flex-shrink:0; place-items:center; width:42px; height:42px; border-radius:50%; background:var(--cc-disabled-surface); color:var(--cc-primary); }
 .event-action-label { width:100%; min-width:0; white-space:normal; overflow-wrap:anywhere; font-size:.62rem; line-height:1.3; font-weight:600; text-align:center; }
+.event-registration-actions { grid-column:1/-1; display:grid; grid-template-columns:repeat(auto-fit,minmax(85px,1fr)); gap:8px; }
 .event-action-share .event-action-bubble, .event-action-niaz .event-action-bubble { background:var(--cc-success-soft); }
 .event-action-directions .event-action-bubble, .event-action-calendar .event-action-bubble { background:var(--cc-primary-soft); }
 .event-action-delete .event-action-bubble, .event-action-deleteSeries .event-action-bubble, .event-action-live .event-action-bubble { background:var(--cc-danger-soft); color:var(--cc-danger); }

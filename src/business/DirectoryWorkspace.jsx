@@ -4,6 +4,7 @@ import { BUSINESS_ADMIN_GROUPS } from '../utils/adminNavigation.mjs';
 import BottomNav from '../components/BottomNav';
 import AccountMenu from '../components/AccountMenu';
 import AdminActionPanels from '../components/AdminActionPanels';
+import PagePanel from '../components/PagePanel';
 import { SavedBusinesses, Notifications, BusinessInbox, EnquiryForm } from './MemberScreens';
 import OwnerScreen from './OwnerScreen';
 import ConnectedOperations from './ConnectedOperations';
@@ -89,6 +90,7 @@ export default function DirectoryWorkspace({ onOpenNotification, data, profile, 
   return <div className="bw-shell"><header className="bw-header bw-workspace-header"><div><p className="directory-eyebrow">Community Connect Australia</p><strong>Business Directory</strong></div><span>{profile?.fullName || 'Guest browsing'}</span></header>
     <div className="bw-layout"><nav id="workspace-navigation" className="bw-nav" aria-label="Business workspace">{nav.map(([key,label]) => { const Icon = sidebarIcons[key]; return <button key={key} aria-current={route.page === key ? 'page' : undefined} onClick={() => navigate(key)}><Icon size={20} aria-hidden="true"/><span>{label}{key === 'notifications' && data.notifications.some(row => !row.read) ? ` (${data.notifications.filter(row => !row.read).length})` : ''}</span></button>; })}<button className="bw-add" onClick={() => navigate('listing')}><Plus size={20} aria-hidden="true"/><span>Add Business</span></button></nav>
       <main className="bw-main" aria-labelledby="workspace-title"><div className="bw-page-heading" hidden={route.page === 'home' && !!renderHome}>{!['home','promotions'].includes(route.page) && <button className="btn-light" onClick={() => navigate(adminPages.includes(route.page) && route.page !== 'admin' ? 'admin' : 'home')}>← {adminPages.includes(route.page) && route.page !== 'admin' ? 'Administration' : 'Directory'}</button>}<h1 id="workspace-title">{names[route.page]}</h1></div>
+        <PagePanel title={names[route.page]} subtitle="Discover, connect and support your local community." Icon={sidebarIcons[route.page] || Store}/>
         {message && <p role="status" className="bw-success">{message}</p>}{error && <p role="alert" className="bw-error">{error}</p>}
         {restricted && !['loading', 'error'].includes(status) ? <Empty title={profile ? 'Administrator access required' : 'Member access required'}><p>{profile ? 'This area is available to authorised directory administrators.' : 'Sign in to access saved businesses, conversations and owner tools.'}</p></Empty>
           : status === 'loading' ? <p role="status" className="bw-empty">Loading directory information…</p>

@@ -10,6 +10,7 @@ import { getEventImage, getFallbackImageAsync } from '../services/imageService';
 import { getHijriDisplay, hijriDisplayFromParts } from '../services/hijriService';
 import { getHijriSettings } from '../services/settingsService';
 import { STORE_SHARE_LINES } from '../utils/storeLinks';
+import { useRegistration } from '../registration/RegistrationContext';
 
 const GoLiveButton = lazy(() => import('./LiveStream').then(module => ({ default: module.GoLiveButton })));
 const WatchLiveButton = lazy(() => import('./LiveStream').then(module => ({ default: module.WatchLiveButton })));
@@ -44,10 +45,43 @@ const dateChip = (d) => {
 };
 
 export default function EventCard({
-  event, user, profile, onEdit, onDelete, onCopy,
+  event: sourceEvent, user, profile, onEdit, onDelete, onCopy,
   isExpanded, onExpand, isGuest,
   savedIds = [], onSaveToggle, onStreamStart, onCalendar, onContactHost, onReminder, onNiazArrangement, onEditSeries, onDeleteSeries, imagePriority = false
 }) {
+  const registration = useRegistration();
+  const [privateState, setPrivateState] = useState(null);
+  const [pageVisible, setPageVisible] = useState(() => !document.hidden);
+  const [registrationError, setRegistrationError] = useState('');
+  const [registrationBusy, setRegistrationBusy] = useState(false);
+  const registrationKey = [user?.uid, sourceEvent.id, sourceEvent.revision, registration?.revision].join(':');
+  const registrationDetail = pageVisible && privateState?.key === registrationKey ? privateState.detail : null;
+  const event = sourceEvent.registrationOnly ? { ...sourceEvent,
+    ...(registrationDetail ? { ...registrationDetail.event, eventDate: registrationDetail.event.date } : {}),
+    address: { suburb: sourceEvent.suburb || sourceEvent.address?.suburb || '',
+      ...(registrationDetail?.privateDetails ? { fullAddress: registrationDetail.privateDetails.address } : {}) },
+    imageUrl: '',
+  } : sourceEvent;
+  useEffect(() => {
+    const visibility = () => { setPageVisible(!document.hidden); setPrivateState(null); };
+    document.addEventListener('visibilitychange', visibility);
+    return () => document.removeEventListener('visibilitychange', visibility);
+  }, []);
+  useEffect(() => {
+    if (!sourceEvent.registrationOnly || !registration?.api || !pageVisible || (!isExpanded && !sourceEvent.hasPoster)) return;
+    let current = true;
+    setRegistrationError('');
+    registration.api.load(sourceEvent.id).then(async detail => {
+      if (!current) return;
+      setPrivateState({ key: registrationKey, detail, poster: null });
+      if (detail.privateDetails?.hasPoster) {
+        const poster = await registration.api.poster(sourceEvent.id);
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(poster.mime)) throw new Error('Unsupported event poster format.');
+        if (current) setPrivateState({ key: registrationKey, detail, poster: `data:${poster.mime};base64,${poster.base64}` });
+      }
+    }).catch(error => { if (current) setRegistrationError(error.message); });
+    return () => { current = false; };
+  }, [registration?.api, registrationKey, sourceEvent.registrationOnly, sourceEvent.hasPoster, pageVisible, isExpanded]);
   const [seriesArchiveOpen, setSeriesArchiveOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false), [seriesEditBusy, setSeriesEditBusy] = useState(false), [actionError, setActionError] = useState('');
   const [reminderOpen, setReminderOpen] = useState(false);
@@ -56,7 +90,9 @@ export default function EventCard({
   const suburbOnly = `${a.suburb || ''}${a.state ? ', ' + a.state : ''}`;
 
   // Display privacy — any logged-in user sees full details; guests see suburb only
-  const displayPrivacy = getDisplayPrivacy(isGuest);
+  const displayPrivacy = event.registrationOnly
+    ? { showFullAddress: Boolean(registrationDetail?.privateDetails), showPhone: false }
+    : getDisplayPrivacy(isGuest);
   const addr   = displayPrivacy.showFullAddress ? fullAddr : suburbOnly;
   const suburb = a.suburb || '';
 
@@ -65,7 +101,7 @@ export default function EventCard({
   const isPrivate     = event.organiserType === 'private';
   const showReligious = RELIGIOUS_EVENT_TYPES.includes(event.eventType);
   const member = Boolean(!isGuest && user?.uid && !user.isAnonymous && profile?.isActive !== false);
-  const manage = member && canEditEvent(profile, event, user?.uid);
+  const manage = member && (event.registrationOnly ? Boolean(registrationDetail?.canManage ?? event.canManage) && !event.deletedAt && event.status !== 'cancelled' : canEditEvent(profile, event, user?.uid));
   const admin = member && canAdminAccessEvent(profile, event);
   const readOnly = import.meta.env.VITE_READ_ONLY_PREVIEW === 'true';
   const [showLiveControls, setShowLiveControls] = useState(false);
@@ -76,7 +112,8 @@ export default function EventCard({
   // Poster image — Firestore organisation logos resolve asynchronously, while
   // uploaded posters and bundled fallbacks can render immediately.
   const [eventImage, setEventImage] = useState(() => getEventImage(event, isGuest));
-  const { src: posterSrc, isLogo: posterIsLogo } = eventImage;
+  const privatePoster = registrationDetail && privateState?.poster;
+  const { src: posterSrc, isLogo: posterIsLogo } = privatePoster ? { src: privatePoster, isLogo: false } : eventImage;
   const hasPoster = !posterIsLogo;
 
   const fmtDate = d => {
@@ -131,7 +168,7 @@ export default function EventCard({
   const handleShare = (ev) => {
     ev.stopPropagation();
     if (!window.__showShareSheet) return;
-    const sharePrivacy = getSharePrivacy(profile, event, user?.uid);
+    const sharePrivacy = event.registrationOnly ? { showFullAddress: false, showPhone: false } : getSharePrivacy(profile, event, user?.uid);
     const loc = sharePrivacy.showFullAddress
       ? (a.fullAddress || suburbOnly)
       : suburbOnly;
@@ -163,13 +200,13 @@ export default function EventCard({
     // pass imageUrl for logged-in users who can see the real poster.
     window.__showShareSheet({
       text,
-      imageUrl: (!isGuest && event.imageUrl) ? event.imageUrl : '',
+      imageUrl: (!event.registrationOnly && !isGuest && event.imageUrl) ? event.imageUrl : '',
     });
   };
 
   const handleDirections = (ev) => {
     ev.stopPropagation();
-    if (isGuest) return;
+    if (isGuest || (event.registrationOnly && !registrationDetail?.privateDetails)) return;
     const q = encodeURIComponent(fullAddr || suburb);
     const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const url = isIOS
@@ -181,8 +218,19 @@ export default function EventCard({
   const handlers = {
     uid: user?.uid, share: handleShare, directions: handleDirections,
     live: () => setShowLiveControls(value => !value),
-    edit: onEdit && (() => onEdit(event)), delete: onDelete && (() => onDelete(event.id)),
-    copy: onCopy && (() => onCopy(event)), calendar: onCalendar && (() => onCalendar(event)),
+    edit: event.registrationOnly ? registration?.open && (() => registration.open(event, 'edit')) : onEdit && (() => onEdit(event)),
+    delete: event.registrationOnly ? registration?.api && (async () => {
+      if (!manage || !registration?.api || registrationBusy || !window.confirm('Delete this event? Existing places will be released and registration history retained.')) return;
+      setRegistrationBusy(true); setRegistrationError('');
+      try { await registration.api.deleteEvent(event.id, event.revision); registration.refresh(); }
+      catch (error) { setRegistrationError(error.message); }
+      finally { setRegistrationBusy(false); }
+    }) : onDelete && (() => onDelete(event.id)),
+    register: registration?.open && (() => registration.open(event, 'register')),
+    editForm: registration?.open && (() => registration.open(event, 'form')),
+    responses: registration?.open && (() => registration.open(event, 'responses')),
+    registrationHistory: registration?.open && (() => registration.open(event, 'history')),
+    copy: event.registrationOnly ? registration?.open && (() => registration.open(event, 'copy')) : onCopy && (() => onCopy(event)), calendar: onCalendar && (() => onCalendar(event)),
     contact: () => { if (!readOnly && member) { if (onContactHost) onContactHost(event); else setContactOpen(true); } },
     reminder: () => { if (!readOnly && member) { if (onReminder) onReminder(event); else setReminderOpen(true); } },
     niaz: () => {
@@ -201,7 +249,10 @@ export default function EventCard({
     }),
     deleteSeries: () => { if (!readOnly && member && admin && manage) { if (onDeleteSeries) onDeleteSeries(event); else setSeriesArchiveOpen(true); } },
   };
-  const actions = eventActions({ event, member, manage, admin, arrangeNiaz: canArrangeEventNiaz(event, user, profile, isGuest), readOnly, handlers });
+  const actions = eventActions({ event: { ...event, isRegistered: registrationDetail ? registrationDetail.ownRegistration?.status === 'registered' : event.isRegistered,
+    canEditRegistration: registrationDetail?.canEditRegistration ?? event.canEditRegistration,
+    privateVenueAvailable: Boolean(registrationDetail?.privateDetails) }, member, manage, admin, registrationRemindersEnabled: import.meta.env.VITE_EVENT_REMINDERS_ENABLED === 'true',
+    arrangeNiaz: canArrangeEventNiaz(event, user, profile, isGuest), readOnly: readOnly || registrationBusy, handlers });
   const chip = dateChip(event.eventDate);
   const organiser = isPrivate ? 'Private' : (event.organisationType === 'org' || event.organiserCategory === 'org') ? 'Org' : 'Centre';
 
@@ -217,6 +268,8 @@ export default function EventCard({
         transform: isExpanded ? 'translateY(-1px)' : 'none',
         marginBottom: 8,
       }}>
+      {event.registrationOnly && event.status === 'pending' && <p role="note" style={{ margin:'0 0 12px', padding:14, fontSize:'1.3rem', fontWeight:900, color:'var(--cc-warning-strong)', background:'var(--cc-warning-soft)', borderRadius:12 }}>UnApproved</p>}
+      {event.registrationOnly && event.status === 'cancelled' && <p role="status">Event deleted or cancelled. No places reserved.</p>}
 
       <div className="event-native-summary">
         <div className="event-native-poster">
@@ -259,6 +312,10 @@ export default function EventCard({
         <div className="event-card-details" style={{ borderTop:'1px solid var(--border)', paddingTop:10 }}>
           <EventActionPanel actions={actions} handlers={handlers} />
           <p className="event-action-note">{readOnly ? 'Read-only preview: actions that change data are disabled. ' : ''}Unavailable actions are dimmed; their labels explain the restriction.</p>
+          {event.registrationOnly && ['live', 'reminder'].map(id => {
+            const action = actions.find(item => item.id === id);
+            return action?.disabled && action.reason ? <p className="event-action-note" role="note" key={id}>{action.reason}</p> : null;
+          })}
           {showLiveControls && !actions.find(action => action.id === 'live').disabled && <div onClick={click => click.stopPropagation()}>
             <Suspense fallback={<span className="small">Loading live controls…</span>}>
               {event.isLive && event.liveWatchUrl && event.liveAppVisibility !== 'private'
@@ -294,9 +351,9 @@ export default function EventCard({
           {/* Address */}
           <p style={{ margin:'0 0 5px', fontSize:'0.8125rem', color:'var(--text)', fontWeight:400, fontFamily:'var(--font)' }}>
             📍 {addr}
-            {isGuest && (
+            {(isGuest || event.registrationOnly && !registrationDetail?.privateDetails) && (
               <span style={{ fontSize:'0.6875rem', color:'var(--muted)', marginLeft:4 }}>
-                (login for full address)
+                {event.registrationOnly ? '(confirmed registration required for full address and poster)' : '(login for full address)'}
               </span>
             )}
           </p>
@@ -332,6 +389,8 @@ export default function EventCard({
 
       {seriesEditBusy && <p role="status">Checking future occurrences…</p>}
       {actionError && <p role="alert">{actionError}</p>}
+      {registrationError && <p role="alert">{registrationError}</p>}
+      {registrationBusy && <p role="status">Updating registration event...</p>}
       {contactOpen && <Suspense fallback={<p role="status">Opening host message…</p>}><ContactHostDialog key={user?.uid + event.id} event={event} onClose={() => setContactOpen(false)}/></Suspense>}
       {reminderOpen && <Suspense fallback={<p role="status">Loading reminder…</p>}><EventReminderDialog key={user?.uid + event.id} event={event} onClose={() => setReminderOpen(false)}/></Suspense>}
       {seriesArchiveOpen && <Suspense fallback={<p role="status">Loading series review…</p>}>

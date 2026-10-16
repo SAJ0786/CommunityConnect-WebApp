@@ -82,11 +82,11 @@ test('new host flow requires venue, saves a form and recovers a partial poster u
   assert.ok(text(view.toJSON()).includes('poster upload was not confirmed'));await click(view,'Retry selected poster upload');
   const uploads=f.calls.filter(row=>row[0]==='poster');assert.equal(uploads.length,2);assert.equal(uploads[1][1][1],5);view.unmount();delete globalThis.FileReader;
 });
-test('approval, host cancellation and attendee deletion keep distinct lifecycle confirmations',async()=>{
+test('approval and attendee deletion retain confirmations without a separate whole-event cancellation control',async()=>{
   const f=fixture({manager:true,registered:true}),view=await mount(f);f.setPending();await card(view);
   await click(view,'Approve event');await click(view,'Confirm approve event');assert.equal(f.calls.find(row=>row[0]==='approve')[1][1],4);
-  await click(view,'Cancel whole event');assert.equal(f.calls.filter(row=>row[0]==='cancelEvent').length,0);await click(view,'Confirm cancel event');
-  assert.equal(f.calls.find(row=>row[0]==='cancelEvent')[1][2],'CANCEL EVENT');assert.ok(text(view.toJSON()).includes('Event cancelled'));
+  assert.equal(view.root.findAllByType('button').some(button=>text(button.props.children)==='Cancel whole event'),false);
+  assert.equal(f.calls.filter(row=>row[0]==='cancelEvent').length,0);
   await click(view,'Delete my registration');await click(view,'Confirm delete registration');assert.equal(f.calls.find(row=>row[0]==='cancel')[1][1],2);view.unmount();
 });
 test('responses paginate and answer deletion does not cancel reserved places',async()=>{

@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import EventCard from '../components/EventCard';
 import { getMyEvents, toggleEventVisibility } from '../services/eventService';
+import { useRegistration, useRegistrationFeed } from '../registration/RegistrationContext';
+import { compareEventsByDateTime } from '../services/dateUtils';
 
 export default function MyEvents({ user, profile, setPage, setEditingEvent, handleDelete, handleCopy, onStreamStart, savedIds = [], onSaveToggle }) {
   const [myEvents,  setMyEvents]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  const registration = useRegistration();
+  const hosted = useRegistrationFeed(registration?.api, 'mine', undefined, registration?.revision);
+  const attending = useRegistrationFeed(registration?.api, 'attending', undefined, registration?.revision);
+  const allEvents = [...new Map([...myEvents, ...attending.events, ...hosted.events].map(event => [event.id, event])).values()].sort(compareEventsByDateTime);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -42,7 +48,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
       <div className="card">
         <h2 style={{ margin: '0 0 4px' }}>My Events</h2>
         <p className="small" style={{ margin: 0, color: 'var(--muted)' }}>
-          Events you created. Toggle visibility to show or hide from the home screen.
+          Events you created and your registrations. Registration events appear publicly after Superadmin approval.
         </p>
       </div>
 
@@ -52,18 +58,20 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
         </div>
       )}
 
-      {!loading && myEvents.length === 0 && (
+      {(hosted.error || attending.error) && <div className="card" role="alert">{hosted.error || attending.error}<button onClick={() => registration.refresh()}>Retry registration events</button></div>}
+      {(hosted.loading || attending.loading) && <p role="status">Loading your registration events...</p>}
+      {!loading && !hosted.loading && !attending.loading && allEvents.length === 0 && (
         <div className="card center">
           <p style={{ color: 'var(--muted)', marginBottom: 12 }}>You haven't added any events yet.</p>
           <button onClick={() => setPage('add')}>➕ Add Your First Event</button>
         </div>
       )}
 
-      {!loading && myEvents.length > 0 && <div className="desktop-page-event-grid">
-      {myEvents.map(e => (
+      {!loading && allEvents.length > 0 && <div className="desktop-page-event-grid">
+      {allEvents.map(e => (
         <div key={e.id}>
           {/* Visibility toggle row */}
-          <div style={{
+          {!e.registrationOnly && <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '4px 4px 2px', flexWrap: 'wrap'
           }}>
@@ -83,7 +91,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
               }}>
               {e.hidden ? '👁 Make Visible' : '🙈 Hide Event'}
             </button>
-          </div>
+          </div>}
 
           {/* Event card with slight opacity if hidden */}
           <div style={{ opacity: e.hidden ? 0.65 : 1, transition: 'opacity 0.2s' }}>

@@ -1,7 +1,7 @@
 const clean = value => String(value || '').trim();
 export const eventHostUid = event => clean(event?.createdByUserId || event?.ownerUid || event?.createdByUid || event?.userId);
 const millis = value => value?.toMillis?.() || value?.seconds * 1000 || Date.parse(value) || 0;
-export function createHostMessaging({ db, sdk, currentUser, readOnly = false }) {
+export function createHostMessaging({ db, sdk, currentUser, readOnly = false, registrationEvent }) {
   const id = value => {
     if (typeof value !== 'string' || !value.trim() || value.includes('/')) throw new Error('A valid reference is required.');
     return value;
@@ -25,11 +25,22 @@ export function createHostMessaging({ db, sdk, currentUser, readOnly = false }) 
   const participant = (thread, uid) => {
     if (!thread?.participantUids?.includes(uid) || thread.participantUids.length !== 2) throw new Error('This conversation is not available to your account.');
   };
-  async function send(eventId, text) {
+  async function send(eventId, text, { registrationOnly = false } = {}) {
     const message = textValue(text), member = await session(true);
-    const snapshot = await sdk.getDocFromServer(reference('events', eventId));
-    const event = snapshot.data(), hostUid = eventHostUid(event);
-    if (!snapshot.exists() || event.hidden || ['inactive', 'archived', 'deleted', 'cancelled'].includes(event.status)) throw new Error('This event is no longer available.');
+    let event;
+    if (registrationOnly) {
+      if (!registrationEvent) throw new Error('Registration host messaging is not connected.');
+      const fresh = await registrationEvent(eventId);
+      if (!fresh?.event || fresh.event.status !== 'approved' || fresh.event.deletedAt) throw new Error('This event is no longer available.');
+      event = { ...fresh.event, eventDate: fresh.event.date, hostName: fresh.event.title };
+    } else {
+      const snapshot = await sdk.getDocFromServer(reference('events', eventId));
+      if (!snapshot.exists()) throw new Error('This event is no longer available.');
+      event = snapshot.data();
+    }
+    same(member.uid);
+    const hostUid = eventHostUid(event);
+    if (event.hidden || ['inactive', 'archived', 'deleted', 'cancelled'].includes(event.status)) throw new Error('This event is no longer available.');
     if (!hostUid || hostUid === member.uid) throw new Error('Choose an event with another linked host.');
     const threadId = id(eventId + '_' + member.uid + '_' + hostUid);
     const threadRef = reference('hostMessageThreads', threadId);

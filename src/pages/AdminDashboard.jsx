@@ -5,6 +5,7 @@ import AdminActionPanels from '../components/AdminActionPanels';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import EventCard from '../components/EventCard';
 import EventFilters from '../components/EventFilters';
+import RegistrationEventPanel from '../registration/RegistrationEventPanel';
 import { saveHijriSettings, getHijriSettings, saveMonthOverride } from '../services/settingsService';
 import { listUsers, updateUserContactProfile, updateUserRole } from '../services/userService';
 import { memberJoinedMillis, memberJoinedLabel, newestMembersFirst } from '../utils/memberProfile.mjs';
@@ -1398,6 +1399,8 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
       {tab === 'tools' && <><CityManagementPanel profile={profile}/><YouTubeConnectCard isSuperAdmin={isSuperAdmin}/><div className="card"><h3>Utilities</h3><button className="btn-light" onClick={() => setTab('import')}>Event Import &amp; Export</button>{isSuperAdmin && <button className="btn-light" onClick={() => setTab('repair')}>Data Repair</button>}</div></>}
       {tab === 'import' && <section className="card"><h3>Export Upcoming Events</h3><p>Download upcoming events within your administrator access.</p><button disabled={adminEvents === null} onClick={exportUpcoming}>Download upcoming events CSV</button></section>}
       {tab === 'users' && renderSummaryPanels(userSummaryPanels, userPanelFilter, applyUserSummaryFilter)}
+      {tab === 'users' && isSuperAdmin && <RegistrationEventPanel scope="review" user={user} profile={profile} onCalendar={() => setPage('calendar')}/>}
+      {tab === 'events' && <RegistrationEventPanel scope="management" city={adminCity} user={user} profile={profile} onCalendar={() => setPage('calendar')}/>}
       {tab === 'events' && adminEvents !== null && renderSummaryPanels(eventSummaryPanels, adminEventPanelFilter, applyEventSummaryFilter)}
 
       {/* Global message */}

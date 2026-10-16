@@ -12,7 +12,7 @@ import './workspace.css';
 const reference = () => crypto.randomUUID();
 const answerText = value => Array.isArray(value) ? value.join(', ') : value === true ? 'Agreed' : String(value ?? '');
 // api is injected: no direct Firestore reads, persistence, capacity or permission authority here.
-export default function RegistrationWorkspace({ api, enabled = false, user, profile, city, onBack, onRequireSignIn, initialCreate = false, initialEventId, eventTypes = EVENT_TYPES }) {
+export default function RegistrationWorkspace({ api, enabled = false, user, profile, city, onBack, onRequireSignIn, initialCreate = false, initialEventId, initialAction = 'register', operationsOnly = false, eventTypes = EVENT_TYPES }) {
   const [stage, setStage] = useState('list'), [scope, setScope] = useState('public');
   const [items, setItems] = useState([]), [cursor, setCursor] = useState(null);
   const [detail, setDetail] = useState(null), [draft, setDraft] = useState(null), [poster, setPoster] = useState(null);
@@ -38,11 +38,25 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     if (!valid()) return;
     setItems(current => mergeRegistrationPage(next ? current : [], result.events || [])); setCursor(result.nextCursor); setScope(nextScope);
   });
-  const open = id => run(async valid => {
+  const open = (id, action) => run(async valid => {
     clearPrivate(); setDraft(null); currentId.current = id;
     const fresh = await api.load(id);
     if (!valid()) return;
     setDetail(fresh); setStage('card'); submission.current = null; setRetrySubmission(false);
+    if (action === 'register') {
+      if (!requireMember()) return;
+      if (!(fresh.canRegister || fresh.canEditRegistration) || !fresh.form) { setNotice('Registration cannot be edited at this time.'); return; }
+      setAnswers(answersForReview(fresh)); setPlaces(String(fresh.ownRegistration?.status === 'registered' ? fresh.ownRegistration.places : 1));
+      setErrors({}); setStage('entry');
+    } else if (['edit', 'form', 'copy'].includes(action)) {
+      if (!fresh.canManage) throw new Error('You cannot edit this event.');
+      setDraft(eventDraftFromDetail(fresh, eventTypes)); setStage('editor');
+      if (action === 'copy') { createKey.current = reference(); currentId.current = null; setDetail(null); }
+      await loadTemplates(valid);
+    } else if (action === 'responses') {
+      const result = await api.responses(id);
+      if (valid()) { setResponses(result.registrations || []); setResponseCursor(result.nextCursor); setStage('responses'); }
+    }
   });
   const loadTemplates = async (valid, next = null) => {
     const result = await api.templates(next);
@@ -55,16 +69,16 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       if (!valid()) return;
       if (isNew) { createKey.current = reference(); currentId.current = null; setDetail(null); }
       else setDetail(fresh);
-      setDraft(isNew ? { ...createDraft(), title: '', address: '', suburb: '', eventType: eventTypes[0], customEventType: '' } : eventDraftFromDetail(fresh, eventTypes));
+      setDraft(isNew ? { ...createDraft(), startTime: '', endTime: '', title: '', address: '', suburb: '', eventType: eventTypes[0], customEventType: '' } : eventDraftFromDetail(fresh, eventTypes));
       setStage('editor'); setPendingPoster(null); setPoster(null); await loadTemplates(valid);
     });
   };
   useEffect(() => {
     if (!enabled) return undefined;
-    if (initialEventId) open(initialEventId); else if (initialCreate && member) edit(true); else list('public');
+    if (initialEventId) open(initialEventId, initialAction); else if (initialCreate && member) edit(true); else if (!operationsOnly) list('public');
     const hide = () => {
       if (document.hidden) { epoch.current++; lock.current = false; setBusy(false); setObscured(true); clearPrivate(); setDraft(null); setTemplates([]); setPendingPoster(null); }
-      else { setObscured(false); if (currentId.current) open(currentId.current); else list('public'); }
+      else { setObscured(false); if (currentId.current) open(currentId.current, operationsOnly ? initialAction : undefined); else if (!operationsOnly) list('public'); else if (initialCreate) edit(true); }
     };
     document.addEventListener('visibilitychange', hide);
     return () => { epoch.current++; lock.current = false; document.removeEventListener('visibilitychange', hide); };
@@ -119,14 +133,18 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
   const links = detail?.privateDetails ? privateVenueLinks(detail.privateDetails) : null;
   if (!enabled) return <section className="card"><p>Registration is not enabled for this release.</p><button onClick={onBack}>Back</button></section>;
   if (obscured) return <section className="card"><p>Private registration details are hidden while the app is inactive.</p></section>;
-  return <main className="registration-workspace" aria-label="Registration events"><h1>Registration only events</h1><p>{cityLabel(city)}</p>
-    <div className="registration-actions"><button className="btn-light" disabled={busy} onClick={onBack}>Back to Events</button><button className="btn-light" disabled={busy} onClick={() => list(scope)}>Event list</button>{currentId.current && <button disabled={busy} onClick={() => open(currentId.current)}>Reload current status</button>}</div>
+  return <main className="registration-workspace" aria-label="Event registration"><h1>{operationsOnly ? initialCreate ? 'Create registration event' : ['edit', 'form', 'copy'].includes(initialAction) ? 'Edit event and registration form' : initialAction === 'responses' ? 'Registration responses' : 'Event registration' : 'Registration only events'}</h1><p>{cityLabel(city)}</p>
+    <div className="registration-actions"><button className="btn-light" disabled={busy} onClick={onBack}>Back to Events</button>{!operationsOnly && <button className="btn-light" disabled={busy} onClick={() => list(scope)}>Event list</button>}{currentId.current && <button disabled={busy} onClick={() => open(currentId.current, operationsOnly ? initialAction : undefined)}>Reload current status</button>}</div>
     {busy && <p role="status">Working…</p>}{notice && <p role="status">{notice}</p>}
     {confirm && <section className="registration-confirm" aria-label={confirm.title}><h2>{confirm.title}</h2><p>{confirm.description}</p><button disabled={busy} onClick={() => setConfirm(null)}>Go back</button><button disabled={busy} onClick={() => { const action = confirm.action; setConfirm(null); run(action); }}>Confirm {confirm.title.toLowerCase()}</button></section>}
-    {stage === 'list' && <><nav className="registration-actions" aria-label="Registration lists"><button disabled={busy} onClick={() => list('public')}>Browse events</button>{member && <><button disabled={busy} onClick={() => list('attending')}>My registrations</button><button disabled={busy} onClick={() => list('mine')}>My hosted events</button></>}{admin && <button disabled={busy} onClick={() => list('review')}>Review city events</button>}<button disabled={busy} onClick={() => edit(true)}>Create registration event</button></nav>
+    {stage === 'list' && !operationsOnly && <><nav className="registration-actions" aria-label="Registration lists"><button disabled={busy} onClick={() => list('public')}>Browse events</button>{member && <><button disabled={busy} onClick={() => list('attending')}>My registrations</button><button disabled={busy} onClick={() => list('mine')}>My hosted events</button></>}{admin && <button disabled={busy} onClick={() => list('review')}>Review city events</button>}<button disabled={busy} onClick={() => edit(true)}>Create registration event</button></nav>
       {!items.length && !busy && <p>No events on this page.{cursor ? ' Load more to continue.' : ''}</p>}{items.map(event => <article className="card" key={event.id}><h2>{event.title}</h2><p>{event.eventType} · {event.date} · {event.suburb}</p><p>{event.status === 'cancelled' ? 'Event cancelled' : event.status} · Registration required</p><button disabled={busy} onClick={() => open(event.id)}>View event</button></article>)}{cursor && <button disabled={busy} onClick={() => list(scope, cursor)}>Load more events</button>}
     </>}
-    {stage === 'editor' && draft && <RegistrationEditor initialDraft={draft} eventTypes={eventTypes} templates={templates} templateCursor={templateCursor} onMoreTemplates={() => run(valid => loadTemplates(valid, templateCursor))} busy={busy} onSave={save} onCancel={detail ? () => setStage('card') : undefined} onSaveTemplate={template => run(async valid => {
+    {stage === 'editor' && draft && <RegistrationEditor initialDraft={draft} initialStep={initialAction === 'form' ? 'form' : 'event'} hasPoster={Boolean(detail?.privateDetails?.hasPoster)} onRemovePoster={() => ask('Remove poster', 'Delete the existing private poster? Unsaved event and form fields will stay in this editor.', async valid => {
+      await api.removePoster(detail.event.id, detail.event.revision);
+      const fresh = await api.load(detail.event.id);
+      if (valid()) { setDetail(fresh); setNotice('Poster removed.'); }
+    })} eventTypes={eventTypes} templates={templates} templateCursor={templateCursor} onMoreTemplates={() => run(valid => loadTemplates(valid, templateCursor))} busy={busy} onSave={save} onCancel={detail ? () => setStage('card') : undefined} onSaveTemplate={template => run(async valid => {
       const content = JSON.stringify(template);
       if (templateRequest.current?.content !== content) templateRequest.current = { content, id: reference() };
       await api.saveTemplate({ ...template, templateId: templateRequest.current.id }); await loadTemplates(valid); if (valid()) { templateRequest.current = null; setNotice('Template saved to your account.'); }
@@ -141,11 +159,10 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
         {(detail.canRegister || detail.canEditRegistration) && <button disabled={busy} onClick={startEntry}>{detail.ownRegistration?.status === 'registered' ? 'Edit registration' : 'Register for event'}</button>}
         {detail.canCancel && <button disabled={busy} onClick={() => ask('Delete registration', 'Your answers will be deleted and your places released. You will lose private venue and poster access.', async valid => { await api.cancel(detail.event.id, detail.ownRegistration.revision); await reloadAfter(valid, 'Your registration and submitted answers were deleted.'); })}>Delete my registration</button>}
         {detail.canManage && <><button disabled={busy || detail.event.status === 'cancelled'} onClick={() => edit()}>Edit event and form</button><button disabled={busy} onClick={() => responsePage()}>Registration responses</button>
-          {detail.event.status !== 'cancelled' && <button disabled={busy} onClick={() => ask('Cancel event', 'This cannot be undone. All places will be released and attendee notifications queued. Answers remain subject to retention and deletion controls.', async valid => { await api.cancelEvent(detail.event.id, detail.event.revision, 'CANCEL EVENT'); await reloadAfter(valid, 'Event cancelled. Attendee notifications are queued.'); })}>Cancel whole event</button>}
           {detail.privateDetails?.hasPoster && <button disabled={busy} onClick={() => ask('Remove poster', 'The private poster will be removed. Approved events remain approved.', async valid => { await api.removePoster(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Poster removed.'); })}>Remove private poster</button>}
           {pendingPoster && <button disabled={busy} onClick={() => run(async valid => { const fresh = await api.load(detail.event.id); await api.uploadPoster(fresh.event.id, fresh.event.revision, pendingPoster.mime, pendingPoster.base64); if (valid()) setPendingPoster(null); await reloadAfter(valid, 'Poster uploaded.'); })}>Retry selected poster upload</button>}
         </>}
-        {detail.canApprove && detail.event.status === 'pending' && <button disabled={busy} onClick={() => ask('Approve event', 'Confirm you have reviewed the venue, poster and registration form.', async valid => { await api.approve(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Event approved.'); })}>Approve event</button>}
+        {!operationsOnly && detail.canApprove && detail.event.status === 'pending' && <button disabled={busy} onClick={() => ask('Approve event', 'Confirm you have reviewed the venue, poster and registration form.', async valid => { await api.approve(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Event approved.'); })}>Approve event</button>}
       </div>
       {detail.canManage && detail.form && <details><summary>Review registration form</summary><p>{detail.form.purpose}</p>{detail.form.fields.map(field => <section key={field.id}><h3>{field.label}{field.required ? ' *' : ''}</h3><p>{field.description}</p><p>{field.terms || field.options?.join(', ')}</p></section>)}</details>}
     </article>}

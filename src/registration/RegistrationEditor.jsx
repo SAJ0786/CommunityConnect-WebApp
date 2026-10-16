@@ -1,19 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import AnswerField from './AnswerField';
-import { FIELD_TYPES, FORM_TEMPLATES, NOTES_LIMIT, TERMS_LIMIT, closingDateError, consentLast, makeField, moveField, publicNotesError, publicSuburbError, templateFields, validateDraft } from './prototypeModel.mjs';
+import { FIELD_TYPES, FORM_TEMPLATES, NOTES_LIMIT, TERMS_LIMIT, closingDateError, consentLast, makeField, moveField, publicNotesError, publicSuburbError, templateFields } from './prototypeModel.mjs';
 import { normalisePrivateVenue } from './privateVenue.mjs';
+import { validateRegistrationDraft } from './registrationViewModel.mjs';
 
 // Private drafts stay in component memory only, never localStorage/IndexedDB.
-export default function RegistrationEditor({ initialDraft, eventTypes, templates, templateCursor, onMoreTemplates, busy, onSave, onSaveTemplate, onCancel }) {
-  const [draft, setDraft] = useState(initialDraft), [step, setStep] = useState('event');
+export default function RegistrationEditor({ initialDraft, initialStep = 'event', hasPoster = false, onRemovePoster, eventTypes, templates, templateCursor, onMoreTemplates, busy, onSave, onSaveTemplate, onCancel }) {
+  const [draft, setDraft] = useState(initialDraft), [step, setStep] = useState(initialStep);
   const [error, setError] = useState(''), [templateName, setTemplateName] = useState('');
   const serial = useRef(0), posterRead = useRef(0);
   useEffect(() => () => { posterRead.current++; }, []);
   const update = (key, value) => setDraft(current => ({ ...current, [key]: value }));
   const change = (id, values) => update('fields', draft.fields.map(field => field.id === id ? { ...field, ...values } : field));
   const choose = template => { setDraft(current => ({ ...current, fields: consentLast(structuredClone(template.fields)), purpose: template.purpose || current.purpose })); setStep('form'); };
-  const validation = () => [...validateDraft(draft), ...(!normalisePrivateVenue(draft.venue) ? ['Select a complete address with coordinates for the private map and directions.'] : [])];
+  const validation = () => [...validateRegistrationDraft(draft), ...(!normalisePrivateVenue(draft.venue) ? ['Select a complete address with coordinates for the private map and directions.'] : [])];
   const save = () => { const errors = validation(); setError(errors.join(' ')); if (!errors.length) onSave(draft); };
   const readPoster = async e => {
     const file = e.target.files?.[0], request = ++posterRead.current;
@@ -32,6 +33,10 @@ export default function RegistrationEditor({ initialDraft, eventTypes, templates
         <label>Event type<select value={draft.eventType} onChange={e => update('eventType', e.target.value)}>{[...new Set([...eventTypes, 'Custom'])].map(type => <option key={type}>{type}</option>)}</select></label>
         {draft.eventType === 'Custom' && <label>Custom event type<input value={draft.customEventType} maxLength={100} onChange={e => update('customEventType', e.target.value)}/></label>}
         <label>Event date<input type="date" value={draft.date} onChange={e => update('date', e.target.value)}/></label>
+        <label>Start time (optional, event city timezone)<input type="time" value={draft.startTime || ''} onChange={e => update('startTime', e.target.value)}/></label>
+        <label>End time (optional)<input type="time" value={draft.endTime || ''} onChange={e => update('endTime', e.target.value)}/></label>
+        <p>An end time earlier than the start time means the following day.</p>
+        <p>Leave times blank for a date-only event. No default start time will be added.</p>
         <h3>Private venue</h3><p>The full address, coordinates and poster are shown only to authorised attendees, organisers and administrators.</p>
         <AddressAutocomplete label="Private venue address" required value={draft.venue || { fullAddress: draft.address }} onChange={venue => setDraft(current => ({ ...current, venue, address: venue.fullAddress || '', suburb: venue.suburb || current.suburb }))}/>
         <label>Public suburb<input value={draft.suburb} maxLength={100} aria-invalid={Boolean(suburbError)} aria-describedby="registration-suburb-error" onChange={e => update('suburb', e.target.value)}/></label><p id="registration-suburb-error" role={suburbError ? 'alert' : undefined}>{suburbError || 'Do not include the street address here.'}</p>
@@ -41,7 +46,8 @@ export default function RegistrationEditor({ initialDraft, eventTypes, templates
         <label className="registration-check"><input type="checkbox" checked={draft.allowCancellation} onChange={e => update('allowCancellation', e.target.checked)}/>Allow attendee cancellation before event day</label>
         <label>Private poster (optional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={readPoster}/></label>
         {draft.poster && <><img className="registration-poster" src={draft.poster.uri} alt="Selected private poster"/><button type="button" onClick={() => { posterRead.current++; update('poster', null); }}>Discard selected poster</button></>}
-        <p>Existing posters are managed on the event card. A selected poster uploads after the event is saved.</p><button type="button" onClick={() => setStep('templates')}>Choose registration form</button>
+        {hasPoster && onRemovePoster && <button type="button" onClick={onRemovePoster}>Delete existing poster</button>}
+        <p>A selected poster uploads after the event is saved.</p><button type="button" onClick={() => setStep('templates')}>Choose registration form</button>
       </div>}
       {step === 'templates' && <div className="card"><h2>Use a template or build your own?</h2><p>Templates can be customised.</p><div className="registration-actions">{FORM_TEMPLATES.map(template => <button type="button" key={template.name} onClick={() => choose({ fields: templateFields(template) })}>{template.name}</button>)}{templates.map(template => <button type="button" key={template.id} onClick={() => choose(template)}>{template.name} (saved)</button>)}{templateCursor && <button type="button" onClick={onMoreTemplates}>Load more templates</button>}<button type="button" onClick={() => choose({ fields: [] })}>Build my own form</button><button type="button" onClick={() => setStep('form')}>Continue current form</button></div></div>}
       {step === 'form' && <><div className="card"><label>Why are you collecting these answers?<textarea value={draft.purpose} maxLength={1000} onChange={e => update('purpose', e.target.value)}/></label></div>

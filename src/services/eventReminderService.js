@@ -15,14 +15,15 @@ async function call(name, eventId, extra = {}, savedContext = context()) {
   if (auth.currentUser?.uid !== savedContext.uid) throw new Error('Your account changed. Reopen Reminder.');
   return result;
 }
-export async function getEventReminder(eventId) { return (await call('getEventReminder', eventId)).reminder; }
-export async function setEventReminder(eventId, minutesBefore) {
+const collection = registrationOnly => ({ eventCollection: registrationOnly ? 'registrationEvents' : 'events' });
+export async function getEventReminder(eventId, registrationOnly = false) { return (await call('getEventReminder', eventId, collection(registrationOnly))).reminder; }
+export async function setEventReminder(eventId, minutesBefore, registrationOnly = false) {
   const member = context(), token = await enablePushNotifications(member.uid);
   if (!token) throw new Error('Browser notifications were not enabled. No reminder was scheduled.');
-  const result = await call('setEventReminder', eventId, { minutesBefore, token }, member);
+  const result = await call('setEventReminder', eventId, { minutesBefore, token, ...collection(registrationOnly) }, member);
   if (result?.reminder?.status !== 'pending') throw new Error('The reminder could not be confirmed. Reopen Reminder to check its status.');
   return result.reminder;
 }
-export async function removeEventReminder(eventId) {
-  if ((await call('removeEventReminder', eventId)).removed !== true) throw new Error('Removal could not be confirmed. Reopen Reminder to check.');
+export async function removeEventReminder(eventId, registrationOnly = false) {
+  if ((await call('removeEventReminder', eventId, collection(registrationOnly))).removed !== true) throw new Error('Removal could not be confirmed. Reopen Reminder to check.');
 }

@@ -27,13 +27,25 @@ exports.eventStartAt = eventStartAt;
 exports.createReminderHandlers = ({ db, HttpsError, now = Date.now }) => {
   const fail = (code, message) => { throw new HttpsError(code, message); };
   const eligible = profile => profile && profile.isActive !== false && profile.active !== false && !['archived','banned','deleted'].includes(profile.accountStatus);
-  const available = event => event && !event.hidden && !event.isLive && !['inactive','archived','deleted','cancelled'].includes(event.status);
+  const available = (event, collection) => event && !event.hidden && !event.isLive && !event.deletedAt
+    && (collection === 'registrationEvents' ? event.status === 'approved' : !['inactive','archived','deleted','cancelled'].includes(event.status));
+  const startFor = (event, collection) => {
+    if (collection !== 'registrationEvents') return eventStartAt(event);
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(event.startTime || '') || typeof event.startAt !== 'string' || !Number.isFinite(Date.parse(event.startAt))) {
+      throw new Error('The host must provide an exact registration event start time before a reminder can be scheduled.');
+    }
+    return Date.parse(event.startAt);
+  };
   const ref = (collection, id) => db.collection(collection).doc(id);
   const requestParts = request => {
     const uid = request.auth?.uid, data = request.data || {};
     if (!uid || request.auth.token?.firebase?.sign_in_provider === 'anonymous') fail('unauthenticated', 'Sign in to manage reminders.');
     if (typeof data.eventId !== 'string' || !data.eventId || data.eventId.includes('/') || !/^[a-zA-Z0-9-]{16,80}$/.test(data.deviceId || '')) fail('invalid-argument', 'A valid event and browser reference are required.');
-    return { uid, data, record: ref('webEventReminders', hash(JSON.stringify([uid, data.eventId, data.deviceId]))) };
+    const eventCollection = data.eventCollection || 'events';
+    if (!['events','registrationEvents'].includes(eventCollection)) fail('invalid-argument', 'Unsupported event collection.');
+    const key = [uid, data.eventId, data.deviceId];
+    if (eventCollection === 'registrationEvents') key.push(eventCollection);
+    return { uid, data, eventCollection, record: ref('webEventReminders', hash(JSON.stringify(key))) };
   };
   const result = data => data ? { status: data.status, minutesBefore: data.minutesBefore, fireAt: data.fireAt, eventStartAt: data.eventStartAt, delivery: data.delivery || null } : null;
   async function get(request) {
@@ -42,20 +54,20 @@ exports.createReminderHandlers = ({ db, HttpsError, now = Date.now }) => {
     return { reminder: result((await record.get()).data()) };
   }
   async function set(request) {
-    const { uid, data, record } = requestParts(request);
+    const { uid, data, record, eventCollection } = requestParts(request);
     if (![15,30,60,180,1440].includes(data.minutesBefore) || typeof data.token !== 'string' || !data.token) fail('invalid-argument', 'Choose a reminder time and enable browser notifications.');
     return db.runTransaction(async transaction => {
-      const [user, eventDoc, old] = await transaction.getAll(ref('users', uid), ref('events', data.eventId), record);
+      const [user, eventDoc, old] = await transaction.getAll(ref('users', uid), ref(eventCollection, data.eventId), record);
       const profile = user.data(), event = eventDoc.data();
       if (!eligible(profile) || profile.pushNotificationsEnabled === false || profile.fcmTokens?.[data.token]?.source !== 'web') fail('permission-denied', 'Enable notifications for this browser first.');
-      if (!available(event)) fail('failed-precondition', 'This event is no longer available for a reminder.');
+      if (!available(event, eventCollection)) fail('failed-precondition', 'This event is no longer available for a reminder.');
       let start;
-      try { start = eventStartAt(event); } catch (error) { fail('failed-precondition', error.message); }
+      try { start = startFor(event, eventCollection); } catch (error) { fail('failed-precondition', error.message); }
       const fireAt = start - data.minutesBefore * 60000;
       if (fireAt <= now()) fail('failed-precondition', 'That reminder time has already passed. Choose a shorter lead time.');
       const previous = old.data();
       if (previous?.status === 'pending' && previous.fireAt === fireAt && previous.token === data.token && previous.minutesBefore === data.minutesBefore) return { reminder: result(previous) };
-      const next = { uid, eventId: data.eventId, deviceId: data.deviceId, token: data.token, minutesBefore: data.minutesBefore,
+      const next = { uid, eventId: data.eventId, eventCollection, deviceId: data.deviceId, token: data.token, minutesBefore: data.minutesBefore,
         status: 'pending', revision: (previous?.revision || 0) + 1, fireAt, eventStartAt: start, updatedAt: now() };
       transaction.set(record, next);
       return { reminder: result(next) };
@@ -81,12 +93,16 @@ exports.createReminderHandlers = ({ db, HttpsError, now = Date.now }) => {
         return null;
       }
       if (saved.status !== 'pending') return null;
-      const [user, eventDoc] = await transaction.getAll(ref('users', saved.uid), ref('events', saved.eventId));
+      const eventCollection = saved.eventCollection || 'events';
+      if (!['events','registrationEvents'].includes(eventCollection)) {
+        transaction.update(record, { status:'cancelled', delivery:'unsupported-event-collection', updatedAt:now() }); return null;
+      }
+      const [user, eventDoc] = await transaction.getAll(ref('users', saved.uid), ref(eventCollection, saved.eventId));
       const profile = user.data(), event = eventDoc.data();
       let start;
-      try { start = eventStartAt(event || {}); } catch (_) { start = 0; }
+      try { start = startFor(event || {}, eventCollection); } catch (_) { start = 0; }
       if (!eligible(profile) || profile.pushNotificationsEnabled === false || profile.fcmTokens?.[saved.token]?.source !== 'web'
-        || !available(event) || start <= now()) {
+        || !available(event, eventCollection) || start <= now()) {
         transaction.update(record, { status:'cancelled', delivery:'event-or-account-unavailable', updatedAt:now() }); return null;
       }
       const fireAt = start - saved.minutesBefore * 60000;
@@ -97,7 +113,7 @@ exports.createReminderHandlers = ({ db, HttpsError, now = Date.now }) => {
       // At-most-once dispatch: an uncertain delivery is retained for review,
       // never retried automatically with a duplicate visible notification.
       transaction.update(record, { status:'dispatching', updatedAt:now() });
-      return { ...saved, eventStartAt:start, title:'Event reminder', body:(event.eventTypeDisplay || event.eventType || 'Event') + ' · ' + (event.hostName || 'Community host'), tag:recordId + '-' + saved.revision };
+      return { ...saved, eventStartAt:start, title:'Event reminder', body:eventCollection === 'registrationEvents' ? (event.title || event.eventType || 'Community event') : (event.eventTypeDisplay || event.eventType || 'Event') + ' · ' + (event.hostName || 'Community host'), tag:recordId + '-' + saved.revision };
     });
     if (!claimed) return { delivered:false };
     // Re-read cancellation/replacement before the external side effect.

@@ -10,7 +10,7 @@ export default function ContactHostDialog({ event, onClose }) {
   async function submit(e) {
     e.preventDefault(); if (pending.current || !text.trim()) return;
     pending.current = true; setBusy(true); setError('');
-    try { await sendHostMessage(event.id, text); setText(''); setSent(true); }
+    try { await sendHostMessage(event.id, text, { registrationOnly: Boolean(event.registrationOnly) }); setText(''); setSent(true); }
     catch (problem) { setError(problem.message + ' Check Host Inbox before retrying if the connection was interrupted.'); }
     finally { pending.current = false; setBusy(false); }
   }

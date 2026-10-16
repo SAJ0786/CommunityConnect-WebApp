@@ -14,6 +14,7 @@ if (!Number.isInteger(previewPort) || previewPort < 1024 || previewPort > 65535)
 if (embedded && !fs.existsSync('.qa-site-preview/readonly-preview.json')) throw new Error('Build the read-only preview first.');
 const pureServices = ['dateUtils', 'hijriService', 'prayerTimeService', 'calendarService', 'imageService', 'hijriObservanceService', 'recurrenceService'];
 const testConfig = { ...config, configFile: false, root, publicDir: path.resolve('public'), envDir:root,
+  define: { ...config.define, 'import.meta.env.VITE_EVENT_REGISTRATION_ENABLED': '"true"' },
   base:embedded ? '/ui-review/' : '/', resolve:{ ...config.resolve, preserveSymlinks:true },
   plugins: [{ name: 'offline-visual-services', enforce: 'pre',
     resolveId(id, importer) {

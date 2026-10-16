@@ -841,6 +841,18 @@ exports.calendarFeed = onRequest(
       pushICS(lines, `DESCRIPTION:${escICS(`Audience: ${e.audienceType || "All audiences"}`)}`);
       lines.push("END:VEVENT");
     });
+    // A UID feed token is not registration authorisation: export public fields only.
+    const registrations = await db.collection("registrationEvents").where("status", "==", "approved").get();
+    const { registrationCalendarLines } = require("./registration-calendar.cjs");
+    for (const document of registrations.docs) {
+      try {
+        for (const line of registrationCalendarLines(document.id, document.data(), {
+          escape: escICS, stamp: new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z",
+        })) pushICS(lines, line);
+      } catch (error) {
+        console.warn("Skipping invalid registration calendar event", { eventId: document.id, reason: error.message });
+      }
+    }
     lines.push("END:VCALENDAR");
     res.set("Content-Type", "text/calendar; charset=utf-8");
     res.set("Cache-Control", "no-cache, no-store");
@@ -4636,5 +4648,4 @@ exports.nativeStreamEndEvent = onCall(
     return { ok: true };
   }
 );
-
 

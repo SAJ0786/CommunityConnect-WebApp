@@ -24,6 +24,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
   const [expandedId, setExpandedId] = useState(null);
   const [visibleCount, setVisibleCount] = useState(12);
   const [query,      setQuery]      = useState('');
+  const [registrationOnly, setRegistrationOnly] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [browsePeriod, setBrowsePeriod] = useState('');
   const [browseCategory, setBrowseCategory] = useState('');
@@ -33,6 +34,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
   const locationRequest = useRef(0);
   useEffect(() => () => { locationRequest.current += 1; }, []);
   const resetAdvanced = () => { setFiltered(null); setBrowseRevision(value => value + 1); };
+  const toggleRegistrationOnly = value => { setRegistrationOnly(value); resetAdvanced(); };
   const choosePeriod = value => {
     const request = ++locationRequest.current;
     setLocationNote('');
@@ -84,7 +86,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
     setViewMode('list');
   }, [selectedCity]);
 
-  const cityEvents = events.filter(event => getEventMetroArea(event) === selectedCity);
+  const cityEvents = events.filter(event => getEventMetroArea(event) === selectedCity && (!registrationOnly || event.registrationOnly));
   // A stream may legitimately continue past midnight. Keep it reachable until
   // the host ends it, even when its scheduled event date is now yesterday.
   const upcoming = cityEvents.filter(e => e.isLive || e.eventDate >= today).sort(compareEventsByDateTime);
@@ -113,9 +115,10 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
 
   useEffect(() => {
     setVisibleCount(12);
-  }, [query, filtered, browsePeriod, browseCategory]);
+  }, [query, filtered, browsePeriod, browseCategory, registrationOnly]);
 
   let displayed = (filtered ?? upcoming).filter(event =>
+    (!registrationOnly || event.registrationOnly) &&
     (browsePeriod === 'nearby' || matchesEventPeriod(event, browsePeriod))
     && (!browseCategory || eventBrowseType(event) === browseCategory));
   // Smart keyword filter — tokenizes the query, ignores filler words,
@@ -242,7 +245,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
       </div>
 
       </>)}
-      <EventQuickAccess viewMode={viewMode} setViewMode={setViewMode} setPage={setPage} isGuest={isGuest}/>
+      <EventQuickAccess viewMode={viewMode} setViewMode={setViewMode} setPage={setPage} isGuest={isGuest} registrationOnly={registrationOnly} onRegistrationOnly={toggleRegistrationOnly}/>
       {viewMode === 'list' && (<>
       {browseControls}
 
@@ -351,6 +354,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
       {wideLayout && <div className="home-desktop-layout">
         <Suspense fallback={<div className="home-event-skeleton"><div className="skeleton-card" /></div>}>
         <DesktopHome
+          registrationOnly={registrationOnly} onRegistrationOnly={toggleRegistrationOnly}
           events={cityEvents} mapEvents={displayed} displayed={visibleDisplayed} totalCount={displayed.length}
           hasMore={hasMore} onLoadMore={() => setVisibleCount(count => count + 12)}
           filterableEvents={filterableEvents} browseControls={browseControls} browseRevision={browseRevision}

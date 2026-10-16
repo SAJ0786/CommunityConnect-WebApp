@@ -1,11 +1,18 @@
-import { createDraft } from './prototypeModel.mjs';
+import { createDraft, validateDraft } from './prototypeModel.mjs';
+
+export function validateRegistrationDraft(draft) {
+  const errors = validateDraft(draft);
+  for (const key of ['startTime', 'endTime']) if (draft[key] && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(draft[key])) errors.push('Enter event times as HH:mm.');
+  if (draft.endTime && (!draft.startTime || draft.endTime === draft.startTime)) errors.push('End time requires a different start time. Earlier end times mean the following day.');
+  return errors;
+}
 
 export function eventDraftFromDetail(detail, eventTypes) {
   if (!detail?.canManage || !detail.privateDetails || !detail.form) throw new Error('Reload an event you can manage before editing.');
   const event = detail.event;
   const knownType = eventTypes.includes(event.eventType);
   return { ...createDraft(), title: event.title, eventType: knownType ? event.eventType : 'Custom',
-    customEventType: knownType ? '' : event.eventType, date: event.date, suburb: event.suburb,
+    customEventType: knownType ? '' : event.eventType, date: event.date, startTime: event.startTime || '', endTime: event.endTime || '', suburb: event.suburb,
     address: detail.privateDetails.address, venue: detail.privateDetails.venue, notes: event.notes || '',
     capacity: event.capacity, closes: event.closes || '', allowCancellation: event.allowCancellation,
     purpose: detail.form.purpose, fields: JSON.parse(JSON.stringify(detail.form.fields)), poster: null };

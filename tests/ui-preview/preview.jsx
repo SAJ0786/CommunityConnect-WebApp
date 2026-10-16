@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import Home from '../../src/pages/Home';
 import CalendarView from '../../src/pages/CalendarView';
@@ -27,6 +27,11 @@ import GuestEditModal from '../../src/components/GuestEditModal';
 import Toast, { showToast } from '../../src/components/Toast';
 import { toPublicBusiness } from '../../src/utils/publicBusinesses.mjs';
 import { resolveThemeColor } from '../../src/utils/themeColor.mjs';
+import PagePanel from '../../src/components/PagePanel';
+import { RegistrationContext } from '../../src/registration/RegistrationContext';
+import RegistrationWorkspace from '../../src/registration/RegistrationWorkspace';
+import { registrationEventCard } from '../../src/registration/eventFeed.mjs';
+import { registrationFixture } from './registrationFixture.mjs';
 import '../../src/styles/theme.css';
 import '../../src/styles/directory.css';
 import './preview.css';
@@ -75,10 +80,15 @@ function Preview() {
   const [status,setStatus] = useState('ready');
   const [editingEvent,setEditingEvent] = useState(events[0]);
   const [eventRows,setEventRows] = useState(events);
+  const [registrationRevision,setRegistrationRevision] = useState(0), [operation,setOperation] = useState(null);
   auth.currentUser = guest ? null : persona === 'member' ? {...user,uid:'synthetic-viewer'} : user;
+  const registrationReview = new URLSearchParams(location.search).has('registration');
+  const fixture = useMemo(() => registrationReview ? registrationFixture(date, auth.currentUser || user, profile.role, guest,
+    new URLSearchParams(location.search).has('registered')) : null, [registrationReview, guest, persona]);
+  if (fixture) window.__registrationCalls = fixture.calls;
   window.__uiReviewStatus = status;
   const Screen = screens[page] || Home;
-  const props = { events: status==='empty'?[]:eventRows, user:auth.currentUser || user, profile, setProfile, setPage, setEditingEvent, handleDelete:noop, handleCopy:noop, isGuest:guest, loadEvents:async()=>setEventRows([...window.__uiEvents]), savedIds:['fixture-0'], onSaveToggle:noop, onStreamStart:noop, selectedCity:city, setSelectedCity:setCity, onSaved:()=>{setEventRows([...window.__uiEvents]);setPage('my');}, eventsLoading:status==='loading', offlineMode:status==='cached', editingEvent, event:events[0], role:'host', nativeStream:{mode:'external'}, onClose:()=>setPage('home'), onCancel:()=>setPage('home') };
+  const props = { events: status==='empty'?[]:[...eventRows,...(fixture ? fixture.publicRows().map(registrationEventCard) : [])], user:auth.currentUser || user, profile, setProfile, setPage, setEditingEvent, handleDelete:noop, handleCopy:noop, isGuest:guest, loadEvents:async()=>setEventRows([...window.__uiEvents]), savedIds:['fixture-0'], onSaveToggle:noop, onStreamStart:noop, selectedCity:city, setSelectedCity:setCity, onSaved:()=>{setEventRows([...window.__uiEvents]);setPage('my');}, eventsLoading:status==='loading', offlineMode:status==='cached', editingEvent, event:events[0], role:'host', nativeStream:{mode:'external'}, onClose:()=>setPage('home'), onCancel:()=>setPage('home') };
   return <>
     <aside className="ui-review-bar"><strong>Offline UI review</strong><span>Synthetic data · no Firebase · no sign-in</span>
       <label>Screen <select aria-label="Review screen" value={page} onChange={e=>setPage(e.target.value)}>{[...Object.keys(screens),'directory'].map(p=><option key={p}>{p}</option>)}</select></label>
@@ -91,7 +101,15 @@ function Preview() {
     </aside>
     <Header {...props} page={page}/>
     <main className={`ui-review-content ${page==='home'?'is-home':''}`} key={page+'-'+guest+'-'+persona}>
-      {page==='directory'?<BusinessDirectoryView businesses={status==='empty'?[]:businesses} loading={status==='loading'} error={status==='error'} fromCache={status==='cached'} selectedCity={city} setSelectedCity={setCity} onRetry={()=>setStatus('ready')} requestLocation={async()=>{if(status==='error')throw new Error('Location denied in the synthetic review.');return {latitude:-33.81,longitude:151};}}/>:<Screen {...props}/>}
+      <RegistrationContext.Provider value={fixture ? { api:fixture.api, revision:registrationRevision, refresh:()=>setRegistrationRevision(value=>value+1),
+        open:(event,action)=>{ if(guest) { window.__registrationGuestPrompt=true; return; } setOperation({id:event.id,action}); setPage('registration'); } } : null}>
+      {page !== 'directory' && <PagePanel page={page}/>}
+      {page === 'registration' && operation ? <RegistrationWorkspace api={fixture.api} enabled operationsOnly initialEventId={operation.id} initialAction={operation.action}
+        user={props.user} profile={profile} city={city} onBack={()=>{setOperation(null);setRegistrationRevision(value=>value+1);setPage('home');}}/>
+        :
+      page==='directory'?<BusinessDirectoryView businesses={status==='empty'?[]:businesses} loading={status==='loading'} error={status==='error'} fromCache={status==='cached'} selectedCity={city} setSelectedCity={setCity} onRetry={()=>setStatus('ready')} requestLocation={async()=>{if(status==='error')throw new Error('Location denied in the synthetic review.');return {latitude:-33.81,longitude:151};}}/>:<Screen {...props}/>
+      }
+      </RegistrationContext.Provider>
     </main>
     {page!=='directory'&&<BottomNav page={page} setPage={setPage} isGuest={guest} profile={profile} user={user} onOpenMenu={() => window.dispatchEvent(new CustomEvent('community-events-walkthrough-menu', {detail:{open:true}}))}/>}
     <ShareSheet/><Toast/>

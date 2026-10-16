@@ -59,6 +59,26 @@ test('host request aborts before writing if identity changes while looking up th
   state.sdk.getDocFromServer=async ref=>{ const value=await original(ref); if(ref.path==='events/first')state.login('owner'); return value; };
   await assert.rejects(state.host.send('first','Question'),/account changed/); assert.equal(state.writes.length,0);
 });
+test('registration Contact Host resolves the callable event, never reads private registration or legacy event records',async()=>{
+  const state=setup({registrationEvent:async id=>({event:{id,status:'approved',ownerUid:'owner',title:'Workshop',date:'2099-10-12',city:'sydney'}})});
+  const reads=[], original=state.sdk.getDocFromServer;
+  state.sdk.getDocFromServer=async ref=>{reads.push(ref.path);return original(ref);};
+  const {threadId}=await state.host.send('registration-event','Hello',{registrationOnly:true});
+  const thread=state.records.get('hostMessageThreads/'+threadId);
+  assert.deepEqual(thread.participantUids,['viewer','owner']);
+  assert.equal(thread.eventDate,'2099-10-12');
+  assert.equal(reads.some(path=>path.startsWith('events/')||path.startsWith('registrationEvents/')),false);
+});
+test('unapproved/deleted registration events and account changes cannot create host messages',async()=>{
+  for(const mode of ['pending','deleted','identity']) {
+    const state=setup({registrationEvent:async()=> {
+      if(mode==='identity')state.login('owner');
+      return {event:{status:mode==='pending'?'pending':'approved',deletedAt:mode==='deleted'?'now':null,ownerUid:'owner'}};
+    }});
+    await assert.rejects(state.host.send('registration-event','Hello',{registrationOnly:true}));
+    assert.equal(state.writes.length,0);
+  }
+});
 
 test('inbox subscriptions keep the latest 200 messages chronological and clear on account change',async()=>{
   const state=setup(), {threadId}=await state.host.send('first','Initial message');

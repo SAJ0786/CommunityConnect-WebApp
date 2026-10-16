@@ -9,14 +9,14 @@ export default function EventReminderDialog({ event, onClose }) {
   useDialogFocus(dialog, true, () => { if (!pending.current) onClose(); });
   useEffect(() => {
     let active = true;
-    getEventReminder(event.id).then(value => { if (active) { setReminder(value); setReady(true); } }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setBusy(false); });
+    getEventReminder(event.id, event.registrationOnly).then(value => { if (active) { setReminder(value); setReady(true); } }).catch(e => { if (active) setError(e.message); }).finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
   }, [event.id]);
   async function change(minutes) {
     if (pending.current) return; pending.current = true; setBusy(true); setError(''); setStatus('');
     try {
-      if (minutes === null) { await removeEventReminder(event.id); setReminder(null); setStatus('Reminder removed.'); }
-      else { setReminder(await setEventReminder(event.id, minutes)); setStatus('Reminder saved for this browser.'); }
+      if (minutes === null) { await removeEventReminder(event.id, event.registrationOnly); setReminder(null); setStatus('Reminder removed.'); }
+      else { setReminder(await setEventReminder(event.id, minutes, event.registrationOnly)); setStatus('Reminder saved for this browser.'); }
     } catch (problem) { setError(problem.message); }
     finally { pending.current = false; setBusy(false); }
   }

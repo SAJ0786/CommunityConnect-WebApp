@@ -135,7 +135,7 @@ export default function DesktopHome({
   expandedId, setExpandedId, user, profile, setPage,
   setEditingEvent, handleDelete, handleCopy, isGuest, savedIds, onSaveToggle,
   onStreamStart, selectedCity, onCityChange, viewMode = 'list', setViewMode,
-  onSelectMapEvent, browseControls, browseRevision = 0,
+  onSelectMapEvent, browseControls, browseRevision = 0, registrationOnly, onRegistrationOnly,
 }) {
   const [layout, setLayout] = useState(() => {
     try { return localStorage.getItem('communityEventsDesktopLayout') || 'grid'; }
@@ -199,7 +199,7 @@ export default function DesktopHome({
         </div>
       </div>
 
-      <EventQuickAccess viewMode={viewMode} setViewMode={setViewMode} setPage={setPage} isGuest={isGuest}/>
+      <EventQuickAccess viewMode={viewMode} setViewMode={setViewMode} setPage={setPage} isGuest={isGuest} registrationOnly={registrationOnly} onRegistrationOnly={onRegistrationOnly}/>
       {browseControls}
 
       <EventFilters key={selectedCity + browseRevision} events={filterableEvents} onChange={setFiltered}

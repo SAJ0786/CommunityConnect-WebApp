@@ -1,0 +1,9 @@
+.cc-page-panel { position:relative; isolation:isolate; display:flex; align-items:center; gap:12px; overflow:hidden; padding:16px; margin:12px 16px; border:1px solid var(--cc-primary-border,var(--cc-border)); border-radius:20px; background:var(--cc-primary-soft); box-shadow:var(--shadow-sm); }
+.cc-page-panel::before,.cc-page-panel::after { content:''; position:absolute; z-index:-1; border-radius:50%; background:var(--cc-primary); opacity:.08; pointer-events:none; }
+.cc-page-panel::before { width:130px; height:130px; right:-35px; top:-70px; }
+.cc-page-panel::after { width:72px; height:72px; right:58px; bottom:-54px; }
+.cc-page-panel-icon { display:grid; place-items:center; flex:0 0 44px; width:44px; height:44px; border-radius:15px; border:1px solid var(--cc-border); color:var(--cc-primary); background:var(--cc-surface); }
+.cc-page-panel > div { min-width:0; }
+.cc-page-panel-eyebrow { color:var(--cc-primary-strong); font-size:.65rem; font-weight:700; letter-spacing:.08em; }
+.cc-page-panel h2 { margin:3px 0; color:var(--cc-heading); font-size:1.25rem; font-weight:800; }
+.cc-page-panel p { margin:0; color:var(--cc-muted); font-size:.85rem; line-height:1.5; }

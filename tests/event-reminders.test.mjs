@@ -28,6 +28,43 @@ test('reminders persist across handler instances, retries are idempotent and rep
   await second.set(state.request({minutesBefore:15,token})); assert.equal(state.records.get(state.record()).revision,2);
   await second.remove(request); assert.equal((await second.get(request)).reminder.status,'cancelled');
 });
+test('registration reminders resolve only approved registration records and exact backend UTC schedule',async()=>{
+  const state=setup();
+  state.records.set('registrationEvents/registration',{status:'approved',date:'2026-10-12',startTime:'18:00',startAt:'2026-10-12T07:00:00Z',title:'Workshop',privateDetails:{address:'PRIVATE'}});
+  const request=state.request({eventId:'registration',eventCollection:'registrationEvents',minutesBefore:30,token});
+  const result=await state.api.set(request);
+  assert.equal(result.reminder.eventStartAt,Date.parse('2026-10-12T07:00:00Z'));
+  assert.equal(state.records.get(state.record()).eventCollection,'registrationEvents');
+  assert.equal((await state.api.get(state.request({eventId:'registration'}))).reminder,null,'Collections cannot collide');
+  state.tick(Date.parse('2026-10-12T06:31:00Z'));
+  const sent=[]; await state.api.process(state.record().split('/')[1],async payload=>sent.push(payload));
+  assert.equal(sent.length,1); assert.equal(sent[0].body,'Workshop');
+  assert.equal(JSON.stringify(sent).includes('PRIVATE'),false);
+});
+test('pending, deleted and date-only registrations cannot schedule reminders or use invented times',async()=>{
+  for(const changes of [{status:'pending'},{deletedAt:'now'},{startTime:'',startAt:null}]) {
+    const state=setup();
+    state.records.set('registrationEvents/registration',{status:'approved',startTime:'18:00',startAt:'2026-10-12T07:00:00Z',...changes});
+    await assert.rejects(state.api.set(state.request({eventId:'registration',eventCollection:'registrationEvents',minutesBefore:30,token})));
+    assert.equal(state.record(),undefined);
+  }
+  const state=setup();
+  await assert.rejects(state.api.set(state.request({eventCollection:'users',minutesBefore:30,token})),/Unsupported/);
+});
+test('registration cancellation, deletion and schedule changes are rechecked by reminder worker',async()=>{
+  for(const mode of ['cancelled','deleted','rescheduled']) {
+    const state=setup(), id='registration';
+    state.records.set('registrationEvents/'+id,{status:'approved',startTime:'18:00',startAt:'2026-10-12T07:00:00Z'});
+    await state.api.set(state.request({eventId:id,eventCollection:'registrationEvents',minutesBefore:30,token}));
+    if(mode==='deleted')state.records.delete('registrationEvents/'+id);
+    else if(mode==='cancelled')state.records.get('registrationEvents/'+id).status='cancelled';
+    else state.records.get('registrationEvents/'+id).startAt='2026-10-12T08:00:00Z';
+    state.tick(Date.parse('2026-10-12T06:31:00Z'));
+    let sent=0;await state.api.process(state.record().split('/')[1],async()=>sent++);
+    assert.equal(sent,0);
+    assert.equal(state.records.get(state.record()).status,mode==='rescheduled'?'pending':'cancelled');
+  }
+});
 test('invalid, past, inactive, unavailable and unregistered-token reminder requests do not save',async()=>{
   for(const mode of ['past','inactive','hidden','token','anonymous']) {
     const state=setup();
