@@ -311,6 +311,7 @@ async function geocodeImportRows(rows) {
 
 export default function AdminDashboard({ events, user, profile, setPage, setEditingEvent, handleDelete, handleCopy }) {
   const [tab,            setTab]            = useState('overview');
+  const [eventManagementTab, setEventManagementTab] = useState('regular');
   const [hijriSettings,  setHijriSettings]  = useState({ adjustmentDays: 0, anchorDate: '', overrides: [] });
   const [anchorDate,     setAnchorDate]     = useState('');
   const [anchorMonth,    setAnchorMonth]    = useState('');
@@ -1392,7 +1393,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   };
   return (
     <div className="cc-events-admin">
-      <header className="cc-admin-header"><h1>Admin Dashboard</h1><p>{profile?.fullName || user?.email} · <RoleBadge role={profile?.role}/></p><p>{isSuperAdmin ? 'All locations' : adminCity} · Events</p></header>
+      <header className="cc-admin-header"><p>{profile?.fullName || user?.email} · <RoleBadge role={profile?.role}/></p><p>{isSuperAdmin ? 'All locations' : adminCity} · Events</p></header>
       {tab === 'overview' ? <AdminActionPanels groups={adminGroups} onSelect={setTab}/> : <nav className="cc-admin-tool-nav" aria-label="Admin tools"><button className="btn-light" onClick={() => setTab('overview')}>← Admin Dashboard</button><span>{adminGroups.flatMap(group => group.items).find(item => item[0] === tab)?.[1]}</span></nav>}
 
       {tab === 'troubleshooting' && <DiagnosticsRegister user={user} profile={profile}/>}
@@ -1400,8 +1401,21 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
       {tab === 'import' && <section className="card"><h3>Export Upcoming Events</h3><p>Download upcoming events within your administrator access.</p><button disabled={adminEvents === null} onClick={exportUpcoming}>Download upcoming events CSV</button></section>}
       {tab === 'users' && renderSummaryPanels(userSummaryPanels, userPanelFilter, applyUserSummaryFilter)}
       {tab === 'users' && isSuperAdmin && <RegistrationEventPanel scope="review" user={user} profile={profile} onCalendar={() => setPage('calendar')}/>}
-      {tab === 'events' && <RegistrationEventPanel scope="management" city={adminCity} user={user} profile={profile} onCalendar={() => setPage('calendar')}/>}
-      {tab === 'events' && adminEvents !== null && renderSummaryPanels(eventSummaryPanels, adminEventPanelFilter, applyEventSummaryFilter)}
+      {tab === 'events' && <div className="card registration-actions" role="tablist" aria-label="Event management">
+        {[['regular', 'Regular Events'], ['registration', 'Registration only Events']].map(([key, label]) => <button type="button" key={key}
+          id={`event-management-tab-${key}`} role="tab" aria-selected={eventManagementTab === key} aria-controls={`event-management-panel-${key}`}
+          tabIndex={eventManagementTab === key ? 0 : -1} className={eventManagementTab === key ? '' : 'btn-light'}
+          onClick={() => setEventManagementTab(key)} onKeyDown={event => {
+            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === 'Home' ? 'regular' : event.key === 'End' ? 'registration' : key === 'regular' ? 'registration' : 'regular';
+            setEventManagementTab(next);
+            document.getElementById(`event-management-tab-${next}`)?.focus();
+          }}>{label}</button>)}
+      </div>}
+      {tab === 'events' && eventManagementTab === 'registration' && <section role="tabpanel" id="event-management-panel-registration" aria-labelledby="event-management-tab-registration" tabIndex={0}>
+        <RegistrationEventPanel scope="management" city={adminCity} user={user} profile={profile} onCalendar={() => setPage('calendar')}/>
+      </section>}
 
       {/* Global message */}
       {msg.text && (
@@ -1655,8 +1669,9 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
       )}
 
       {/* ── EVENTS TAB ── */}
-      {tab === 'events' && (
-        <>
+      {tab === 'events' && eventManagementTab === 'regular' && (
+        <section role="tabpanel" id="event-management-panel-regular" aria-labelledby="event-management-tab-regular" tabIndex={0}>
+          {adminEvents !== null && renderSummaryPanels(eventSummaryPanels, adminEventPanelFilter, applyEventSummaryFilter)}
           {adminEvents === null && (
             <div className="card center">
               <p style={{ color:'var(--muted)' }}>Loading events…</p>
@@ -1804,7 +1819,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
             </>
           )}
           <style>{`@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.3}}`}</style>
-        </>
+        </section>
       )}
 
       {/* ── REPAIR TAB ── */}

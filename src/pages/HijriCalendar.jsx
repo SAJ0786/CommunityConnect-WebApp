@@ -143,10 +143,6 @@ export default function HijriCalendar({ selectedCity }) {
 
   return (
     <main className="hijri-page">
-      <header className="hijri-page-title">
-        <h1><Moon size={26} aria-hidden="true"/> Hijri Calendar</h1><p>Dates, prayer times and quick conversion</p>
-      </header>
-
       {loadError && <p role="alert">{loadError}</p>}
       {loading ? (
         <div className="card hijri-loading">Loading Hijri calendar...</div>

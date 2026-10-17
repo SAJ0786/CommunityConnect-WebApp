@@ -268,7 +268,6 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
   return (
     <>
       <div className="card">
-        <h2 style={{ margin: '0 0 6px' }}>Recurring Event</h2>
         <p className="small" style={{ margin: '0 0 16px', color: 'var(--muted)' }}>
           Create repeating events from one shared set of details. Dates are previewed before saving.
         </p>

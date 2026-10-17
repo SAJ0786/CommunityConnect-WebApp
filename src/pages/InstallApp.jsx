@@ -10,10 +10,6 @@ export default function InstallApp() {
         background: 'var(--card,var(--cc-surface))', borderRadius: 22, padding: 24,
         boxShadow: '0 8px 30px color-mix(in srgb, var(--cc-shadow-base) 8%, transparent)', border: '1px solid var(--border)',
       }}>
-        <h2 style={{ margin: '0 0 16px', fontSize: '1.125rem', fontFamily: 'var(--font)', fontWeight: 900 }}>
-          📲 Install App
-        </h2>
-
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
           {[['iphone', '🍎 iPhone'], ['android', '🤖 Android']].map(([key, label]) => (
             <button key={key} onClick={() => setInstallPlatform(key)} style={{

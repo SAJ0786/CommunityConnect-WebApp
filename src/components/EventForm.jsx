@@ -20,7 +20,7 @@ export default function EventForm({
   initialEvent, onSubmit, submitLabel = null,
   user, profile, existingEvents = EMPTY_EVENTS,
   seriesMode = false, saving = false, onCancel = null, initialDate = '',
-  registrationMode = false, posterControls = null, notesMaxLength = 500
+  registrationMode = false, posterControls = null, registrationSections = {}, notesMaxLength = 500
 }) {
   const id = useId();
   const userName  = profile?.fullName  || user?.displayName || user?.email?.split('@')[0] || '';
@@ -310,14 +310,23 @@ export default function EventForm({
       imageUrl,
       imagePath,
       eventTypeDisplay: resolvedType,    // human-readable label (e.g. "Aqeeqa")
-      speakerName: showReligious ? form.speakerName : '',
-      reciters:    showReligious ? (form.reciters || []).filter(r => r.name?.trim()) : [],
+      speakerName: showReligious || registrationMode ? form.speakerName : '',
+      reciters:    showReligious || registrationMode ? (form.reciters || []).filter(r => r.name?.trim()) : [],
     });
   };
 
+  const venueControls = <><label>{registrationMode ? 'Private venue address *' : 'Address *'}</label>
+    <AddressAutocomplete value={form.address} onChange={addr => {
+      setForm(p => ({ ...p, address:addr }));
+      clearValidationError('address');
+    }} required invalid={!!validationErrors.address} label={registrationMode ? 'Private venue address' : undefined}/>
+    {validationErrors.address && <p className="field-error">{validationErrors.address}</p>}
+  </>;
+
   return (
     <form className="card event-form" onSubmit={submit} noValidate>
-      <h2>{registrationMode ? 'Event details' : initialEvent?.__editSeries ? 'Shared Series Details' : initialEvent ? 'Edit Event' : 'Add Event'}</h2>
+      {initialEvent?.__editSeries && <h2>Shared Series Details</h2>}
+      {registrationMode && registrationSections.title}
       {Object.keys(validationErrors).length > 0 && (
         <div className="event-validation-summary" role="alert">
           <strong>Complete the highlighted mandatory fields:</strong>
@@ -541,20 +550,7 @@ export default function EventForm({
 
 
 
-      {/* Address */}
-      <label>{registrationMode ? 'Private venue address *' : 'Address *'}</label>
-      <AddressAutocomplete
-        value={form.address}
-        onChange={addr => {
-          setForm(p => ({ ...p, address: addr }));
-          clearValidationError('address');
-        }}
-        required
-        invalid={!!validationErrors.address}
-        label={registrationMode ? 'Private venue address' : undefined}
-      />
-      {validationErrors.address && <p className="field-error">{validationErrors.address}</p>}
-
+      {!registrationMode && venueControls}
       {form.timeMode === 'prayer' && (
         <div className="notice" style={{ marginTop: 10, marginBottom: 14 }}>
           <label htmlFor={id + '-prayer'} style={{ marginTop: 0 }}>Prayer Time *</label>
@@ -618,6 +614,12 @@ export default function EventForm({
         </div>
       )}
 
+      {registrationMode && form.timeMode === 'prayer' && <><label htmlFor={id + '-prayer-end'}>End time (optional)</label><input id={id + '-prayer-end'} type="time" value={form.endTime || ''} onChange={e => update('endTime', e.target.value)}/></>}
+      {registrationMode && registrationSections.closing?.(form)}
+
+      {registrationMode && venueControls}
+      {registrationMode && registrationSections.venue}
+
       {/* Event type */}
       <label htmlFor={id + '-type'}>Event Type *</label>
       <select id={id + '-type'} value={form.eventType} onChange={e => handleEventTypeChange(e.target.value)}>
@@ -637,6 +639,8 @@ export default function EventForm({
           />
         </>
       )}
+
+      {registrationMode && registrationSections.frequency}
 
       {/* Subject — optional, shown for all event types */}
       <label htmlFor={id + '-subject'}>
@@ -667,10 +671,10 @@ export default function EventForm({
       </select>
 
       {/* Speaker + Reciters — Majlis, Milad, Custom */}
-      {showReligious && (
+      {(showReligious || registrationMode) && (
         <div className="notice">
           <p className="small" style={{ margin: '0 0 10px' }}>
-            Speaker and reciters available for <strong>{isCustom ? (form.customEventType || 'Custom') : form.eventType}</strong> events.
+            {registrationMode ? 'Speaker and reciters are optional.' : <>Speaker and reciters available for <strong>{isCustom ? (form.customEventType || 'Custom') : form.eventType}</strong> events.</>}
           </p>
           <label htmlFor={id + '-speaker'}>Speaker</label>
           <input id={id + '-speaker'} maxLength={registrationMode ? 160 : undefined} value={form.speakerName || ''} onChange={e => update('speakerName', e.target.value)} placeholder="Speaker name" />
@@ -678,6 +682,7 @@ export default function EventForm({
         </div>
       )}
 
+      {registrationMode && registrationSections.settings}
       {onCancel && (
         <button type="button" className="btn-muted" onClick={onCancel} style={{ marginRight: 8 }}>
           Cancel

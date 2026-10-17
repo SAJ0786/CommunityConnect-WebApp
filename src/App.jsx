@@ -749,7 +749,7 @@ export default function App() {
           )}
 
           <RegistrationContext.Provider key={[user.uid, profile?.role, profile?.adminCity].join(':')} value={{ api: registrationApi, open: openRegistration, revision: registrationRevision, refresh: () => setRegistrationRevision(value => value + 1) }}>
-          {activePage !== 'businesses' ? <PagePanel page={activePage}/> : isGuest && <PagePanel title="Business Directory" subtitle="Discover and support your local community."/>}
+          {!['businesses', 'registration', 'registration-create', 'notifications'].includes(activePage) && <PagePanel page={activePage}/>}
           {registrationFeed.error && activePage === 'home' && <div className="card" role="alert">{registrationFeed.error} <button onClick={() => setRegistrationRevision(value => value + 1)}>Retry registration events</button></div>}
           <Suspense fallback={<PageLoadingFallback />}>
           {activePage === 'businesses' && (!isGuest && import.meta.env.VITE_DIRECTORY_WORKSPACE_ENABLED === 'true' && import.meta.env.VITE_READ_ONLY_PREVIEW !== 'true'

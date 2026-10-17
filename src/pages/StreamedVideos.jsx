@@ -86,12 +86,6 @@ export default function StreamedVideos({ isGuest }) {
   return (
     <section style={{ padding:'8px 16px 32px' }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, marginBottom:14 }}>
-        <div>
-          <h2 style={{ margin:'0 0 4px' }}>Streamed Videos</h2>
-          <p className="small" style={{ margin:0, color:'var(--muted)' }}>
-            Community Events Australia live-stream archive
-          </p>
-        </div>
         <button className="btn-light" onClick={loadVideos} disabled={loading} aria-label="Refresh streamed videos">
           {loading ? 'Loading...' : 'Refresh'}
         </button>

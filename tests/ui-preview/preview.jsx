@@ -91,7 +91,7 @@ function Preview() {
   const props = { events: status==='empty'?[]:[...eventRows,...(fixture ? fixture.publicRows().map(registrationEventCard) : [])], user:auth.currentUser || user, profile, setProfile, setPage, setEditingEvent, handleDelete:noop, handleCopy:noop, isGuest:guest, loadEvents:async()=>setEventRows([...window.__uiEvents]), savedIds:['fixture-0'], onSaveToggle:noop, onStreamStart:noop, selectedCity:city, setSelectedCity:setCity, focusEventId, setFocusEventId, onSaved:()=>{setEventRows([...window.__uiEvents]);setPage('my');}, eventsLoading:status==='loading', offlineMode:status==='cached', editingEvent, event:events[0], role:'host', nativeStream:{mode:'external'}, onClose:()=>setPage('home'), onCancel:()=>setPage('home') };
   return <>
     <aside className="ui-review-bar"><strong>Offline UI review</strong><span>Synthetic data · no Firebase · no sign-in</span>
-      <label>Screen <select aria-label="Review screen" value={page} onChange={e=>setPage(e.target.value)}>{[...Object.keys(screens),'directory'].map(p=><option key={p}>{p}</option>)}</select></label>
+      <label>Screen <select aria-label="Review screen" value={page} onChange={e=>setPage(e.target.value)}>{[...Object.keys(screens),'directory','registration-create'].map(p=><option key={p}>{p}</option>)}</select></label>
       <label><input type="checkbox" checked={guest} onChange={e=>setGuest(e.target.checked)}/> Guest layout</label>
       <label>Role <select aria-label="Review role" value={persona} onChange={e=>{setPersona(e.target.value);setProfile(current=>({...current,role:['member','owner'].includes(e.target.value)?'user':e.target.value}));}}>{['member','owner','admin','superAdmin'].map(role=><option key={role}>{role}</option>)}</select></label>
       <label>State <select aria-label="Review state" value={status} onChange={e=>setStatus(e.target.value)}>{['ready','empty','loading','cached','error'].map(s=><option key={s}>{s}</option>)}</select></label>
@@ -103,8 +103,8 @@ function Preview() {
     <main className={`ui-review-content ${page==='home'?'is-home':''}`} key={page+'-'+guest+'-'+persona}>
       <RegistrationContext.Provider value={fixture ? { api:fixture.api, revision:registrationRevision, refresh:()=>setRegistrationRevision(value=>value+1),
         open:(event,action)=>{ if(guest) { window.__registrationGuestPrompt=true; return; } setOperation({id:event.id,action}); setPage('registration'); } } : null}>
-      {page !== 'directory' && <PagePanel page={page}/>}
-      {page === 'registration' && operation ? <RegistrationWorkspace api={fixture.api} enabled operationsOnly initialEventId={operation.id} initialAction={operation.action}
+      {!['directory', 'registration', 'registration-create'].includes(page) && <PagePanel page={({hijri:'hijri-calendar',bulk:'bulkshare',videos:'streams',series:'add',stream:'streams',precheck:'streams'})[page] || page}/>}
+      {(page === 'registration' && operation || page === 'registration-create') ? <RegistrationWorkspace api={fixture.api} enabled operationsOnly initialCreate={page === 'registration-create'} initialEventId={operation?.id} initialAction={operation?.action}
         user={props.user} profile={profile} city={city} onSubmitted={event=>{setFocusEventId(event.id);setOperation(null);setRegistrationRevision(value=>value+1);setPage('home');}} onBack={()=>{setOperation(null);setRegistrationRevision(value=>value+1);setPage('home');}}/>
         :
       page==='directory'?<BusinessDirectoryView businesses={status==='empty'?[]:businesses} loading={status==='loading'} error={status==='error'} fromCache={status==='cached'} selectedCity={city} setSelectedCity={setCity} onRetry={()=>setStatus('ready')} requestLocation={async()=>{if(status==='error')throw new Error('Location denied in the synthetic review.');return {latitude:-33.81,longitude:151};}}/>:<Screen {...props}/>

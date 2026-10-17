@@ -74,7 +74,7 @@ export default function AddressAutocomplete({ value = {}, onChange, required, in
 
   // No API key → manual fields
   if (!hasGoogleMapsKey()) {
-    return <ManualAddress value={value} onChange={onChange} required={required} />;
+    return <ManualAddress value={value} onChange={onChange} required={required} label={label} invalid={invalid} />;
   }
 
   return (
@@ -116,7 +116,7 @@ const inputStyle = {
   boxSizing: 'border-box', color: 'var(--text)'
 };
 
-function ManualAddress({ value = {}, onChange, required }) {
+function ManualAddress({ value = {}, onChange, required, label, invalid }) {
   const upd = (k, v) => {
     const n = { ...value, [k]: v, latitude: null, longitude: null, placeId: '' };
     n.fullAddress = `${n.street||''}, ${n.suburb||''} ${n.state||''} ${n.postcode||''}`.trim();
@@ -124,7 +124,7 @@ function ManualAddress({ value = {}, onChange, required }) {
   };
   return (
     <>
-      <input required={required} placeholder="Street number and name"
+      <input required={required} aria-label={label} aria-invalid={invalid} placeholder="Street number and name"
         value={value.street || ''} onChange={e => upd('street', e.target.value)}
         style={{ ...inputStyle, marginBottom: 12 }} />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

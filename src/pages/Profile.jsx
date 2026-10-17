@@ -229,7 +229,7 @@ export default function Profile({ user, profile, setProfile }) {
 
   return (
     <div className="card profile-page">
-      <h2>Profile &amp; Settings</h2><p className="small">Your account and app preferences</p><a className="cc-feedback-card" href="/support.html">Feedback &amp; Report a Problem<span>App feedback, technical issues, account help and other enquiries.</span></a>
+      <a className="cc-feedback-card" href="/support.html">Feedback &amp; Report a Problem<span>App feedback, technical issues, account help and other enquiries.</span></a>
 
       <div style={{ padding:16, border:'1px solid var(--border)', borderRadius:8, background:'var(--card-alt, var(--cc-background))', marginBottom:16 }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, marginBottom:editingDetails ? 14 : 0 }}>
@@ -527,5 +527,4 @@ export default function Profile({ user, profile, setProfile }) {
     </div>
   );
 }
-
 

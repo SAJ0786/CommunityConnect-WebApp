@@ -45,13 +45,6 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
 
   return (
     <>
-      <div className="card">
-        <h2 style={{ margin: '0 0 4px' }}>My Events</h2>
-        <p className="small" style={{ margin: 0, color: 'var(--muted)' }}>
-          Events you created and your registrations. Registration events appear publicly after Superadmin approval.
-        </p>
-      </div>
-
       {loading && (
         <div className="card center">
           <p style={{ color: 'var(--muted)' }}>Loading your events…</p>

@@ -7,6 +7,7 @@ import { directoryQuery, PUBLIC_DIRECTORY_PATH } from '../utils/businessRoutes.m
 import { usePublicBusinesses } from '../utils/usePublicDirectory';
 
 import CitySelector from '../components/CitySelector';
+import PagePanel from '../components/PagePanel';
 import BrowseStrip from '../components/BrowseStrip';
 import BusinessBrowseCard from '../components/BusinessBrowseCard';
 import { BUSINESS_CATEGORIES } from '../business/categories.mjs';
@@ -20,7 +21,7 @@ const QUICK_FILTERS = [
 ];
 
 // Presentational export also supports deterministic offline component testing.
-export function BusinessDirectoryView({ businesses, loading, error, fromCache, selectedCity, setSelectedCity, onRetry, requestLocation = requestBusinessLocation, savedIds = null, onOpenBusiness, onPromotions, categoryCatalogue = BUSINESS_CATEGORIES }) {
+export function BusinessDirectoryView({ businesses, loading, error, fromCache, selectedCity, setSelectedCity, onRetry, requestLocation = requestBusinessLocation, savedIds = null, onOpenBusiness, onPromotions, categoryCatalogue = BUSINESS_CATEGORIES, showPagePanel = true }) {
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('q') || '');
   const [category, setCategory] = useState(() => new URLSearchParams(window.location.search).get('category') || '');
   const [quick, setQuick] = useState('');
@@ -75,9 +76,9 @@ export function BusinessDirectoryView({ businesses, loading, error, fromCache, s
   }, [returnQuery, loading, error]);
 
   return (
-    <main className="business-directory" aria-labelledby="business-directory-title">
+    <main className="business-directory" aria-labelledby={showPagePanel ? 'business-directory-title' : undefined} aria-label={showPagePanel ? undefined : 'Business directory results'}>
+      {showPagePanel && <PagePanel headingId="business-directory-title" title="Business Directory" subtitle="Discover and support your local community."/>}
       <header className="business-browse-header">
-        <h1 id="business-directory-title">Business Directory</h1>
         <div className="business-browse-city"><CitySelector label="Your city" value={selectedCity}
           onChange={value => { setSelectedCity(value); setCategory(''); setService(''); }} /></div>
       </header>

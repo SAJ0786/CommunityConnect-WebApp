@@ -39,7 +39,6 @@ export default function AddEvent({ user, profile, onSaved, setPage, events = [],
   if (!mode) {
     return (
       <div className="card" style={{ maxWidth: 760, margin: '18px auto' }}>
-        <h2 style={{ margin: '0 0 6px' }}>Add Event</h2>
         <p className="small" style={{ color: 'var(--muted)', margin: '0 0 16px' }}>
           Choose how this event should be created.
         </p>

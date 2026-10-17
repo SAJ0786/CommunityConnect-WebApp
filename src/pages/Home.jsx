@@ -249,17 +249,6 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
       {viewMode === 'list' && (<>
       {browseControls}
 
-      {/* ── PINNED header (does NOT scroll away) ── */}
-      <div style={{ position:'sticky', top:0, zIndex:10,
-        background:'var(--bg,var(--cc-background))', paddingTop:4 }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-          padding:'6px 18px 8px' }}>
-          <h2 style={{ margin:0, fontSize:'1.125rem', fontWeight:700, color:'var(--text)' }}>
-            Events
-          </h2>
-        </div>
-      </div>
-
       {/* ── Filters (toggle from filter icon) ── */}
       {showFilters && (
         <EventFilters key={selectedCity + browseRevision} events={filterableEvents} onChange={applyAdvanced} upcomingOnlyOnEmpty />

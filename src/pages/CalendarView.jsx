@@ -124,7 +124,7 @@ export default function CalendarView({ events = [], user, profile, setPage,
             border:'none', cursor:'pointer', color:'var(--cc-on-primary)', fontSize:'1.375rem', fontWeight:800,
             display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1,
             boxShadow:'0 2px 8px color-mix(in srgb, var(--cc-accent-strong) 30%, transparent)' }}>‹</button>
-          <h2 style={{ margin:0, fontSize:'1.125rem', fontWeight:800 }}>Sync Calendar</h2>
+          <span>Calendar subscription</span>
         </div>
         <CalendarSync user={user} />
       </div>
@@ -133,12 +133,6 @@ export default function CalendarView({ events = [], user, profile, setPage,
 
   return (
     <div className="calendar-page" style={{ padding: '8px 0 112px', overflowX: 'hidden' }}>
-
-      {/* Header: title */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between',
-        padding:'4px 16px 12px' }}>
-        <h2 style={{ margin:0, fontSize:'1.125rem', fontWeight:800 }}>Calendar</h2>
-      </div>
 
       <div style={{ padding:'0 16px 12px' }}>
         <CitySelector value={selectedCity} onChange={setSelectedCity} />

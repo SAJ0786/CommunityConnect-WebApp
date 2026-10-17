@@ -26,19 +26,7 @@ export default function Favourites({ user, profile, events, setPage, setEditingE
 
   return (
     <>
-      <div className="card" style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <div>
-          <h2 style={{ margin:'0 0 4px' }}>⭐ Favourites</h2>
-          <p className="small" style={{ margin:0, color:'var(--muted)' }}>
-            Events you've saved. Tap ⭐ on any event to save it here.
-          </p>
-        </div>
-        {saved.length > 0 && (
-          <span style={{ fontSize:'0.8125rem', color:'var(--teal)', fontWeight:700 }}>
-            {saved.length}
-          </span>
-        )}
-      </div>
+      {saved.length > 0 && <p className="card">{saved.length} saved event{saved.length === 1 ? '' : 's'}</p>}
 
       {loading && (
         <div className="card center">

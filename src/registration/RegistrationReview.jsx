@@ -6,6 +6,7 @@ export default function RegistrationReview({ detail, poster, busy, onPoster }) {
   return <section aria-label="Submitted event details">
     {detail.pendingChanges && <p>These are the submitted changes. The last approved version remains published until approval.</p>}
     <h3>{event.title}</h3>
+    {event.seriesId && <p>Occurrence {event.occurrenceIndex + 1} of {event.occurrenceCount}. Registration, capacity and approval apply only to this occurrence.</p>}
     <p>{event.eventType} · {event.date} · {event.startTime || 'Time not provided'}{event.endTime ? ` - ${event.endTime}${event.endTime < event.startTime ? ' (following day)' : ''}` : ''} · {event.suburb}</p>
     {event.hostName && <p>Host: {event.hostName}</p>}
     {event.organiserName && <p>Organiser: {event.organiserName}</p>}

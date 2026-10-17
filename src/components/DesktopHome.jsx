@@ -194,7 +194,6 @@ export default function DesktopHome({
 
       <div className="desktop-title-row">
         <div>
-          <h1>Events</h1>
           <p>{totalCount} event{totalCount === 1 ? '' : 's'} available</p>
         </div>
       </div>

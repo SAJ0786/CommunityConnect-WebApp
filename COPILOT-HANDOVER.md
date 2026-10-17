@@ -10,6 +10,18 @@ See [release status](docs/RELEASE-STATUS-2026-10-12.md) and
 
 ## Release state
 
+- Current source follow-up, **not deployed**: panel-only page headings, one
+  registration details form in the user-requested field sequence, recurring
+  registrations with separate occurrence capacity/closing and date preview,
+  and Regular Events / Registration only Events tabs in Admin Event Management.
+  The matching Native backend/client source is
+  `1efe7330a316c98f204ddcd4e7cd851d653a0b8a`; it is not deployed or included in
+  Android tester build 97. A future coordinated release must deploy the
+  registration codebase with its new twentieth `createRegistrationSeries`
+  callable before Web Hosting, and build fresh Native binaries. Existing
+  production configuration, reminders and delivery holds must remain unchanged.
+  See the registration README for the bounded recurrence contract, true Hijri
+  cadence, per-event approval/edit semantics and private-poster quota recovery.
 - Production URL: https://communityconnect.siza.info.
 - Web follow-up source: `9729f2f36757d6995a69e854a6fb45eee3c59b79`.
   The user explicitly authorized coordinated backend/Web deployment and a
@@ -126,6 +138,14 @@ See [release status](docs/RELEASE-STATUS-2026-10-12.md) and
    No rules/index migration or data backfill is part of this release.
 
 ## Verification evidence
+
+Current source follow-up: 283 root Node tests, 21 actual React workflows,
+95 responsive layouts, phone/desktop panel-heading uniqueness, exact unified
+field order, recurrence selectors and admin event-tab isolation all pass.
+Series coverage includes true Hijri cadence, DST-safe closing offsets, per-date
+prayer clocks, separate capacity/closing, per-occurrence private poster uploads
+and quota-aware retry without recreating the series. Unified Web build passes.
+These are synthetic/local checks, not a new deployment or device acceptance.
 
 At Web source `9729f2f`: 277 root Node tests, 18 actual React workflows,
 95 responsive layouts, phone/desktop unified registration scenarios (including

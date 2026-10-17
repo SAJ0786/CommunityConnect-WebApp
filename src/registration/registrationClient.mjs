@@ -10,8 +10,12 @@ export function createRegistrationClient(call, { enabled = false } = {}) {
     list: ({ scope = 'public', city, cursor = null } = {}) => invoke('listRegistrationEvents', { scope, ...(city ? { city } : {}), cursor }),
     load: eventId => invoke('getRegistrationEvent', { eventId }),
     save: ({ eventId, city, expectedRevision, createKey, draft }) => {
-      const { poster, ...details } = draft;
+      const { poster, frequency, repeatFrequency, occurrenceCount, occurrenceSettings, seriesId, occurrenceIndex, recurrenceRule, ...details } = draft;
       return invoke('saveRegistrationEvent', { ...(eventId ? { eventId, expectedRevision } : { createKey }), city, draft: details });
+    },
+    createSeries: ({ city, createKey, draft, recurrence, occurrences }) => {
+      const { poster, frequency, repeatFrequency, occurrenceCount, occurrenceSettings, seriesId, occurrenceIndex, recurrenceRule, ...details } = draft;
+      return invoke('createRegistrationSeries', { city, createKey, draft:details, recurrence, occurrences });
     },
     approve: (eventId, expectedRevision) => invoke('approveRegistrationEvent', { eventId, expectedRevision }),
     submit: submission => invoke('submitEventRegistration', submission),

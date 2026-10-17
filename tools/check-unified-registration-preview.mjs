@@ -13,9 +13,45 @@ const start = async (width, screen = 'home', extra = '') => {
   await page.setViewportSize({ width, height:850 });
   await page.goto(`http://127.0.0.1:5182/?registration=1&screen=${screen}${extra}`);
   await page.locator('.cc-page-panel').first().waitFor();
+  assert.equal(await page.locator('.cc-page-panel h1').count(),1);
+  assert.equal(await page.locator('h1').count(),1);
 };
 try {
   for (const width of [390,1440]) {
+    for (const [screen,title] of [['profile','Profile & Settings'],['my','My Events'],['favourites','Favourites'],['calendar','Event calendar'],['hijri','Hijri calendar'],['install','Install App'],['videos','Streamed videos'],['search','Find events'],['bulk','Share events'],['directory','Business Directory']]) {
+      await start(width,screen);
+      await page.getByRole('heading',{level:1,name:title,exact:true}).waitFor();
+      assert.equal(await page.getByRole('heading',{name:title,exact:true}).count(),1,`${screen} uses only its panel heading at ${width}px`);
+    }
+    await start(width, 'registration-create');
+    assert.equal(await page.locator('.event-form').count(),1);
+    const eventForm=page.locator('.event-form');
+    const controls=[
+      eventForm.getByLabel('Event title',{exact:true}),
+      eventForm.getByLabel('Private poster (optional)',{exact:true}),
+      eventForm.getByLabel('I am adding this event on behalf of someone else',{exact:true}),
+      eventForm.getByLabel('Organiser Type',{exact:false}),
+      eventForm.getByLabel('Host Name *',{exact:true}),
+      eventForm.getByLabel('Host Phone Number',{exact:false}),
+      eventForm.locator('input[type=date]'),
+      eventForm.getByLabel('Start time (optional, event city timezone)',{exact:true}),
+      eventForm.getByLabel('Registration closes (optional)',{exact:false}),
+      eventForm.getByLabel('Private venue address',{exact:true}),
+      eventForm.getByLabel('Event Type *',{exact:true}),
+      eventForm.getByLabel('Frequency',{exact:true}),
+      eventForm.getByLabel('Subject',{exact:false}),
+      eventForm.getByLabel('Notes',{exact:false}),
+      eventForm.getByLabel('Audience Type *',{exact:true}),
+      eventForm.getByLabel('Speaker',{exact:true}),
+    ];
+    const order=[];
+    for(const control of controls) { await control.waitFor();order.push(await control.evaluate(element=>[...element.closest('form').querySelectorAll('input,select,textarea')].indexOf(element))); }
+    assert.ok(order.every((position,index)=>index===0||position>order[index-1]),`Requested field sequence at ${width}: ${order}`);
+    await eventForm.getByLabel('Frequency',{exact:true}).selectOption('recurring');
+    assert.deepEqual(await eventForm.getByLabel('Repeat every',{exact:true}).locator('option').allTextContents(),['Daily','Weekly','Fortnightly','Monthly','Yearly']);
+    await eventForm.getByLabel('Repeat every',{exact:true}).selectOption('fortnight');
+    assert.equal(await eventForm.getByLabel('Number of occurrences',{exact:true}).inputValue(),'4');
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
     await start(width);
     await page.getByLabel('Review role').selectOption('member');
     const card = page.locator('#event-registration-approved');
@@ -74,6 +110,20 @@ try {
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 2));
 
     await start(width, 'admin');
+    await page.getByRole('button', { name:/^Event Management/ }).click();
+    const regularTab=page.getByRole('tab', {name:'Regular Events',exact:true});
+    const registrationTab=page.getByRole('tab', {name:'Registration only Events',exact:true});
+    await regularTab.waitFor();
+    assert.equal(await regularTab.getAttribute('aria-selected'),'true');
+    assert.equal(await page.getByRole('region',{name:'Registration event management'}).count(),0);
+    await registrationTab.click();
+    assert.equal(await registrationTab.getAttribute('aria-selected'),'true');
+    assert.equal(await page.locator('#event-management-panel-regular').count(),0);
+    await page.locator('#event-management-panel-registration .event-card').first().waitFor();
+    await registrationTab.press('ArrowLeft');
+    assert.equal(await regularTab.getAttribute('aria-selected'),'true');
+    assert.equal(await page.locator('#event-management-panel-registration').count(),0);
+    await page.getByRole('button',{name:'← Admin Dashboard',exact:true}).click();
     await page.getByRole('button', { name:/^User Management/ }).click();
     const approvals = page.getByRole('region', { name:'Pending event approvals' });
     await approvals.getByText('UnApproved', { exact:true }).waitFor();
@@ -132,7 +182,7 @@ try {
     assert.equal(await page.evaluate(() => window.__registrationGuestPrompt), true);
   }
   assert.deepEqual(errors, []);
-  console.log('Unified registration phone/desktop checks passed: filtering, private posters/address, attendee edit, host form/poster, global approval and guest sign-in.');
+  console.log('Unified registration phone/desktop checks passed: single panel headings, exact form field order, recurrence selectors, separate admin event tabs, filtering, private posters/address, attendee edit, host form/poster, global approval and guest sign-in.');
 } finally {
   await context.close(); await browser.close();
 }

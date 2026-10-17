@@ -29,7 +29,7 @@ export default function HostInbox({ user }) {
     catch (problem) { if (current === generation.current) setError(problem.message + ' Check the conversation before retrying.'); }
     finally { pending.current = false; if (current === generation.current) setBusy(false); }
   }
-  return <section className="card host-inbox"><h2>Host Inbox</h2>
+  return <section className="card host-inbox">
     {error && <p role="alert">{error}</p>}
     {loading ? <p role="status">Loading conversations…</p> : !thread ? <>
       {!threads.length && !error && <p>No conversations yet. Use Contact Host on an event to start one.</p>}

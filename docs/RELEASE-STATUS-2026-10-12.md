@@ -1,5 +1,18 @@
 # Community Connect release status — 12 October 2026
 
+## Source follow-up - 17 October 2026 (not deployed)
+
+Panel-only page headings, unified ordered registration event details, recurring
+registration creation and separate Regular Events / Registration only Events
+admin tabs are follow-up source changes, not part of the live Hosting release.
+The Native-owned backend prerequisite is
+`1efe7330a316c98f204ddcd4e7cd851d653a0b8a`, including the new
+`createRegistrationSeries` callable. A future authorized release must deploy that
+registration codebase before Hosting and provide new Native binaries; tester
+Android build 97 does not contain this follow-up. No new deployment, rules/index
+migration, registration reminder or notification activation is authorized by
+these source edits. See `COPILOT-HANDOVER.md` and `src/registration/README.md`.
+
 ## Staged registration review and normal-form follow-up live - 17 October 2026
 
 Production https://communityconnect.siza.info serves Web source

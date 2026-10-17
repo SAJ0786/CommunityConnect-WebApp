@@ -1,21 +1,39 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import EventForm from '../components/EventForm';
 import AnswerField from './AnswerField';
 import { FIELD_TYPES, FORM_TEMPLATES, NOTES_LIMIT, TERMS_LIMIT, closingDateError, consentLast, makeField, moveField, publicNotesError, publicSuburbError, templateFields } from './prototypeModel.mjs';
 import { normalisePrivateVenue } from './privateVenue.mjs';
 import { registrationDraftFromEventForm, registrationEventForm, validateRegistrationDraft } from './registrationViewModel.mjs';
+import { REGISTRATION_FREQUENCIES, registrationSeriesPlan } from './registrationRecurrence.mjs';
+import { getHijriSettings } from '../services/settingsService';
 
 // Private drafts stay in component memory only, never localStorage/IndexedDB.
 export default function RegistrationEditor({ initialDraft, initialStep = 'event', hasPoster = false, onRemovePoster, user, profile, templates, templateCursor, onMoreTemplates, busy, onSave, onSaveTemplate, onCancel }) {
+  const id = useId();
   const [draft, setDraft] = useState(initialDraft), [step, setStep] = useState(initialStep);
   const [error, setError] = useState(''), [templateName, setTemplateName] = useState('');
+  const [calendarSettings, setCalendarSettings] = useState(null);
   const serial = useRef(0), posterRead = useRef(0);
   useEffect(() => () => { posterRead.current++; }, []);
+  useEffect(() => {
+    let active = true;
+    getHijriSettings().then(settings => { if (active) setCalendarSettings(settings.overrides || []); })
+      .catch(() => { if (active) setError('Calendar settings could not be loaded. Reopen the editor before creating a recurring event.'); });
+    return () => { active = false; };
+  }, []);
   const update = (key, value) => setDraft(current => ({ ...current, [key]: value }));
   const change = (id, values) => update('fields', draft.fields.map(field => field.id === id ? { ...field, ...values } : field));
   const choose = template => { setDraft(current => ({ ...current, fields: consentLast(structuredClone(template.fields)), purpose: template.purpose || current.purpose })); setStep('form'); };
-  const validation = () => [...validateRegistrationDraft(draft), ...(!normalisePrivateVenue(draft.venue) ? ['Select a complete address with coordinates for the private map and directions.'] : [])];
-  const save = () => { const errors = validation(); setError(errors.join(' ')); if (!errors.length) onSave(draft); };
+  const validation = () => {
+    const errors = [...validateRegistrationDraft(draft), ...(!normalisePrivateVenue(draft.venue) ? ['Select a complete address with coordinates for the private map and directions.'] : [])];
+    if (draft.frequency === 'recurring') {
+      try {
+        if (!calendarSettings) throw new Error('Wait for calendar settings before creating a recurring event.');
+        registrationSeriesPlan(draft, calendarSettings);
+      } catch (problem) { errors.push(problem.message); }
+    }
+    return errors;
+  };
   const readPoster = async e => {
     const file = e.target.files?.[0], request = ++posterRead.current;
     if (!file) return;
@@ -25,18 +43,27 @@ export default function RegistrationEditor({ initialDraft, initialStep = 'event'
     reader.onerror = () => { if (request === posterRead.current) setError('The poster could not be read.'); };
     reader.readAsDataURL(file);
   };
-  const closeError = closingDateError(draft), notesError = publicNotesError(draft), suburbError = publicSuburbError(draft);
+  const notesError = publicNotesError(draft), suburbError = publicSuburbError(draft);
+  let seriesPlan = null, seriesError = '';
+  if (step === 'preview' && draft.frequency === 'recurring' && calendarSettings) {
+    try { seriesPlan = registrationSeriesPlan({ ...draft, occurrenceSettings:{} }, calendarSettings); } catch (problem) { seriesError = problem.message; }
+  }
   return <section><div className="registration-actions">{onCancel && <button type="button" disabled={busy} className="btn-light" onClick={onCancel}>Back to event</button>}{step !== 'event' && <button type="button" disabled={busy} className="btn-light" onClick={() => setStep('event')}>Event details</button>}{step === 'preview' && <button type="button" onClick={() => setStep('form')}>Edit form</button>}</div>
     {error && <p role="alert">{error}</p>}<fieldset disabled={busy} className="registration-fields">
       {step === 'event' && <div>
-        <label>Event title<input value={draft.title} maxLength={160} onChange={e => update('title', e.target.value)}/></label>
-        <h3>Private venue</h3><p>The full address, coordinates and poster are shown only to authorised attendees, organisers and administrators.</p>
-        <label>Public suburb<input value={draft.suburb} maxLength={100} aria-invalid={Boolean(suburbError)} aria-describedby="registration-suburb-error" onChange={e => update('suburb', e.target.value)}/></label><p id="registration-suburb-error" role={suburbError ? 'alert' : undefined}>{suburbError || 'Do not include the street address here.'}</p>
-        <label>Registration closes (optional)<input type="datetime-local" value={draft.closes} aria-invalid={Boolean(closeError)} aria-describedby="registration-closing-error" onChange={e => update('closes', e.target.value)}/><small id="registration-closing-error" role={closeError ? 'alert' : undefined}>{closeError || 'Must be an earlier day than the event. Blank closes at the start of event day in the city timezone.'}</small></label>
-        <label>Capacity (places)<input type="number" min="1" max="10000" value={draft.capacity} onChange={e => update('capacity', e.target.value)}/></label>
-        <label className="registration-check"><input type="checkbox" checked={draft.allowCancellation} onChange={e => update('allowCancellation', e.target.checked)}/>Allow attendee cancellation before event day</label>
         <EventForm initialEvent={registrationEventForm(draft)} user={user} profile={profile} registrationMode saving={busy} notesMaxLength={NOTES_LIMIT}
           submitLabel="Choose registration form" onSubmit={form => { setDraft(current => registrationDraftFromEventForm(current, form)); setStep('templates'); }}
+          registrationSections={{
+            title: <label>Event title<input required value={draft.title} maxLength={160} onChange={e => update('title', e.target.value)}/></label>,
+            closing: form => {
+              const closeError = closingDateError({ ...draft, date:form.eventDate });
+              return <label>Registration closes (optional)<input type="datetime-local" value={draft.closes} aria-invalid={Boolean(closeError)} aria-describedby="registration-closing-error" onChange={e => update('closes', e.target.value)}/><small id="registration-closing-error" role={closeError ? 'alert' : undefined}>{closeError || 'Must be an earlier day than the event. Blank closes at the start of event day in the city timezone.'}</small></label>;
+            },
+            venue: <><p>The full address, coordinates and poster are visible only to registered attendees, the host and authorised administrators. Other users see only the public suburb.</p><label>Public suburb<input value={draft.suburb} maxLength={100} aria-invalid={Boolean(suburbError)} aria-describedby="registration-suburb-error" onChange={e => update('suburb', e.target.value)}/></label><p id="registration-suburb-error" role={suburbError ? 'alert' : undefined}>{suburbError || 'Do not include the street address here.'}</p></>,
+            frequency: draft.seriesId ? <p>This is occurrence {draft.occurrenceIndex + 1} of {draft.occurrenceCount}. Changes apply only to this event, not the rest of the series.</p> : <><label htmlFor={id + '-frequency'}>Frequency</label><select id={id + '-frequency'} value={draft.frequency || 'single'} onChange={e => setDraft(current => ({ ...current, frequency:e.target.value, repeatFrequency:current.repeatFrequency || 'week', occurrenceCount:current.occurrenceCount || 4, occurrenceSettings:{} }))}><option value="single">One time</option><option value="recurring">Recurring</option></select>
+              {draft.frequency === 'recurring' && <><label htmlFor={id + '-repeat'}>Repeat every</label><select id={id + '-repeat'} value={draft.repeatFrequency || 'week'} onChange={e => setDraft(current => ({ ...current, repeatFrequency:e.target.value, occurrenceCount:e.target.value === 'year' ? Math.min(5, Number(current.occurrenceCount) || 4) : current.occurrenceCount, occurrenceSettings:{} }))}>{REGISTRATION_FREQUENCIES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select><label>Number of occurrences<input type="number" min="2" max={draft.repeatFrequency === 'year' ? 5 : 100} value={draft.occurrenceCount || ''} onChange={e => update('occurrenceCount', e.target.value)}/></label><p>Each occurrence has separate registration, capacity, closing time and approval. Review its dates and settings before saving. Recurrence follows your selected Gregorian or Hijri calendar.</p></>}</>,
+            settings: <><label>Capacity (places)<input type="number" min="1" max="10000" value={draft.capacity} onChange={e => update('capacity', e.target.value)}/></label><label className="registration-check"><input type="checkbox" checked={draft.allowCancellation} onChange={e => update('allowCancellation', e.target.checked)}/>Allow attendee cancellation before event day</label></>,
+          }}
           posterControls={<><label>Private poster (optional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={readPoster}/></label>
         {draft.poster && <><img className="registration-poster" src={draft.poster.uri} alt="Selected private poster"/><button type="button" onClick={() => { posterRead.current++; update('poster', null); }}>Discard selected poster</button></>}
         {hasPoster && onRemovePoster && <button type="button" onClick={onRemovePoster}>Delete existing poster</button>}
@@ -56,7 +83,13 @@ export default function RegistrationEditor({ initialDraft, initialStep = 'event'
         <div className="card"><label>Save reusable template as<input value={templateName} maxLength={80} onChange={e => setTemplateName(e.target.value)}/></label><button type="button" disabled={!templateName.trim()} onClick={() => onSaveTemplate({ name: templateName, fields: draft.fields, purpose: draft.purpose })}>Save template without venue or answers</button></div>
         <button type="button" onClick={() => { const errors = validation(); setError(errors.join(' ')); if (!errors.length) setStep('preview'); }}>Preview attendee form</button>
       </>}
-      {step === 'preview' && <section className="card"><h2>Attendee form preview</h2><p>{draft.purpose}</p><fieldset disabled>{draft.fields.map(field => <AnswerField key={field.id} field={field} onChange={() => {}}/>)}</fieldset><p>New events and submitted changes need administrator approval. The last approved version stays published while changes are reviewed. Approved form changes may require attendees to review their answers.</p><button type="button" onClick={save}>Save event and registration form</button></section>}
+      {step === 'preview' && <section className="card">
+        {seriesError && <p role="alert">{seriesError}</p>}
+        {seriesPlan && <section aria-label="Recurring registration event preview"><h2>Review {seriesPlan.occurrences.length} occurrences</h2><p>Capacity and registration closing time apply separately to each event. Change the first occurrence in Event details.</p>
+          {seriesPlan.occurrences.map((row,index) => <details key={row.date}><summary>{index + 1}. {row.date}{row.enteredAsHijri ? ` · ${row.hijriDate}` : ''} · {row.startTime || 'Time not provided'} · {draft.occurrenceSettings?.[row.date]?.capacity ?? row.capacity} places</summary>
+            {index === 0 ? <p>Registration closes: {row.closes || 'Start of event day'}</p> : <div className="row"><label>Capacity for {row.date}<input type="number" min="1" max="10000" value={draft.occurrenceSettings?.[row.date]?.capacity ?? row.capacity} onChange={e => setDraft(current => ({ ...current, occurrenceSettings:{ ...current.occurrenceSettings, [row.date]:{ ...current.occurrenceSettings?.[row.date], capacity:e.target.value } } }))}/></label><label>Registration closes for {row.date}<input type="datetime-local" value={draft.occurrenceSettings?.[row.date]?.closes ?? row.closes} onChange={e => setDraft(current => ({ ...current, occurrenceSettings:{ ...current.occurrenceSettings, [row.date]:{ ...current.occurrenceSettings?.[row.date], closes:e.target.value } } }))}/></label></div>}
+          </details>)}</section>}
+        <h2>Attendee form preview</h2><p>{draft.purpose}</p><fieldset disabled>{draft.fields.map(field => <AnswerField key={field.id} field={field} onChange={() => {}}/>)}</fieldset><p>New events and submitted changes need administrator approval. The last approved version stays published while changes are reviewed. Approved form changes may require attendees to review their answers.</p><button type="button" onClick={() => { const errors = validation(); setError(errors.join(' ')); if (!errors.length) onSave(draft, registrationSeriesPlan(draft, calendarSettings || [])); }}>Save event and registration form</button></section>}
     </fieldset>
   </section>;
 }

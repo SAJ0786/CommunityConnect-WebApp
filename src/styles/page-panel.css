@@ -5,5 +5,5 @@
 .cc-page-panel-icon { display:grid; place-items:center; flex:0 0 44px; width:44px; height:44px; border-radius:15px; border:1px solid var(--cc-border); color:var(--cc-primary); background:var(--cc-surface); }
 .cc-page-panel > div { min-width:0; }
 .cc-page-panel-eyebrow { color:var(--cc-primary-strong); font-size:.65rem; font-weight:700; letter-spacing:.08em; }
-.cc-page-panel h2 { margin:3px 0; color:var(--cc-heading); font-size:1.25rem; font-weight:800; }
+.cc-page-panel h1 { margin:3px 0; color:var(--cc-heading); font-size:1.25rem; font-weight:800; }
 .cc-page-panel p { margin:0; color:var(--cc-muted); font-size:.85rem; line-height:1.5; }

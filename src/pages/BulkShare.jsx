@@ -154,11 +154,7 @@ export default function BulkShare({ events, profile, user }) {
   return (
     <>
       <div className="card" style={{ marginBottom: 0 }}>
-        <h2 style={{ margin: '0 0 4px' }}>{ICON_SHARE} Bulk Share Events</h2>
-        <p className="small" style={{ margin: 0, color: 'var(--muted)' }}>
-          Filter events, select the ones you want, then share or copy.
-          {!isNationalBulkShare ? ' Your bulk share list is limited to your city.' : ''}
-        </p>
+        {!isNationalBulkShare && <p className="small" style={{ margin: 0, color: 'var(--muted)' }}>Your bulk share list is limited to your city.</p>}
         <label htmlFor="bulk-share-title" style={{ display:'block', marginTop:14 }}>
           Message title <span className="small">(optional)</span>
         </label>

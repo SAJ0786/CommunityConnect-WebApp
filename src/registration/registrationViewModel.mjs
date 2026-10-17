@@ -42,6 +42,7 @@ export function eventDraftFromDetail(detail, eventTypes) {
     customEventType: knownType ? '' : event.eventType, date: event.date, startTime: event.startTime || '', endTime: event.endTime || '', suburb: event.suburb,
     address: detail.privateDetails.address, venue: detail.privateDetails.venue, notes: event.notes || '',
     capacity: event.capacity, closes: event.closes || '', allowCancellation: event.allowCancellation,
+    ...(event.seriesId ? { seriesId:event.seriesId, occurrenceIndex:event.occurrenceIndex, occurrenceCount:event.occurrenceCount, recurrenceRule:event.recurrenceRule } : {}),
     purpose: detail.form.purpose, fields: JSON.parse(JSON.stringify(detail.form.fields)), poster: null };
 }
 

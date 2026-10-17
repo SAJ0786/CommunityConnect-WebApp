@@ -32,9 +32,10 @@ function fixture({manager=false,registered=false,closed=false,failFirstSubmissio
   const detail=()=>({event:{...structuredClone(event),...(manager&&pendingChanges?{hasPendingChanges:true}:{})},form:structuredClone(form),ownRegistration:booking,canManage:manager,canApprove:manager&&(event.status==='pending'||!!pendingChanges),canRegister:!closed&&event.status==='approved',canEditRegistration:!!booking&&event.status==='approved',canCancel:!!booking,registrationNeedsReview:false,...(manager&&pendingChanges?{pendingChanges:structuredClone(pendingChanges)}:{}),...(manager||booking&&event.status!=='cancelled'?{privateDetails:{address:venue.fullAddress,venue,hasPoster:false}}:{})});
   const api={
     async list(data){calls.push(['list',data]);return data.cursor||data.scope!=='public'?{events:[event],nextCursor:null}:{events:[],nextCursor:'empty-page-next'};},
-    async load(){return detail();},async templates(){return {templates,nextCursor:null};},
+    async load(id){const result=detail();if(id?.startsWith('occurrence-'))result.event.id=id;return result;},async templates(){return {templates,nextCursor:null};},
     async saveTemplate(data){calls.push(['template',data]);templates=[{...data,id:data.templateId}];},
     async save(data){calls.push(['save',data]);if(staged&&event.status==='approved'){event={...event,revision:event.revision+1};pendingChanges={event:{...event,...data.draft},form:{...form,fields:data.draft.fields,purpose:data.draft.purpose},privateDetails:{address:data.draft.address||venue.fullAddress,venue:data.draft.venue||venue,hasPoster:false,hostPhone:data.draft.hostPhone,hostContactOptional:data.draft.hostContactOptional}};}else{event={...event,...data.draft,revision:event.revision+1};form={...form,fields:data.draft.fields,purpose:data.draft.purpose,version:form.version+1};}return {eventId:event.id,revision:event.revision};},
+    async createSeries(data){calls.push(['series',data]);event={...event,...data.draft,...data.occurrences[0],id:'occurrence-0',status:'pending',revision:1,seriesId:'series',occurrenceIndex:0,occurrenceCount:data.occurrences.length,recurrenceRule:data.recurrence};return {seriesId:'series',events:data.occurrences.map((row,index)=>({eventId:`occurrence-${index}`,revision:1,status:'pending'}))};},
     async submit(data){calls.push(['submit',data]);booking={registrationId:'booking',revision:3,status:'registered',places:data.places,answers:data.answers,fields:form.fields,formVersion:form.version};if(firstSubmit&&failFirstSubmission){firstSubmit=false;throw Error('Response lost after write');}},
     async cancel(...data){calls.push(['cancel',data]);booking=null;},
     async cancelEvent(...data){calls.push(['cancelEvent',data]);event.status='cancelled';},
@@ -85,6 +86,67 @@ test('new host flow requires venue, saves a form and recovers a partial poster u
   assert.equal(saved.draft.startTime,'18:30');assert.equal(saved.draft.endTime,'20:00');assert.equal(saved.draft.hostName,'Example host');
   assert.ok(text(view.toJSON()).includes('poster upload was not confirmed'));await click(view,'Retry selected poster upload');
   const uploads=f.calls.filter(row=>row[0]==='poster');assert.equal(uploads.length,2);assert.equal(uploads[1][1][1],5);view.unmount();delete globalThis.FileReader;
+});
+test('registration event details are one form ordered from title through optional speaker and reciters', async()=>{
+  const f=fixture({manager:true}),view=await mount(f,{initialCreate:true});
+  assert.equal(view.root.findAllByType('form').length,1);
+  assert.equal(view.root.findAllByType('h1').length,1);
+  assert.equal(view.root.findAllByType('h2').some(node=>text(node)==='Event details'),false);
+  const form=view.root.findByType('form'), content=text(form);
+  const ordered=['Event title','Private poster','I am adding this event','Organiser Type','Host Name','Host Phone Number','Date *','Time Selection','Registration closes','Private venue address','Event Type','Frequency','Subject','Notes','Audience Type','Speaker and reciters are optional.','Capacity (places)'];
+  let previous=-1;
+  for(const label of ordered){const index=content.indexOf(label);assert.ok(index>previous,`${label} follows the previous field`);previous=index;}
+  const title=view.root.findAllByType('label').find(node=>text(node)==='Event title');
+  assert.ok(form.findAllByType('input').includes(title.findByType('input')));
+  await fill(view,'Event Type *','Workshop');
+  assert.ok(view.root.findAllByType('label').some(node=>text(node)==='Speaker'));
+  view.unmount();
+});
+test('recurring creation previews separate settings and uploads a private poster per occurrence',async()=>{
+  globalThis.FileReader=class { readAsDataURL(){this.result='data:image/png;base64,c3ludGhldGlj';this.onload();} };
+  const f=fixture({manager:true,failFirstPoster:true}),view=await mount(f,{initialCreate:true});
+  await fill(view,'Event title','Recurring workshop');await fill(view,'Host Name','Example host');
+  await fill(view,'Date *','2099-11-01');await click(view,'Select fictional private venue');
+  await fill(view,'Frequency','recurring');await fill(view,'Repeat every','fortnight');await fill(view,'Number of occurrences','3');
+  await fill(view,'Registration closes (optional)','2099-10-30T17:00');
+  const picker=view.root.findAllByType('input').find(input=>input.props.type==='file');
+  await act(async()=>{picker.props.onChange({target:{files:[{type:'image/png',size:50}]}});});
+  await click(view,'Choose registration form');await click(view,'Continue current form');await click(view,'Preview attendee form');
+  assert.ok(text(view.toJSON()).includes('Review 3 occurrences'));
+  await fill(view,'Capacity for 2099-11-15','12');
+  await fill(view,'Registration closes for 2099-11-15','2099-11-12T09:00');
+  await click(view,'Save event and registration form');
+  const sent=f.calls.find(row=>row[0]==='series')[1];
+  assert.ok(sent.createKey);assert.equal(sent.recurrence.repeatEvery,2);
+  assert.equal(sent.occurrences[1].capacity,12);assert.equal(sent.occurrences[1].closes,'2099-11-12T09:00');
+  assert.equal(f.calls.filter(row=>row[0]==='save').length,0);
+  assert.deepEqual(f.calls.filter(row=>row[0]==='poster').map(row=>row[1][0]),['occurrence-0','occurrence-1','occurrence-2']);
+  assert.ok(text(view.toJSON()).includes('3 separate registration events saved'));
+  await click(view,'Retry selected poster upload');
+  assert.equal(f.calls.filter(row=>row[0]==='poster').length,4);
+  assert.equal(f.calls.filter(row=>row[0]==='series').length,1,'Poster retry must not create the series again');
+  await click(view,'Edit event and form');
+  assert.ok(text(view.toJSON()).includes('Changes apply only to this event'));
+  assert.ok(!view.root.findAllByType('label').some(node=>text(node).startsWith('Frequency')));
+  view.unmount();delete globalThis.FileReader;
+});
+test('series poster quota failure stops further uploads and preserves every remaining occurrence for retry',async()=>{
+  globalThis.FileReader=class { readAsDataURL(){this.result='data:image/png;base64,c3ludGhldGlj';this.onload();} };
+  const f=fixture({manager:true}),uploads=[];
+  let exhausted=true;
+  f.api.uploadPoster=async id=>{uploads.push(id);if(exhausted)throw Object.assign(new Error('Poster quota reached'),{code:'functions/resource-exhausted'});};
+  const view=await mount(f,{initialCreate:true});
+  await fill(view,'Event title','Quota preview');await fill(view,'Host Name','Example host');
+  await fill(view,'Date *','2099-11-01');await click(view,'Select fictional private venue');await fill(view,'Frequency','recurring');await fill(view,'Number of occurrences','3');
+  await act(async()=>{view.root.findAllByType('input').find(input=>input.props.type==='file').props.onChange({target:{files:[{type:'image/png',size:50}]}});});
+  await click(view,'Choose registration form');await click(view,'Continue current form');await click(view,'Preview attendee form');await click(view,'Save event and registration form');
+  assert.deepEqual(uploads,['occurrence-0']);
+  assert.ok(text(view.toJSON()).includes('quota resets'));
+  assert.ok(text(view.toJSON()).includes('2099-11-01, 2099-11-08, 2099-11-15'));
+  exhausted=false;await click(view,'Retry selected poster upload');
+  assert.deepEqual(uploads,['occurrence-0','occurrence-0','occurrence-1','occurrence-2']);
+  assert.equal(f.calls.filter(row=>row[0]==='series').length,1);
+  view.unmount();delete globalThis.FileReader;
 });
 test('approval and attendee deletion retain confirmations without a separate whole-event cancellation control',async()=>{
   const f=fixture({manager:true,registered:true}),view=await mount(f);f.setPending();await card(view);

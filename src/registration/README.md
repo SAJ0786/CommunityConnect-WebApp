@@ -1,5 +1,55 @@
 # Event registration on web
 
+## Unified editor and recurring events - source follow-up, not deployed
+
+The decorative page panel is the sole page heading. Event Management in the
+Admin Dashboard has keyboard-accessible Regular Events and Registration only
+Events tabs; the original regular-event tools and filters remain in the first
+tab. Superadmin publication review remains under User Management.
+
+Registration event details use one shared form, ordered: title, private poster,
+on-behalf-of, organiser, host/contact, Gregorian/Hijri date and time, registration
+closing date/time, private venue/public suburb, event type, frequency, optional
+subject/notes, audience, optional speaker/reciters. Capacity and cancellation
+settings follow those details; the attendee question builder remains the next
+step. Private venue/poster permissions are unchanged.
+
+Frequency defaults to One time. Recurring offers Daily, Weekly, Fortnightly,
+Monthly and Yearly, with a bounded occurrence count and a date/settings preview.
+The user chose separate registrations, capacity and closing times per occurrence.
+Gregorian/Hijri cadence reuses the normal recurrence helpers; prayer times are
+recalculated for each date. Closing times initially preserve the first event's
+calendar-day offset and local clock, not an elapsed UTC duration across DST.
+Later occurrences can override capacity/closing independently in the preview.
+Yearly series allow 2-5 occurrences; other frequencies allow 2-100 within one year.
+
+This requires the Native-owned `createRegistrationSeries` backend in source
+`1efe7330a316c98f204ddcd4e7cd851d653a0b8a`, which is **not deployed**.
+Deploy the registration codebase, including its new twentieth callable, before
+releasing this Web follow-up. No rules/index migration or delivery activation
+is implied. The currently live Web/backend versions below are unchanged.
+
+`createRegistrationSeries({city,createKey,draft,recurrence,occurrences})` atomically
+creates pending event/form/private-venue records with independent counters.
+`recurrence` uses `calendarType`, `frequency` (`day|week|month|year`),
+`repeatEvery` (Fortnightly is `week`/2), `endMode:'count'`, `occurrenceCount`,
+and Hijri `startHijri:{day,month,year}` when selected. Each occurrence supplies
+`date,closes,capacity,startTime,endTime` and descriptive Hijri values.
+The server validates against its trusted calendar settings and returns
+`{seriesId,events:[{eventId,revision:1,status:'pending'}]}`. Retry uses the same
+create key; never create another series to recover an uncertain response.
+
+`seriesId,occurrenceIndex,occurrenceCount,recurrenceRule` are immutable provenance,
+not permission for bulk updates. Editing/copying an existing event never
+regenerates its series: existing save/approval/staging/book/cancel/delete remain
+per occurrence, and a copy starts without series provenance.
+Posters upload privately per saved event through the existing callable and
+10-per-user/hour limit. Quota failure stops further uploads, lists remaining
+dates and retries only those uploads using refreshed revisions. The in-memory
+retry queue is cleared on background/account changes; saved events remain in
+My Events and their posters can be added individually later. No Storage paths
+are shared, quotas bypassed or failed posters reported as uploaded.
+
 ## Registration usability follow-up - live 17 October 2026 Sydney
 
 Source `9729f2f36757d6995a69e854a6fb45eee3c59b79` is live at

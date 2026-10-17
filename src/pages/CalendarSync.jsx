@@ -41,7 +41,6 @@ export default function CalendarSync({ user }) {
         background: 'linear-gradient(135deg,var(--teal),var(--teal-dark))',
         border: 'none', color: 'var(--cc-on-primary)'
       }}>
-        <h2 style={{ color: 'var(--cc-on-primary)', margin: '0 0 6px' }}>Community Event Calendar</h2>
         <p style={{ color: 'color-mix(in srgb, var(--cc-surface) 88%, transparent)', margin: 0, fontSize: '0.875rem' }}>
           Subscribe once — your calendar automatically stays up to date as events are added or removed.
         </p>
