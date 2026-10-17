@@ -30,6 +30,7 @@ exports.registrationCalendarLines = (id, event, { escape, stamp }) => {
   }
   lines.push(`SUMMARY:${escape(event.title || event.eventType || 'Community event')}`);
   if (event.suburb) lines.push(`LOCATION:${escape(event.suburb)}`);
+  lines.push('DESCRIPTION:Community Connect - Events');
   lines.push('END:VEVENT');
   return lines;
 };

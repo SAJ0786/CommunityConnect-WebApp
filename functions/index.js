@@ -792,7 +792,7 @@ exports.calendarFeed = onRequest(
     const lines = [
       "BEGIN:VCALENDAR", "VERSION:2.0",
       "PRODID:-//Community Events//EN", "CALSCALE:GREGORIAN",
-      "METHOD:PUBLISH", "X-WR-CALNAME:Community Events",
+      "METHOD:PUBLISH", "X-WR-CALNAME:Community Connect Australia",
       "X-WR-TIMEZONE:Australia/Sydney",
       "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H",
       // VTIMEZONE block for Australia/Sydney (AEDT/AEST)
@@ -842,7 +842,7 @@ exports.calendarFeed = onRequest(
       pushICS(lines, `DTEND;TZID=Australia/Sydney:${dtEnd}`);
       pushICS(lines, `SUMMARY:${escICS(`${e.eventType || "Event"} - ${e.hostName || "Community Events"}`)}`);
       if (addr) pushICS(lines, `LOCATION:${escICS(addr)}`);
-      pushICS(lines, `DESCRIPTION:${escICS(`Audience: ${e.audienceType || "All audiences"}`)}`);
+      pushICS(lines, `DESCRIPTION:${escICS(`Community Connect - Events\nAudience: ${e.audienceType || "All audiences"}`)}`);
       lines.push("END:VEVENT");
     });
     // A UID feed token is not registration authorisation: export public fields only.
