@@ -1,6 +1,6 @@
 # Event registration on web
 
-## Unified editor and recurring events - source follow-up, not deployed
+## Unified editor and recurring events - live 17 October 2026
 
 The decorative page panel is the sole page heading. Event Management in the
 Admin Dashboard has keyboard-accessible Regular Events and Registration only
@@ -23,11 +23,17 @@ calendar-day offset and local clock, not an elapsed UTC duration across DST.
 Later occurrences can override capacity/closing independently in the preview.
 Yearly series allow 2-5 occurrences; other frequencies allow 2-100 within one year.
 
-This requires the Native-owned `createRegistrationSeries` backend in source
-`1efe7330a316c98f204ddcd4e7cd851d653a0b8a`, which is **not deployed**.
-Deploy the registration codebase, including its new twentieth callable, before
-releasing this Web follow-up. No rules/index migration or delivery activation
-is implied. The currently live Web/backend versions below are unchanged.
+This is LIVE from Web `5619d40ffe4aca55efc5f9f1b60c63b5d59b9e07`,
+Hosting `83844b8344aed84d`, released 2026-10-17T00:09:21.148Z.
+The Native-owned registration backend, including twentieth callable
+`createRegistrationSeries`, was deployed first from clean `acae2b7`
+(implementation `1efe7330a316c98f204ddcd4e7cd851d653a0b8a`).
+All twenty handlers are ACTIVE with existing gates/secrets retained. All 133
+hosted hashes, three entry routes and signed-out phone/desktop checks pass.
+No rules/index migration or reminder/notification activation occurred.
+Previous Hosting is retained in `registration-pre-recurrence-20261017`.
+The user owns both Native builds; tester Android build 97 predates this follow-up.
+Earlier release evidence below is historical, not the current Hosting version.
 
 `createRegistrationSeries({city,createKey,draft,recurrence,occurrences})` atomically
 creates pending event/form/private-venue records with independent counters.

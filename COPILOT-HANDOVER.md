@@ -10,22 +10,38 @@ See [release status](docs/RELEASE-STATUS-2026-10-12.md) and
 
 ## Release state
 
-- Current source follow-up, **not deployed**: panel-only page headings, one
+- Current follow-up is **LIVE**, Web source
+  `5619d40ffe4aca55efc5f9f1b60c63b5d59b9e07`, Hosting
+  `83844b8344aed84d`, released 2026-10-17T00:09:21.148Z (11:09 Sydney):
+  panel-only page headings, one
   registration details form in the user-requested field sequence, recurring
   registrations with separate occurrence capacity/closing and date preview,
   and Regular Events / Registration only Events tabs in Admin Event Management.
   The matching Native backend/client source is
-  `1efe7330a316c98f204ddcd4e7cd851d653a0b8a`; it is not deployed or included in
-  Android tester build 97. A future coordinated release must deploy the
-  registration codebase with its new twentieth `createRegistrationSeries`
-  callable before Web Hosting, and build fresh Native binaries. Existing
-  production configuration, reminders and delivery holds must remain unchanged.
+  `1efe7330a316c98f204ddcd4e7cd851d653a0b8a`; deployed from clean docs-only
+  successor `acae2b7974891347904156194aac2c6a6b3bbfcf` before Hosting.
+  All twenty registration handlers are ACTIVE, including `createRegistrationSeries`,
+  with ENABLED=true, NOTICES=false, MAINTENANCE=true and existing secrets retained.
+  Native verified the new callable's deployed source archive against Git.
+  All 133 hosted file hashes and `/`, `/app`, `/businesses` entries match;
+  signed-out 390px/1440px checks have no overflow/browser errors. Thirteen existing
+  protected-callable probes and the new series auth-rejection probe pass.
+  No real records, rules, indexes or other function codebases were changed.
+  Previous Hosting `aa458d7a89f29384` is preserved in
+  `registration-pre-recurrence-20261017`. Five production flags and all
+  reminder/delivery holds are unchanged. Local checks: 283 Node tests and
+  21 rendered workflows pass. Authenticated/device acceptance remains separate.
+  The user now owns both Native platform builds; Android tester build 97 predates
+  this follow-up. Final Native Git confirmation is
+  `00f6660b7beeeece5afb313234ebf5f2659e855a` (docs-only successors).
+  Native retains its shared normal form plus registration settings, not the exact
+  newly ordered Web details layout. No further agent signing/build is required.
   See the registration README for the bounded recurrence contract, true Hijri
   cadence, per-event approval/edit semantics and private-poster quota recovery.
 - Production URL: https://communityconnect.siza.info.
-- Web follow-up source: `9729f2f36757d6995a69e854a6fb45eee3c59b79`.
+- Previous Web follow-up source: `9729f2f36757d6995a69e854a6fb45eee3c59b79`.
   The user explicitly authorized coordinated backend/Web deployment and a
-  side-by-side Native update on 17 October. This Web source is now LIVE as Hosting
+  side-by-side Native update on 17 October. That Web source was released as Hosting
   `aa458d7a89f29384`, released 2026-10-16T19:21:35.543Z (17 October 06:21 Sydney).
   All 134 hosted files match the production build; `/`, `/app` and `/businesses`
   return the exact expected artifacts. Signed-out 390px/1440px entries render

@@ -1,17 +1,30 @@
 # Community Connect release status — 12 October 2026
 
-## Source follow-up - 17 October 2026 (not deployed)
+## Unified editor and recurrence live - 17 October 2026
 
 Panel-only page headings, unified ordered registration event details, recurring
 registration creation and separate Regular Events / Registration only Events
-admin tabs are follow-up source changes, not part of the live Hosting release.
-The Native-owned backend prerequisite is
-`1efe7330a316c98f204ddcd4e7cd851d653a0b8a`, including the new
-`createRegistrationSeries` callable. A future authorized release must deploy that
-registration codebase before Hosting and provide new Native binaries; tester
-Android build 97 does not contain this follow-up. No new deployment, rules/index
-migration, registration reminder or notification activation is authorized by
-these source edits. See `COPILOT-HANDOVER.md` and `src/registration/README.md`.
+admin tabs are LIVE at https://communityconnect.siza.info from Web
+`5619d40ffe4aca55efc5f9f1b60c63b5d59b9e07`, Hosting `83844b8344aed84d`,
+released 2026-10-17T00:09:21.148Z (11:09 Sydney), explicitly authorized by the user.
+The Native-owned registration backend was deployed first from clean
+`acae2b7974891347904156194aac2c6a6b3bbfcf` (implementation `1efe7330`).
+All twenty handlers are ACTIVE, including new `createRegistrationSeries`;
+ENABLED=true, NOTICES=false, MAINTENANCE=true and secret bindings are preserved.
+Native verified the new callable archive byte-for-byte against tracked source.
+
+All 133 hosted file hashes and `/`, `/app`, `/businesses` entries match the
+production build. Signed-out 390px/1440px pages render without overflow/errors.
+Thirteen existing protected-callable rejection probes plus the new series
+unauthenticated rejection pass. Local release checks pass 283 Node tests and
+21 rendered workflows. No real-record mutation or authenticated/device acceptance
+is implied. Five production flags and all reminder/delivery holds are unchanged;
+no rules, indexes, other function codebases or Native builds were deployed.
+Rollback Hosting `aa458d7a89f29384` is retained in
+`registration-pre-recurrence-20261017`. The user owns both Native builds;
+Android tester build 97 predates this follow-up. Native final source confirmation
+is `00f6660b7beeeece5afb313234ebf5f2659e855a` (docs-only successors).
+See `COPILOT-HANDOVER.md` and `src/registration/README.md`.
 
 ## Staged registration review and normal-form follow-up live - 17 October 2026
 
