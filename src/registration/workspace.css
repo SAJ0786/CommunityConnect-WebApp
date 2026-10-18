@@ -37,3 +37,5 @@
 .registration-venue-panel h3,.registration-participant-group h3 { margin:0 0 10px; font-size:1rem; }
 .registration-venue-panel .registration-actions a { padding:8px 12px; min-height:44px; border:1px solid var(--cc-primary-border); border-radius:var(--cc-radius-small); background:var(--cc-surface); text-decoration:none; display:inline-flex; align-items:center; }
 .registration-event-card .registration-delete { color:var(--cc-danger); background:var(--cc-danger-soft); }
+
+.registration-workspace,.registration-workspace button,.registration-workspace input,.registration-workspace textarea,.registration-workspace select { font-family:var(--font); }
