@@ -66,12 +66,14 @@ export function writeProfileCache(uid, profile) {
   if (!storage || !uid || !profile) return;
   if (profile.isProfileFallback) return;
   const cachedProfile = {
-    ...Object.fromEntries(['defaultCity', 'defaultModule', 'emailNotificationsEnabled', 'pushNotificationsEnabled', 'eventNotificationsEnabled', 'businessNotificationsEnabled', 'prayerRemindersEnabled'].filter(key => profile[key] !== undefined).map(key => [key, profile[key]])),
+    ...Object.fromEntries(['adminCity', 'defaultCity', 'defaultModule', 'emailNotificationsEnabled', 'pushNotificationsEnabled', 'eventNotificationsEnabled', 'businessNotificationsEnabled', 'prayerRemindersEnabled'].filter(key => profile[key] !== undefined).map(key => [key, profile[key]])),
     fullName: profile.fullName || '',
     email: profile.email || '',
     phone: profile.phone || profile.phoneNumber || '',
     role: profile.role || 'user',
     isActive: profile.isActive !== false,
+    active: profile.active !== false, accountStatus: profile.accountStatus || 'active',
+    archivedAt: profile.archivedAt || null, bannedAt: profile.bannedAt || null,
     reminderEmailEnabled: profile.reminderEmailEnabled !== false,
     adminAlertEmailEnabled: profile.adminAlertEmailEnabled !== false,
     walkthroughCompleted: profile.walkthroughCompleted !== false,

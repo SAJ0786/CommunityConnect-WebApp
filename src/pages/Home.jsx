@@ -316,21 +316,6 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
 
       <div style={{ height: 88 }} />
 
-      {/* ── View Calendar & Sync — fixed bar above bottom nav ── */}
-      <div data-walkthrough-target="bottom-calendar" onClick={() => setPage('calendar')} style={{
-        position:'fixed', bottom:'calc(76px + env(safe-area-inset-bottom))',
-        left:16, right:16, zIndex:35, cursor:'pointer',
-        background:'var(--cc-surface)',
-        borderRadius:16, padding:'14px 18px', display:'flex', alignItems:'center',
-        justifyContent:'space-between',
-        boxShadow:'0 -2px 12px color-mix(in srgb, var(--cc-shadow-base) 8%, transparent), 0 4px 16px color-mix(in srgb, var(--cc-shadow-base) 10%, transparent)',
-        border:'1px solid var(--border,var(--cc-border))' }}>
-        <span style={{ display:'flex', alignItems:'center', gap:10,
-          fontWeight:700, fontSize:'0.9375rem', color:'var(--text,var(--cc-text))' }}>
-          📅 <span>View Calendar &amp; Sync</span>
-        </span>
-        <span style={{ fontSize:'1.25rem', color:'var(--teal,var(--cc-accent-strong))', fontWeight:700 }}>›</span>
-      </div>
       </>
       )}
       {viewMode === 'map' && !isGuest && (

@@ -23,3 +23,17 @@
 .registration-review-grid > div, .registration-form-field { padding:16px; border:1px solid var(--cc-border); border-radius:var(--cc-radius-card); background:var(--cc-surface); }
 .registration-review-grid dt { color:var(--cc-muted); font-size:.85rem; font-weight:600; }
 .registration-review-grid dd { margin:8px 0 0; color:var(--cc-text); white-space:pre-wrap; }
+
+.registration-event-card,.registration-entry-card { border-radius:var(--cc-radius-card); border:1px solid var(--cc-border); padding:20px; background:var(--cc-surface); box-shadow:var(--cc-shadow-soft); }
+.registration-event-identity { display:flex; gap:12px; align-items:center; }
+.registration-event-identity img { width:62px; height:62px; object-fit:contain; background:var(--cc-primary-soft); border-radius:16px; padding:6px; }
+.registration-event-identity h2 { font-size:1.2rem; line-height:1.35; margin:4px 0; }
+.registration-event-identity p { margin:4px 0; color:var(--cc-muted); font-size:.85rem; }
+.registration-kind { color:var(--cc-primary-strong); font-size:.7rem; font-weight:600; }
+.registration-event-meta { display:flex; flex-wrap:wrap; gap:10px 16px; padding:16px 0; color:var(--cc-muted); font-size:.85rem; }
+.registration-event-meta span,.registration-booked { display:flex; align-items:center; gap:7px; }
+.registration-booked { width:fit-content; border-radius:var(--cc-radius-small); padding:8px 12px; background:var(--cc-primary-soft); color:var(--cc-primary-strong); font-size:.85rem; }
+.registration-venue-panel,.registration-participant-group { padding:16px; margin:16px 0; border:1px solid var(--cc-border); border-radius:var(--cc-radius-small); background:var(--cc-background); }
+.registration-venue-panel h3,.registration-participant-group h3 { margin:0 0 10px; font-size:1rem; }
+.registration-venue-panel .registration-actions a { padding:8px 12px; min-height:44px; border:1px solid var(--cc-primary-border); border-radius:var(--cc-radius-small); background:var(--cc-surface); text-decoration:none; display:inline-flex; align-items:center; }
+.registration-event-card .registration-delete { color:var(--cc-danger); background:var(--cc-danger-soft); }

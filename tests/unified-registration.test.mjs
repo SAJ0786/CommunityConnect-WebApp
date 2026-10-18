@@ -1,9 +1,10 @@
+import {registrationFields,registrationFieldGroups,validateAnswers} from '../src/registration/prototypeModel.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { registrationEventCard, registrationEventPages, mergePublicEvents } from '../src/registration/eventFeed.mjs';
 import { createRegistrationClient } from '../src/registration/registrationClient.mjs';
 import { eventActions } from '../src/utils/eventActions.mjs';
-import { eventDraftFromDetail, validateRegistrationDraft, registrantName, registrationEventForm, registrationDraftFromEventForm, registrationReviewDetail } from '../src/registration/registrationViewModel.mjs';
+import { eventDraftFromDetail, validateRegistrationDraft, answersForReview, registrantName, registrationEventForm, registrationDraftFromEventForm, registrationReviewDetail } from '../src/registration/registrationViewModel.mjs';
 import { createDraft } from '../src/registration/prototypeModel.mjs';
 import { eventExploreItems } from '../src/utils/navigation.mjs';
 
@@ -128,4 +129,14 @@ test('review feedback uses the authorised callable with optimistic revision', as
   const api = createRegistrationClient(async (name,data)=>{calls.push({name,data});return {data:{ok:true}};},{enabled:true});
   await api.review('event',7,'changes-requested','Please confirm start time');
   assert.deepEqual(calls,[{name:'reviewRegistrationEvent',data:{eventId:'event',expectedRevision:7,decision:'changes-requested',feedback:'Please confirm start time'}}]);
+});
+
+test('organiser participant fields expand to five distinct sets and preserve answers on edit',()=>{
+  const fields=[{id:'email',label:'Booking email',type:'email',required:true},{id:'name',label:'Full name',type:'text',required:true,perParticipant:true},{id:'age',label:'Age',type:'number',required:false,perParticipant:true},{id:'consent',label:'Agree',type:'consent',required:true}];
+  const expanded=registrationFields(fields,5);assert.equal(expanded.length,12);assert.equal(expanded.filter(f=>f.type==='consent').length,1);
+  const answers={email:'parent@example.test',consent:true};for(let i=1;i<=5;i++)answers[`participant:${i}:name`]=`Child ${i}`;
+  assert.deepEqual(validateAnswers(fields,answers,5,100),{});assert.ok(validateAnswers(fields,answers,6,100).places);
+  delete answers['participant:3:name'];assert.ok(validateAnswers(fields,answers,5,100)['participant:3:name']);answers['participant:3:name']='Child 3';
+  const reviewed=answersForReview({form:{fields},ownRegistration:{places:5,fields:expanded,answers}});assert.equal(reviewed['participant:5:name'],'Child 5');assert.equal(reviewed.consent,false);
+  assert.deepEqual(registrationFieldGroups(fields,2).map(g=>g.label),['Booking details','Participant 1','Participant 2','Agreement']);
 });

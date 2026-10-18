@@ -2,7 +2,6 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { doc, getDocFromServer } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../firebase/firebase';
-import { CITY_CATALOGUE_ENABLED } from '../config/releaseGates.mjs';
 import { cityCatalogueRevision, subscribeCityCatalogue, installCityCatalogue, validateCityCatalogue } from '../utils/cities';
 const KEY = 'community-connect/city-catalogue/v1';
 let pending, lastCheck = 0, cacheLoaded = false;
@@ -13,7 +12,6 @@ export function acceptCityCatalogue(data) {
   return true;
 }
 export function refreshCityCatalogue() {
-  if (!CITY_CATALOGUE_ENABLED) return Promise.resolve();
   if (pending) return pending;
   pending = (async () => {
     if (!cacheLoaded) {

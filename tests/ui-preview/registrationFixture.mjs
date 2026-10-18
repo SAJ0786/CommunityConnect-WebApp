@@ -1,4 +1,4 @@
-export function registrationFixture(date, user, role, guest, registered = false, staged = false) {
+export function registrationFixture(date, user, role, guest, registered = false, staged = false, participants = false) {
   const calls = [];
   const rows = new Map([
     ['registration-approved', { id:'registration-approved', title:'Registration Workshop', date, eventType:'Workshop', city:'sydney', suburb:'Parramatta', status:'approved', revision:1, ownerUid:'synthetic-member', capacity:30, formVersion:1, startTime:'18:00', endTime:'19:00', startAt:`${date}T07:00:00Z`, endAt:`${date}T08:00:00Z` }],
@@ -9,7 +9,7 @@ export function registrationFixture(date, user, role, guest, registered = false,
   const hasChanges = row => staged && row.id === 'registration-approved';
   const decorate = row => ({ ...row, registrationOnly:true, canManage:manage(row), ...(manage(row) && hasChanges(row) ? {hasPendingChanges:true} : {}), canApprove:member && role === 'superAdmin' && (row.status === 'pending' || hasChanges(row)),
     isRegistered:attending && row.id === 'registration-approved', canRegister:row.status === 'approved', canEditRegistration:attending, ...(manage(row) || attending ? { hasPoster } : {}) });
-  const fields = [{ id:'name', type:'text', label:'Your name', required:true }];
+  const fields = participants ? [{id:'email',type:'email',label:'Booking email',required:true},{id:'name',type:'text',label:'Full name',required:true,perParticipant:true},{id:'age',type:'number',label:'Age',required:true,perParticipant:true}] : [{ id:'name', type:'text', label:'Your name', required:true }];
   const api = {
     list: async ({ scope, city }) => {
       calls.push(['list',scope,city]);

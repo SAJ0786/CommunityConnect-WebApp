@@ -18,6 +18,6 @@ export default function RegistrationReview({ detail, poster, busy, onPoster }) {
     {privateDetails?.hasPoster && <button className="btn-light" type="button" disabled={busy} onClick={onPoster}>View submitted poster</button>}
     {poster && <img className="registration-poster" src={poster} alt="Submitted event poster"/>}
     <h3>Registration form</h3><p>{form?.purpose}</p>
-    {form?.fields?.map(field => <section className="registration-form-field" key={field.id}><h4>{field.label}{field.required ? ' *' : ''}</h4><p>{field.description}</p><p>{field.terms || field.options?.join(', ')}</p></section>)}
+    {form?.fields?.map(field => <section className="registration-form-field" key={field.id}><h4>{field.label}{field.required ? ' *' : ''}</h4>{field.perParticipant && <small>Repeated for each participant (up to five)</small>}<p>{field.description}</p><p>{field.terms || field.options?.join(', ')}</p></section>)}
   </section>;
 }

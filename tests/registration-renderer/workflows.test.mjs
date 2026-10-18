@@ -268,3 +268,13 @@ test('approval requires opening the submitted poster and supports explicit feedb
   assert.deepEqual(f.calls.find(row=>row[0]==='review'),['review','example',5,'changes-requested','Please confirm the venue']);
   view.unmount();
 });
+
+test('participant form renders selected-place sections, validates every name and keeps contact/consent single',async()=>{
+ const f=fixture();const load=f.api.load;f.api.load=async id=>{const detail=await load(id);detail.form.fields[0].perParticipant=true;detail.form.fields.splice(1,0,{id:'email',label:'Booking email',type:'email',required:true,options:[]});return detail;};
+ const view=await mount(f);await card(view);await click(view,'Register for event');await fill(view,'Number of attendees','2');
+ assert.ok(text(view.toJSON()).includes('Participant 1'));assert.ok(text(view.toJSON()).includes('Participant 2'));assert.equal(text(view.toJSON()).includes('Participant 3'),false);
+ const names=view.root.findAllByType('label').filter(node=>text(node).startsWith('Full name'));assert.equal(names.length,2);
+ await act(async()=>view.root.findByProps({id:names[0].props.htmlFor}).props.onChange({target:{value:'First child'}}));await fill(view,'Booking email','parent@example.test');await fill(view,'I agree to these terms',true);await submit(view);assert.equal(f.calls.filter(row=>row[0]==='submit').length,0);
+ await act(async()=>view.root.findByProps({id:names[1].props.htmlFor}).props.onChange({target:{value:'Second child'}}));await submit(view);
+ const data=f.calls.find(row=>row[0]==='submit')[1];assert.equal(data.places,2);assert.equal(data.answers['participant:1:name'],'First child');assert.equal(data.answers['participant:2:name'],'Second child');assert.equal(data.answers.email,'parent@example.test');assert.equal(data.answers.consent,true);view.unmount();
+});

@@ -34,6 +34,7 @@ import {
   readEventCache,
   writeEventCache,
   writeProfileCache,
+  readProfileCache,
 } from './services/eventCache';
 
 const RegistrationRoute = REGISTRATION_ENABLED ? lazy(() => import('./registration/RegistrationRoute')) : null;
@@ -321,6 +322,13 @@ export default function App() {
     setProfileLoading(true);
     setLoading(false);
     setAuthError('');
+    const cached = readProfileCache(authenticatedUser.uid);
+    if (memberEntryState(authenticatedUser, cached, false) === 'ready') {
+      // Restore menu/profile presentation immediately; protected admin pages wait for the server check.
+      setProfile({...cached, isSessionHint:true}); setProfileLoading(false);
+      if (['admin','superAdmin'].includes(cached.role)) void import('./pages/AdminDashboard').catch(() => {});
+      setAuthMode('user'); setPage(getExperience(experienceRef.current).page);
+    }
     try {
       const p = await ensureUserProfile(authenticatedUser);
       if (!current()) return;
@@ -330,6 +338,8 @@ export default function App() {
         experienceRef.current = preferred.id; setSelectedExperience(preferred.id);
       }
       setProfileVerified(true);
+      setProfileLoading(false);
+      if (['admin','superAdmin'].includes(p.role)) void import('./pages/AdminDashboard').catch(() => {});
       // Refresh and existing sessions use the same gate as first registration.
       if (memberEntryState(authenticatedUser, p, false) !== 'ready') return;
       writeProfileCache(authenticatedUser.uid, p);
@@ -337,7 +347,7 @@ export default function App() {
       setPage(getExperience(experienceRef.current).page);
       setSavedIds(p.savedEvents || []);
       syncGrantedNotificationToken(authenticatedUser.uid, p).catch(() => {});
-      await loadEvents(false);
+      void loadEvents(false);
     } catch (error) {
       if (current()) {
         setProfile(null);
@@ -592,7 +602,7 @@ export default function App() {
     </div>
   );
 
-  const entryState = memberEntryState(user, profileVerified ? profile : null, profileLoading);
+  const entryState = memberEntryState(user, profile, profileLoading);
   if (!['guest', 'ready'].includes(entryState)) return <CompleteMemberProfile
     key={user.uid + ':' + entryState} user={user} profile={profile} state={entryState}
     onComplete={finishMemberProfile} onRetry={() => processAuthenticatedUser(user)}
@@ -793,7 +803,8 @@ export default function App() {
             selectExperience('businesses');
           }}/>}
           {!isGuest && activePage === 'profile'    && <Profile       user={user} profile={profile} setProfile={setProfile} />}
-          {!isGuest && activePage === 'admin'      && <AdminDashboard {...shared} />}
+          {!isGuest && !profileVerified && activePage === 'admin' && <div className="card" role="status">Opening dashboard…</div>}
+          {!isGuest && profileVerified && activePage === 'admin'      && <AdminDashboard {...shared} />}
           {!isGuest && activePage === 'bulkshare'  && <BulkShare     events={events} profile={profile} user={user} />}
           {!isGuest && activePage === 'install'    && <InstallApp />}
           {activePage === 'hijri-calendar' && <HijriCalendar profile={profile} selectedCity={selectedCity} />}

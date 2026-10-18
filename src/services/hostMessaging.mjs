@@ -42,7 +42,7 @@ export function createHostMessaging({ db, sdk, currentUser, readOnly = false, re
     const hostUid = eventHostUid(event);
     if (event.hidden || ['inactive', 'archived', 'deleted', 'cancelled'].includes(event.status)) throw new Error('This event is no longer available.');
     if (!hostUid || hostUid === member.uid) throw new Error('Choose an event with another linked host.');
-    const threadId = id(eventId + '_' + member.uid + '_' + hostUid);
+    const threadId = id((registrationOnly ? 'registration_' : '') + eventId + '_' + member.uid + '_' + hostUid);
     const threadRef = reference('hostMessageThreads', threadId);
     // A participant query avoids reading a non-existent private thread, which
     // the native rules correctly refuse before it has any participants.
@@ -54,7 +54,7 @@ export function createHostMessaging({ db, sdk, currentUser, readOnly = false, re
       unreadBy: { [hostUid]: sdk.increment(1), [member.uid]: 0 } };
     const batch = sdk.writeBatch(db);
     if (previous) batch.set(threadRef, state, { merge: true });
-    else batch.set(threadRef, { ...state, type: 'host', eventId,
+    else batch.set(threadRef, { ...state, type: 'host', eventId, eventCollection: registrationOnly ? 'registrationEvents' : 'events',
       eventTitle: (event.eventTypeDisplay || event.eventType || 'Event') + ' - ' + (event.hostName || 'Host'),
       eventDate: event.eventDate || '', eventCity: event.metroArea || event.city || 'sydney',
       hostUid, hostName: clean(event.createdByName || event.hostName) || 'Host', senderUid: member.uid,

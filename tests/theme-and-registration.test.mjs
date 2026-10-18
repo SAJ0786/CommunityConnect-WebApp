@@ -57,7 +57,10 @@ test('web completion uses the native callable and never creates client-owned reg
   const auth = fs.readFileSync('src/pages/AuthPage.jsx', 'utf8');
   assert.doesNotMatch(auth, /lookupPhoneAccountByEmail|migratePhoneAccountByEmail|fbUpdateProfile/);
   const app = fs.readFileSync('src/App.jsx', 'utf8');
-  assert.ok(app.includes('memberEntryState(user, profileVerified ? profile : null, profileLoading)'));
+  assert.ok(app.includes('memberEntryState(user, profile, profileLoading)'));
   assert.ok(app.indexOf('return <CompleteMemberProfile') < app.indexOf('const shared'));
-  assert.doesNotMatch(app, /buildFallbackProfile|readProfileCache/);
+  assert.doesNotMatch(app, /buildFallbackProfile/);
+  assert.match(app, /setProfile\(\{\.\.\.cached, isSessionHint:true\}\)/);
+  assert.match(app, /profileVerified && activePage === 'admin'/);
+  assert.match(app, /setProfileLoading\(false\);[\s\S]*void loadEvents\(false\)/);
 });

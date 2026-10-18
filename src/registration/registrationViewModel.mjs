@@ -1,4 +1,4 @@
-import { createDraft, validateDraft } from './prototypeModel.mjs';
+import { createDraft, validateDraft, registrationFields } from './prototypeModel.mjs';
 
 const EVENT_DETAIL_FIELDS = ['hostName', 'organiserType', 'organiserId', 'organiserName', 'organisationType', 'isOnBehalfOf',
   'eventSubject', 'audienceType', 'speakerName', 'reciters', 'timeMode', 'prayerName', 'prayerLabel',
@@ -50,7 +50,7 @@ export function eventDraftFromDetail(detail, eventTypes) {
 export function answersForReview(detail) {
   const previous = detail.ownRegistration;
   const answers = {};
-  for (const field of detail.form?.fields || []) {
+  for (const field of registrationFields(detail.form?.fields || [], previous?.places || 1)) {
     const oldField = previous?.fields?.find(item => item.id === field.id);
     if (field.type === 'consent') { answers[field.id] = false; continue; }
     if (!oldField || oldField.type !== field.type || oldField.label !== field.label) continue;
@@ -65,6 +65,8 @@ export function mergeRegistrationPage(previous, incoming) {
 }
 
 export function registrantName(registration) {
+  const participantNames = (registration.fields || []).filter(field => field.participantIndex && /name/i.test(field.originalLabel || field.label) && !/parent|guardian/i.test(field.originalLabel || field.label)).map(field => String(registration.answers?.[field.id] || '').trim()).filter(Boolean);
+  if (participantNames.length) return participantNames.join(', ');
   const names = (registration.fields || []).filter(field =>
     field.type === 'text' && /\bname\b/i.test(field.label)
     && !/\b(parent|guardian|host|organis[ez]r|school|company|team|event|group)\b/i.test(field.label)
