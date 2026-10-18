@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
+import { validateWebEnvironment } from './tools/validate-web-env.mjs';
 import react from '@vitejs/plugin-react';
 import fs from 'fs';
 import path from 'path';
@@ -32,7 +33,20 @@ function stampServiceWorker() {
 }
 
 export default defineConfig({
-  plugins: [react(), stampServiceWorker()],
+  plugins: [react(), stampServiceWorker(), {
+    name: 'validate-web-release-environment',
+    apply: 'build',
+    configResolved(config) {
+      const env = { ...loadEnv(config.mode, config.root, 'VITE_'), ...process.env };
+      // Candidate builders provide the same values via explicit Vite defines.
+      for (const [key, value] of Object.entries(config.define || {})) {
+        if (key.startsWith('import.meta.env.VITE_')) {
+          env[key.slice('import.meta.env.'.length)] = JSON.parse(value);
+        }
+      }
+      validateWebEnvironment(env);
+    },
+  }],
   define: {
     // Injected at build time — used to show "Build Number" in Profile > About
     __APP_BUILD_TIME__: JSON.stringify(Date.now()),
