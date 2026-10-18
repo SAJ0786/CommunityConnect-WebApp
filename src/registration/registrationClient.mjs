@@ -18,6 +18,7 @@ export function createRegistrationClient(call, { enabled = false } = {}) {
       return invoke('createRegistrationSeries', { city, createKey, draft:details, recurrence, occurrences });
     },
     approve: (eventId, expectedRevision) => invoke('approveRegistrationEvent', { eventId, expectedRevision }),
+    review: (eventId, expectedRevision, decision, feedback) => invoke('reviewRegistrationEvent', { eventId, expectedRevision, decision, feedback }),
     submit: submission => invoke('submitEventRegistration', submission),
     cancel: (eventId, expectedRevision) => invoke('cancelEventRegistration', { eventId, expectedRevision }),
     cancelEvent: (eventId, expectedRevision, confirmation) => invoke('cancelRegistrationEvent', { eventId, expectedRevision, confirmation }),

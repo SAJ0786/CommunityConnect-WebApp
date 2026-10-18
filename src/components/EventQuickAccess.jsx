@@ -9,5 +9,5 @@ export default function EventQuickAccess({ viewMode, setViewMode, setPage, isGue
     { label: 'Hijri', Icon: Moon, action: () => setPage('hijri-calendar') },
     { label: 'Calendar', Icon: CalendarDays, action: () => setPage('calendar') },
   ];
-  return <section className="cc-quick-access" aria-label="Quick access"><h2>Quick access</h2><div>{items.map(({label,Icon,action,restricted,pressed}) => <button type="button" key={label} className={pressed !== undefined ? 'cc-registration-filter' : undefined} onClick={action} aria-pressed={pressed} disabled={restricted} title={restricted ? 'Sign in to use the map' : undefined}><span><Icon size={23} aria-hidden="true"/></span>{label}</button>)}</div></section>;
+  return <section className="cc-quick-access" aria-label="Quick access"><h2>Quick access</h2><div>{items.map(({label,Icon,action,restricted,pressed}) => <button type="button" key={label} className={pressed !== undefined ? 'cc-registration-filter' : undefined} onClick={action} aria-pressed={pressed} disabled={restricted} title={restricted ? 'Sign in to use the map' : undefined}><span className="cc-quick-icon"><Icon size={23} aria-hidden="true"/></span><span className="cc-quick-label">{label}</span></button>)}</div></section>;
 }

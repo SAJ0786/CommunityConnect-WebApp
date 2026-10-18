@@ -1,3 +1,4 @@
+import EventPosterPicker from './EventPosterPicker';
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import ReciterFields from './ReciterFields';
 import HijriDatePicker from './HijriDatePicker';
@@ -340,35 +341,7 @@ export default function EventForm({
       )}
 
       {/* ── Event Poster ── */}
-      {registrationMode ? posterControls : <><label>Upload Event Poster <span className="small" style={{ fontWeight: 400 }}>(optional)</span></label>
-      {imagePreview ? (
-        <div style={{ position: 'relative', borderRadius: 14, overflow: 'hidden',
-          marginBottom: 14, marginTop: 4 }}>
-          <img src={imagePreview} alt="Event"
-            style={{ width: '100%', height: 180, objectFit: 'cover', display: 'block' }} />
-          <button type="button" onClick={removePhoto} style={{
-            position: 'absolute', top: 8, right: 8, width: 32, height: 32,
-            borderRadius: '50%', background: 'color-mix(in srgb, var(--cc-overlay-base) 60%, transparent)', color: 'var(--cc-on-primary)',
-            border: 'none', cursor: 'pointer', fontSize: '1rem', lineHeight: 1,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>×</button>
-        </div>
-      ) : (
-        <label style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
-          background: 'var(--bg,var(--cc-background))', border: '2px dashed var(--cc-border)',
-          borderRadius: 14, padding: 22, cursor: 'pointer',
-          color: 'var(--teal,var(--cc-accent-strong))', marginTop: 4, marginBottom: 14,
-        }}>
-          <span style={{ fontSize: '1.875rem' }}>📷</span>
-          <span style={{ fontSize: '0.8125rem', fontWeight: 800 }}>Upload your event poster</span>
-          <span style={{ fontSize: '0.6875rem', color: 'var(--muted)', textAlign: 'center' }}>
-            Optional — if you don't, your organisation logo will be shown
-          </span>
-          <input type="file" accept="image/*" onChange={handlePhotoPick}
-            style={{ display: 'none' }} />
-        </label>
-      )}</>}
+      {registrationMode ? posterControls : <EventPosterPicker uri={imagePreview} onChange={handlePhotoPick} onRemove={removePhoto} disabled={saving || uploadingImg} />}
 
       {/* On behalf of */}
       <label className="checkbox" style={{ marginBottom: 10 }}>

@@ -1,3 +1,4 @@
+import ExperienceSwitch from '../components/ExperienceSwitch';
 import { normalisePhone, userMatchesSearch } from '../utils/adminUserSearch.mjs';
 import { EVENT_ADMIN_GROUPS } from '../utils/adminNavigation.mjs';
 import { upcomingEventsCsv } from '../utils/adminEventExport.mjs';
@@ -1376,19 +1377,10 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
       {tab === 'tools' && <><CityManagementPanel profile={profile}/><YouTubeConnectCard isSuperAdmin={isSuperAdmin}/><div className="card"><h3>Utilities</h3><button className="btn-light" onClick={() => setTab('import')}>Event Import &amp; Export</button>{isSuperAdmin && <button className="btn-light" onClick={() => setTab('repair')}>Data Repair</button>}</div></>}
       {tab === 'import' && <section className="card"><h3>Export Upcoming Events</h3><p>Download upcoming events within your administrator access.</p><button disabled={adminEvents === null} onClick={exportUpcoming}>Download upcoming events CSV</button></section>}
       {tab === 'users' && renderSummaryPanels(userSummaryPanels, userPanelFilter, applyUserSummaryFilter)}
-      {tab === 'users' && isSuperAdmin && <RegistrationEventPanel scope="review" user={user} profile={profile} onCalendar={() => setPage('calendar')}/>}
-      {tab === 'events' && <div className="card registration-actions" role="tablist" aria-label="Event management">
-        {[['regular', 'Regular Events'], ['registration', 'Registration only Events']].map(([key, label]) => <button type="button" key={key}
-          id={`event-management-tab-${key}`} role="tab" aria-selected={eventManagementTab === key} aria-controls={`event-management-panel-${key}`}
-          tabIndex={eventManagementTab === key ? 0 : -1} className={eventManagementTab === key ? '' : 'btn-light'}
-          onClick={() => setEventManagementTab(key)} onKeyDown={event => {
-            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-            event.preventDefault();
-            const next = event.key === 'Home' ? 'regular' : event.key === 'End' ? 'registration' : key === 'regular' ? 'registration' : 'regular';
-            setEventManagementTab(next);
-            document.getElementById(`event-management-tab-${next}`)?.focus();
-          }}>{label}</button>)}
-      </div>}
+      {tab === 'events' && <ExperienceSwitch label="Event management" options={[
+        { id:'event-management-tab-regular', label:'Events', icon:'📅', selected:eventManagementTab === 'regular', controls:'event-management-panel-regular', onClick:() => setEventManagementTab('regular') },
+        { id:'event-management-tab-registration', label:'Registration only events', icon:'📋', selected:eventManagementTab === 'registration', controls:'event-management-panel-registration', onClick:() => setEventManagementTab('registration') },
+      ]} />}
       {tab === 'events' && eventManagementTab === 'registration' && <section role="tabpanel" id="event-management-panel-registration" aria-labelledby="event-management-tab-registration" tabIndex={0}>
         <RegistrationEventPanel scope="management" city={adminCity} user={user} profile={profile} onCalendar={() => setPage('calendar')}/>
       </section>}

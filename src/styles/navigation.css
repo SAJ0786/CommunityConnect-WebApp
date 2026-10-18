@@ -68,3 +68,8 @@
   .cc-events-workspace .desktop-dashboard-layout, .cc-events-workspace .desktop-calendar-layout { grid-template-columns: minmax(0,1fr); }
   .cc-events-workspace .desktop-home-toolbar { flex-wrap: wrap; }
 }
+
+/* One readable row on every viewport; full labels never split mid-word. */
+.cc-quick-access > div, .cc-quick-access > div:has(.cc-registration-filter) { display:flex; gap:10px; overflow-x:auto; padding-bottom:4px; }
+.cc-quick-access button, .cc-quick-access .cc-registration-filter { display:grid; grid-template-rows:44px minmax(2.5em,auto); align-items:start; align-content:start; justify-items:center; flex:1 0 100px; min-width:100px; gap:8px; }
+.cc-quick-access button > .cc-quick-label { display:flex; align-items:center; justify-content:center; width:auto; height:auto; min-height:2.5em; border-radius:0; background:transparent; color:inherit; overflow-wrap:normal; word-break:normal; text-align:center; }

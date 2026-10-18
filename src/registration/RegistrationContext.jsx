@@ -10,8 +10,8 @@ export function useRegistrationFeed(api, scope, city, revision = 0) {
   useEffect(() => {
     if (!api) { setState({ events: [], loading: false, error: '' }); return; }
     let current = true;
-    setState({ api, key, events: [], loading: true, error: '' });
-    registrationEventPages(api, { scope, ...(city ? { city } : {}) })
+    setState(previous => ({ api, key, events: previous.api === api && previous.key === key ? previous.events : [], loading: true, error: '' }));
+    registrationEventPages(api, { scope, ...(city ? { city } : {}) }, events => { if (current) setState({ api, key, events, loading: true, error: '' }); })
       .then(events => { if (current) setState({ api, key, events, loading: false, error: '' }); })
       .catch(error => { if (current) setState({ api, key, events: [], loading: false, error: error.message || 'Registration events could not be loaded.' }); });
     return () => { current = false; };

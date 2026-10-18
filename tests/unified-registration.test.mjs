@@ -110,3 +110,22 @@ test('poster API only opts into pending view explicitly; default remains publish
   assert.throws(()=>api.poster('event','draft'),/Unsupported/);
   assert.deepEqual(calls,[{name:'getRegistrationPoster',data:{eventId:'event'}},{name:'getRegistrationPoster',data:{eventId:'event',view:'pending'}}]);
 });
+
+test('registration pages become visible before the following page resolves', async () => {
+  let release;
+  const pages = [];
+  const api = { list: async ({ cursor }) => cursor ? new Promise(resolve => { release = resolve; }) : { events: [{ id:'first',date:'2026-12-01',city:'sydney' }], nextCursor:'next' } };
+  const pending = registrationEventPages(api, {scope:'management',city:'sydney'}, rows => pages.push(rows.map(row=>row.id)));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(pages, [['first']]);
+  release({events:[{id:'second',date:'2026-12-02',city:'sydney'}],nextCursor:null});
+  assert.equal((await pending).length,2);
+  assert.deepEqual(pages,[['first'],['first','second']]);
+});
+
+test('review feedback uses the authorised callable with optimistic revision', async () => {
+  const calls = [];
+  const api = createRegistrationClient(async (name,data)=>{calls.push({name,data});return {data:{ok:true}};},{enabled:true});
+  await api.review('event',7,'changes-requested','Please confirm start time');
+  assert.deepEqual(calls,[{name:'reviewRegistrationEvent',data:{eventId:'event',expectedRevision:7,decision:'changes-requested',feedback:'Please confirm start time'}}]);
+});

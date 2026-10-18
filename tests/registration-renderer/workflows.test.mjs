@@ -93,7 +93,7 @@ test('registration event details are one form ordered from title through optiona
   assert.equal(view.root.findAllByType('h1').length,1);
   assert.equal(view.root.findAllByType('h2').some(node=>text(node)==='Event details'),false);
   const form=view.root.findByType('form'), content=text(form);
-  const ordered=['Event title','Private poster','I am adding this event','Organiser Type','Host Name','Host Phone Number','Date *','Time Selection','Registration closes','Private venue address','Event Type','Frequency','Subject','Notes','Audience Type','Speaker and reciters are optional.','Capacity (places)'];
+  const ordered=['Event title','Upload Event Poster','I am adding this event','Organiser Type','Host Name','Host Phone Number','Date *','Time Selection','Registration closes','Private venue address','Event Type','Frequency','Subject','Notes','Audience Type','Speaker and reciters are optional.','Capacity (places)'];
   let previous=-1;
   for(const label of ordered){const index=content.indexOf(label);assert.ok(index>previous,`${label} follows the previous field`);previous=index;}
   const title=view.root.findAllByType('label').find(node=>text(node)==='Event title');
@@ -210,7 +210,7 @@ test('staged approved-event edits reopen in editor/review but self-registration 
   assert.equal(f.calls.find(row=>row[0]==='submit')[1].formVersion,1);view.unmount();
   view=await mount(f,{operationsOnly:true,initialEventId:'example',initialAction:'approve'});
   assert.ok(text(view.toJSON()).includes('Submitted replacement'));assert.ok(text(view.toJSON()).includes('Unapproved question'));
-  await click(view,'Confirm approve event');
+  await click(view,'Approve event'); await click(view,'Confirm approve event');
   assert.equal(f.calls.find(row=>row[0]==='approve')[1][1],5);
   assert.equal(f.detail().event.title,'Submitted replacement');assert.equal(f.detail().event.hasPendingChanges,undefined);view.unmount();
 });
@@ -250,4 +250,21 @@ test('Add City displays verified coordinates and sends only confirmed fingerprin
   let view;await act(async()=>{view=Renderer.create(React.createElement(CityPanel,{profile:{role:'superAdmin'}}));});await fill(view,'City name','Darwin');await click(view,'Search cities');await click(view,'Darwin');
   assert.ok(text(view.toJSON()).includes('-12.46'));assert.ok(text(view.toJSON()).includes('130.8'));assert.ok(text(view.toJSON()).includes('Australia/Darwin'));
   await fill(view,'City short code','DRW');await click(view,'Confirm and add city');assert.deepEqual(calls.at(-1),['addCatalogueCity',{placeId:'place',fingerprint:'fingerprint',code:'DRW'}]);assert.ok(text(view.toJSON()).includes('City added'));view.unmount();
+});
+
+test('approval requires opening the submitted poster and supports explicit feedback decisions', async()=>{
+  const f=fixture({manager:true,staged:true});
+  await f.api.save({draft:{title:'Review me',fields:structuredClone(fields),purpose:'Purpose'}});
+  const load=f.api.load; f.api.load=async()=>{const value=await load();value.pendingChanges.privateDetails.hasPoster=true;return value;};
+  f.api.poster=async()=>({mime:'image/png',base64:'c3ludGhldGlj'});
+  f.api.review=async(...args)=>{f.calls.push(['review',...args]);};
+  const view=await mount(f,{operationsOnly:true,initialEventId:'example',initialAction:'approve'});
+  assert.equal(button(view,'Approve event').props.disabled,true);
+  assert.equal(button(view,'Reject event').props.disabled,true);
+  await click(view,'View submitted poster');
+  assert.equal(Boolean(button(view,'Approve event').props.disabled),false);
+  await fill(view,'Feedback for organiser','Please confirm the venue');
+  await click(view,'Suggest changes'); await click(view,'Confirm suggest changes');
+  assert.deepEqual(f.calls.find(row=>row[0]==='review'),['review','example',5,'changes-requested','Please confirm the venue']);
+  view.unmount();
 });

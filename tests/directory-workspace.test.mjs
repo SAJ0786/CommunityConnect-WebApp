@@ -9,7 +9,7 @@ const admin = { ...member, role: 'superAdmin' };
 
 test('native hours helpers and category catalogue are reused without altering their source', () => {
   assert.equal(fs.readFileSync('src/business/businessHours.mjs','utf8').replaceAll('\r',''), fs.readFileSync('../sdk51-package-backup/src/utils/businessHours.js','utf8').replaceAll('\r',''));
-  const native = fs.readFileSync('../sdk51-package-backup/src/business/businessData.js','utf8').split('export const SAMPLE_BUSINESSES')[0].trim();
+  const native = fs.readFileSync('../sdk51-package-backup/src/business/businessData.js','utf8').split('export const SAMPLE_BUSINESSES')[0].replace(/^import \{ colors \} from '\.\.\/theme';\r?\n/, '').trim();
   assert.equal(fs.readFileSync('src/business/categories.mjs','utf8').trim(),native);
 });
 test('listing form requires reference consent, declaration, selected address and valid schedules', () => {

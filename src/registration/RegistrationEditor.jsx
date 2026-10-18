@@ -1,3 +1,4 @@
+import EventPosterPicker from '../components/EventPosterPicker';
 import React, { useEffect, useId, useRef, useState } from 'react';
 import EventForm from '../components/EventForm';
 import AnswerField from './AnswerField';
@@ -64,10 +65,8 @@ export default function RegistrationEditor({ initialDraft, initialStep = 'event'
               {draft.frequency === 'recurring' && <><label htmlFor={id + '-repeat'}>Repeat every</label><select id={id + '-repeat'} value={draft.repeatFrequency || 'week'} onChange={e => setDraft(current => ({ ...current, repeatFrequency:e.target.value, occurrenceCount:e.target.value === 'year' ? Math.min(5, Number(current.occurrenceCount) || 4) : current.occurrenceCount, occurrenceSettings:{} }))}>{REGISTRATION_FREQUENCIES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select><label>Number of occurrences<input type="number" min="2" max={draft.repeatFrequency === 'year' ? 5 : 100} value={draft.occurrenceCount || ''} onChange={e => update('occurrenceCount', e.target.value)}/></label><p>Each occurrence has separate registration, capacity, closing time and approval. Review its dates and settings before saving. Recurrence follows your selected Gregorian or Hijri calendar.</p></>}</>,
             settings: <><label>Capacity (places)<input type="number" min="1" max="10000" value={draft.capacity} onChange={e => update('capacity', e.target.value)}/></label><label className="registration-check"><input type="checkbox" checked={draft.allowCancellation} onChange={e => update('allowCancellation', e.target.checked)}/>Allow attendee cancellation before event day</label></>,
           }}
-          posterControls={<><label>Private poster (optional)<input type="file" accept="image/jpeg,image/png,image/webp" onChange={readPoster}/></label>
-        {draft.poster && <><img className="registration-poster" src={draft.poster.uri} alt="Selected private poster"/><button type="button" onClick={() => { posterRead.current++; update('poster', null); }}>Discard selected poster</button></>}
-        {hasPoster && onRemovePoster && <button type="button" onClick={onRemovePoster}>Delete existing poster</button>}
-        <p>A selected poster uploads privately after the event is saved.</p></>}/>
+          posterControls={<EventPosterPicker uri={draft.poster?.uri} hasPoster={hasPoster} privatePoster disabled={busy} onChange={readPoster} onRemove={draft.poster ? () => { posterRead.current++; update('poster', null); } : onRemovePoster} />}/>
+
         {notesError && <p role="alert">{notesError}</p>}
       </div>}
       {step === 'templates' && <div className="card"><h2>Use a template or build your own?</h2><p>Templates can be customised.</p><div className="registration-actions">{FORM_TEMPLATES.map(template => <button type="button" key={template.name} onClick={() => choose({ fields: templateFields(template) })}>{template.name}</button>)}{templates.map(template => <button type="button" key={template.id} onClick={() => choose(template)}>{template.name} (saved)</button>)}{templateCursor && <button type="button" onClick={onMoreTemplates}>Load more templates</button>}<button type="button" onClick={() => choose({ fields: [] })}>Build my own form</button><button type="button" onClick={() => setStep('form')}>Continue current form</button></div></div>}

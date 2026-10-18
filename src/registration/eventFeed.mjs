@@ -4,12 +4,13 @@ export function registrationEventCard(row) {
     organiserType: row.organiserType || 'private', address: { suburb: row.suburb || '' }, imageUrl: '' };
 }
 
-export async function registrationEventPages(api, options) {
+export async function registrationEventPages(api, options, onPage) {
   const events = new Map(), cursors = new Set();
   let cursor = null;
   do {
     const page = await api.list({ ...options, cursor });
     for (const row of page.events || []) events.set(row.id, registrationEventCard(row));
+    onPage?.([...events.values()]);
     cursor = page.nextCursor || null;
     if (cursor && cursors.has(cursor)) throw new Error('Registration pagination repeated a cursor. Refresh events to retry.');
     if (cursor) cursors.add(cursor);

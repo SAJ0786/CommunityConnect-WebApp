@@ -69,7 +69,7 @@ export default function EventCard({
     return () => document.removeEventListener('visibilitychange', visibility);
   }, []);
   useEffect(() => {
-    if (!sourceEvent.registrationOnly || !registration?.api || !pageVisible || (!isExpanded && !sourceEvent.hasPoster)) return;
+    if (!sourceEvent.registrationOnly || !registration?.api || !pageVisible || !isExpanded) return;
     let current = true;
     setRegistrationError('');
     registration.api.load(sourceEvent.id).then(async detail => {
@@ -80,7 +80,7 @@ export default function EventCard({
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(poster.mime)) throw new Error('Unsupported event poster format.');
         if (current) setPrivateState({ key: registrationKey, detail, poster: `data:${poster.mime};base64,${poster.base64}` });
       }
-    }).catch(error => { if (current) setRegistrationError(error.message); });
+    }).catch(error => { if (current) { setPrivateState(null); setRegistrationError(error.message); } });
     return () => { current = false; };
   }, [registration?.api, registrationKey, sourceEvent.registrationOnly, sourceEvent.hasPoster, pageVisible, isExpanded]);
   const [seriesArchiveOpen, setSeriesArchiveOpen] = useState(false);
@@ -273,8 +273,7 @@ export default function EventCard({
         transform: isExpanded ? 'translateY(-1px)' : 'none',
         marginBottom: 8,
       }}>
-      {event.registrationOnly && event.status === 'pending' && <p role="note" style={{ margin:'0 0 12px', padding:14, fontSize:'1.3rem', fontWeight:900, color:'var(--cc-warning-strong)', background:'var(--cc-warning-soft)', borderRadius:12 }}>UnApproved</p>}
-      {event.registrationOnly && manage && event.hasPendingChanges && <p role="status">Changes awaiting approval. The last approved version remains published.</p>}
+      {event.registrationOnly && manage && (event.status === 'pending' || event.hasPendingChanges || event.reviewDecision) && <span className="registration-approval-badge">{event.reviewDecision === 'rejected' ? 'Unapproved' : event.reviewDecision === 'changes-requested' ? 'Changes requested' : 'Needs approval'}</span>}
       {event.registrationOnly && event.status === 'cancelled' && <p role="status">Event deleted or cancelled. No places reserved.</p>}
 
       <div className="event-native-summary">

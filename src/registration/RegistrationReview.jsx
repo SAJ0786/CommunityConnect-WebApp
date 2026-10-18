@@ -3,26 +3,21 @@ import './workspace.css';
 
 export default function RegistrationReview({ detail, poster, busy, onPoster }) {
   const { event, form, privateDetails } = detail;
-  return <section aria-label="Submitted event details">
-    {detail.pendingChanges && <p>These are the submitted changes. The last approved version remains published until approval.</p>}
+  const values = [
+    ['Event type', event.eventType], ['Date', event.date], ['Start time', event.startTime || 'Date only'], ['End time', event.endTime || 'Not supplied'],
+    ['City', event.city], ['Public suburb', event.suburb], ['Host', event.hostName], ['Organiser', event.organiserName], ['Subject', event.eventSubject], ['Audience', event.audienceType], ['Speaker', event.speakerName],
+    ['Notes', event.notes], ['Capacity', event.capacity], ['Registration closes', event.closes || 'Start of event day'],
+    ['Full address (private)', privateDetails?.address], ['Host phone (private)', privateDetails?.hostPhone], ['Host contact (private)', privateDetails?.hostContactOptional],
+  ];
+  return <section className="registration-review" aria-label="Submitted event details">
+    {detail.pendingChanges && <p>Submitted changes await approval. The last approved version remains published.</p>}
     <h3>{event.title}</h3>
-    {event.seriesId && <p>Occurrence {event.occurrenceIndex + 1} of {event.occurrenceCount}. Registration, capacity and approval apply only to this occurrence.</p>}
-    <p>{event.eventType} · {event.date} · {event.startTime || 'Time not provided'}{event.endTime ? ` - ${event.endTime}${event.endTime < event.startTime ? ' (following day)' : ''}` : ''} · {event.suburb}</p>
-    {event.hostName && <p>Host: {event.hostName}</p>}
-    {event.organiserName && <p>Organiser: {event.organiserName}</p>}
-    {event.eventSubject && <p>Subject: {event.eventSubject}</p>}
-    {event.audienceType && <p>Audience: {event.audienceType}</p>}
-    {event.speakerName && <p>Speaker: {event.speakerName}</p>}
-    {event.reciters?.map((row, index) => <p key={index}>{row.customType || row.type}: {row.name}</p>)}
-    <p>{event.notes}</p>
-    <p>Capacity: {event.capacity} · Registration closes: {event.closes || 'Start of event day'}</p>
-    <p>{privateDetails?.address}</p>
-    {privateDetails?.hostPhone && <p>Host phone: {privateDetails.hostPhone}</p>}
-    {privateDetails?.hostContactOptional && <p>Host contact: {privateDetails.hostContactOptional}</p>}
-    {privateDetails?.hasPoster && <button type="button" disabled={busy} onClick={onPoster}>View submitted poster</button>}
+    {event.seriesId && <p>Occurrence {event.occurrenceIndex + 1} of {event.occurrenceCount}</p>}
+    <dl className="registration-review-grid">{values.filter(([,value]) => value !== undefined && value !== '').map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{String(value)}</dd></div>)}</dl>
+    {event.reciters?.map((row, index) => <div className="registration-form-field" key={index}><strong>{row.customType || row.type}</strong><p>{row.name}</p></div>)}
+    {privateDetails?.hasPoster && <button className="btn-light" type="button" disabled={busy} onClick={onPoster}>View submitted poster</button>}
     {poster && <img className="registration-poster" src={poster} alt="Submitted event poster"/>}
-    <p>{form?.purpose}</p>
-    {form?.fields?.map(field => <section key={field.id}><h4>{field.label}{field.required ? ' *' : ''}</h4>
-      <p>{field.description}</p><p>{field.terms || field.options?.join(', ')}</p></section>)}
+    <h3>Registration form</h3><p>{form?.purpose}</p>
+    {form?.fields?.map(field => <section className="registration-form-field" key={field.id}><h4>{field.label}{field.required ? ' *' : ''}</h4><p>{field.description}</p><p>{field.terms || field.options?.join(', ')}</p></section>)}
   </section>;
 }

@@ -1,0 +1,9 @@
+.event-poster-control { display:grid; gap:10px; margin-bottom:16px; }
+.event-poster-control > label { color:var(--cc-text); font-weight:600; }
+.event-poster-control small { color:var(--cc-muted); font-weight:400; }
+.event-poster-drop { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:180px; padding:20px; background:var(--cc-accent-soft); color:var(--cc-accent-strong); border:1px dashed var(--cc-border); border-radius:var(--cc-radius-control); cursor:pointer; font:inherit; }
+.event-poster-drop img { display:block; width:100%; height:180px; object-fit:contain; }
+.event-poster-drop > svg { width:32px; height:32px; }
+.event-poster-drop > span { color:var(--cc-muted); font-size:.85rem; }
+.event-poster-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.event-poster-actions button { display:inline-flex; gap:8px; align-items:center; min-height:44px; }

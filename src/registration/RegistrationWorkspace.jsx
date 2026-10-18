@@ -18,7 +18,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
   const [stage, setStage] = useState('list'), [scope, setScope] = useState('public');
   const [items, setItems] = useState([]), [cursor, setCursor] = useState(null);
   const [detail, setDetail] = useState(null), [draft, setDraft] = useState(null), [poster, setPoster] = useState(null);
-  const [reviewPoster, setReviewPoster] = useState(null);
+  const [reviewPoster, setReviewPoster] = useState(null), [feedback, setFeedback] = useState('');
   const [templates, setTemplates] = useState([]), [templateCursor, setTemplateCursor] = useState(null);
   const [responses, setResponses] = useState([]), [responseCursor, setResponseCursor] = useState(null);
   const [answers, setAnswers] = useState({}), [places, setPlaces] = useState('1'), [errors, setErrors] = useState({});
@@ -34,7 +34,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     try { await work(valid); } catch (error) { if (valid()) setNotice(`${error?.message || 'The request could not be confirmed.'} Reload current status before repeating a change.`); }
     finally { if (valid()) { lock.current = false; setBusy(false); } }
   };
-  const clearPrivate = () => { setDetail(null); setPoster(null); setReviewPoster(null); setResponses([]); setAnswers({}); setConfirm(null); };
+  const clearPrivate = () => { setDetail(null); setPoster(null); setReviewPoster(null); setFeedback(''); setResponses([]); setAnswers({}); setConfirm(null); };
   const list = (nextScope = scope, next = null) => run(async valid => {
     clearPrivate(); setPendingPoster(null); currentId.current = null; setDraft(null); setStage('list');
     const result = await api.list({ scope: nextScope, city, cursor: next });
@@ -55,15 +55,13 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       if (!fresh.canManage) throw new Error('You cannot edit this event.');
       setDraft(eventDraftFromDetail(fresh, eventTypes)); setStage('editor');
       if (action === 'copy') { createKey.current = reference(); currentId.current = null; setDetail(null); setDraft(current => ({ ...current, seriesId:undefined, occurrenceIndex:undefined, occurrenceCount:undefined, recurrenceRule:undefined })); }
-      await loadTemplates(valid);
+      loadTemplates(valid).catch(error => { if (valid()) setNotice(error.message || 'Saved templates unavailable; built-in templates are ready.'); });
     } else if (action === 'responses') {
       const result = await api.responses(id);
       if (valid()) { setResponses(result.registrations || []); setResponseCursor(result.nextCursor); setStage('responses'); }
     } else if (action === 'approve') {
       if (!fresh.canApprove || !(fresh.event.status === 'pending' || fresh.event.hasPendingChanges)) throw new Error('This event is no longer awaiting your approval. Reload current status.');
-      ask('Approve event', 'Confirm you have reviewed the venue, poster and registration form below.', async valid => {
-        await api.approve(fresh.event.id, fresh.event.revision); await reloadAfter(valid, 'Event approved.');
-      });
+      setNotice('Review the event, private poster and registration form before choosing an approval action.');
     }
   });
   const loadTemplates = async (valid, next = null) => {
@@ -78,7 +76,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       if (isNew) { createKey.current = reference(); currentId.current = null; setDetail(null); setPendingPoster(null); }
       else setDetail(fresh);
       setDraft(isNew ? { ...createDraft(), startTime: '', endTime: '', title: '', address: '', suburb: '', eventType: eventTypes[0], customEventType: '' } : eventDraftFromDetail(fresh, eventTypes));
-      setStage('editor'); setPendingPoster(null); setPoster(null); setReviewPoster(null); await loadTemplates(valid);
+      setStage('editor'); setPendingPoster(null); setPoster(null); setReviewPoster(null); loadTemplates(valid).catch(error => { if (valid()) setNotice(error.message || 'Saved templates unavailable; built-in templates are ready.'); });
     });
   };
   useEffect(() => {
@@ -186,7 +184,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     })} eventTypes={eventTypes} templates={templates} templateCursor={templateCursor} onMoreTemplates={() => run(valid => loadTemplates(valid, templateCursor))} busy={busy} onSave={save} onCancel={detail ? () => setStage('card') : undefined} onSaveTemplate={template => run(async valid => {
       const content = JSON.stringify(template);
       if (templateRequest.current?.content !== content) templateRequest.current = { content, id: reference() };
-      await api.saveTemplate({ ...template, templateId: templateRequest.current.id }); await loadTemplates(valid); if (valid()) { templateRequest.current = null; setNotice('Template saved to your account.'); }
+      await api.saveTemplate({ ...template, templateId: templateRequest.current.id }); loadTemplates(valid).catch(error => { if (valid()) setNotice(error.message || 'Saved templates unavailable; built-in templates are ready.'); }); if (valid()) { templateRequest.current = null; setNotice('Template saved to your account.'); }
     })}/>}
     {detail && ['card', 'confirmation', 'host-confirmation'].includes(stage) && <article className="card">
       {stage === 'confirmation' && <h2>{detail.ownRegistration?.status === 'registered' ? 'Registration confirmed' : 'Registration status updated'}</h2>}{stage === 'host-confirmation' && <h2>Event saved</h2>}
@@ -204,14 +202,16 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
             if (valid()) await reloadAfter(valid, problem || 'Poster uploaded.');
           })}>Retry selected poster upload</button></>}
         </>}
-        {detail.canApprove && (detail.event.status === 'pending' || detail.event.hasPendingChanges) && <button disabled={busy} onClick={() => ask('Approve event', 'Confirm you have reviewed the submitted event details, venue, poster and registration form below.', async valid => { await api.approve(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Event approved.'); })}>Approve event</button>}
+        {detail.canApprove && (detail.event.status === 'pending' || detail.event.hasPendingChanges) && <button disabled={busy || !reviewDetail.form || !reviewDetail.privateDetails || (reviewDetail.privateDetails.hasPoster && !reviewPoster)} onClick={() => ask('Approve event', 'Confirm you have reviewed the submitted event details, venue, poster and registration form below.', async valid => { await api.approve(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Event approved.'); })}>Approve event</button>}
       </div>
       {detail.canManage && reviewDetail.form && <details open={initialAction === 'approve'}><summary>{detail.pendingChanges ? 'Review submitted changes' : 'Review registration form'}</summary>
         <RegistrationReview detail={reviewDetail} poster={reviewPoster} busy={busy} onPoster={() => run(async valid => {
           const result = await api.poster(detail.event.id, detail.pendingChanges ? 'pending' : undefined);
           if (!['image/jpeg','image/png','image/webp'].includes(result.mime)) throw new Error('Unsupported event poster format.');
           if (valid()) setReviewPoster(`data:${result.mime};base64,${result.base64}`);
-        })}/></details>}
+        })}/>
+        {detail.canApprove && (detail.event.status === 'pending' || detail.event.hasPendingChanges) && <><label>Feedback for organiser<textarea maxLength={2000} value={feedback} onChange={event => setFeedback(event.target.value)} disabled={busy}/></label><div className="registration-actions">{[['rejected', 'Reject event'], ['changes-requested', 'Suggest changes']].map(([decision, label]) => <button key={decision} disabled={busy || !feedback.trim()} onClick={() => ask(label, 'Send this feedback to the organiser?', async valid => { await api.review(detail.event.id, detail.event.revision, decision, feedback.trim()); await reloadAfter(valid, 'Review feedback sent.'); })}>{label}</button>)}</div></>}
+        </details>}
     </article>}
     {stage === 'entry' && detail?.form && <form noValidate onSubmit={submit} className="card"><p>{detail.form.purpose}</p><fieldset disabled={busy || retrySubmission} className="registration-fields"><label>Number of attendees<input type="number" min="1" max={detail.canRegister ? detail.event.capacity : detail.ownRegistration?.places} value={places} onChange={e => setPlaces(e.target.value)}/></label>{errors.places && <p role="alert">{errors.places}</p>}{detail.form.fields.map(field => <AnswerField key={field.id} field={field} value={answers[field.id]} error={errors[field.id]} onChange={value => setAnswers(current => ({ ...current, [field.id]: value }))}/>)}</fieldset><p>Availability is confirmed by the server when you submit.</p>{retrySubmission && !busy && <p>The last request is unconfirmed. Retry the same submission, or reload current status before editing.</p>}<button disabled={busy} type="submit">{retrySubmission ? 'Retry same submission' : 'Confirm registration'}</button></form>}
     {stage === 'responses' && detail?.canManage && <section className="card"><p>Download all authorized responses in an Excel workbook.</p><button disabled={busy || !responses.length} onClick={() => run(async valid => {

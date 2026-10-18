@@ -16,3 +16,10 @@
 .registration-workspace .registration-response { padding:0; }
 .registration-response > summary { padding:20px; cursor:pointer; font-size:1.1rem; font-weight:600; }
 .registration-response > section { padding:0 20px 20px; }
+
+.registration-management { margin:16px 0; display:grid; gap:12px; }
+.registration-approval-badge { display:inline-flex; align-self:flex-start; padding:6px 10px; margin-bottom:8px; border-radius:var(--cc-radius-small); background:var(--cc-warning-soft); color:var(--cc-warning-strong); font-size:.8rem; font-weight:600; }
+.registration-review-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr)); gap:12px; }
+.registration-review-grid > div, .registration-form-field { padding:16px; border:1px solid var(--cc-border); border-radius:var(--cc-radius-card); background:var(--cc-surface); }
+.registration-review-grid dt { color:var(--cc-muted); font-size:.85rem; font-weight:600; }
+.registration-review-grid dd { margin:8px 0 0; color:var(--cc-text); white-space:pre-wrap; }

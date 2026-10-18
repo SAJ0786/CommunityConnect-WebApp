@@ -6,7 +6,7 @@ import { memberRegistrationPayload } from '../src/utils/profileRegistration.mjs'
 test('all active web screens use defined central colour tokens', () => {
   const tokens = fs.readFileSync('src/styles/tokens.css', 'utf8');
   const definitions = new Set([...tokens.matchAll(/(--cc-[\w-]+)\s*:/g)].map(match => match[1]));
-  const files = fs.readdirSync('src', { recursive: true }).filter(file => /\.(jsx|css)$/.test(file) && !file.includes('-SIZA_PC') && !file.replaceAll('\\','/').startsWith('registration/') && !file.endsWith('tokens.css'));
+  const files = fs.readdirSync('src', { recursive: true }).filter(file => /\.(jsx|css)$/.test(file) && !file.includes('-SIZA_PC') && !file.endsWith('tokens.css'));
   for (const relative of files) {
     const file = 'src/' + relative;
     const source = fs.readFileSync(file, 'utf8');

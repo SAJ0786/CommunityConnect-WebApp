@@ -131,3 +131,7 @@
   .directory-tools, .directory-grid, .directory-detail-grid { grid-template-columns: 1fr; }
   .directory-card { padding: 20px; }
 }
+
+.experience-switch { padding:4px; border:1px solid var(--cc-border); border-radius:var(--cc-radius-control); background:var(--cc-accent-soft); }
+.experience-switch button { border-color:transparent; border-radius:var(--cc-radius-control); background:transparent; }
+.experience-switch button[aria-pressed="true"], .experience-switch button[aria-selected="true"] { background:var(--cc-surface); color:var(--cc-primary-strong); border-color:var(--cc-border); box-shadow:var(--cc-shadow-soft); }
