@@ -22,17 +22,18 @@ async function call(name, eventId, extra = {}, savedContext = context()) {
 const collection = registrationOnly => ({ eventCollection: registrationOnly ? 'registrationEvents' : 'events' });
 export async function getEventReminder(eventId, registrationOnly = false) {
   requireReminderRelease(registrationOnly);
-  return (await call('getEventReminder', eventId, collection(registrationOnly))).reminder;
+  return (await call(registrationOnly ? 'registrationReminderStatus' : 'getEventReminder', eventId, collection(registrationOnly))).reminder;
 }
 export async function setEventReminder(eventId, minutesBefore, registrationOnly = false) {
   requireReminderRelease(registrationOnly);
   const member = context(), token = await enablePushNotifications(member.uid);
   if (!token) throw new Error('Browser notifications were not enabled. No reminder was scheduled.');
+  if (registrationOnly) { const result = await call('scheduleRegistrationNotice', eventId, { minutesBefore }, member); return { status: 'pending', minutesBefore, fireAt: Date.parse(result.triggerAt) }; }
   const result = await call('setEventReminder', eventId, { minutesBefore, token, ...collection(registrationOnly) }, member);
   if (result?.reminder?.status !== 'pending') throw new Error('The reminder could not be confirmed. Reopen Reminder to check its status.');
   return result.reminder;
 }
 export async function removeEventReminder(eventId, registrationOnly = false) {
   requireReminderRelease(registrationOnly);
-  if ((await call('removeEventReminder', eventId, collection(registrationOnly))).removed !== true) throw new Error('Removal could not be confirmed. Reopen Reminder to check.');
+  if ((await call(registrationOnly ? 'registrationReminderStatus' : 'removeEventReminder', eventId, { ...collection(registrationOnly), remove: true })).removed !== true) throw new Error('Removal could not be confirmed. Reopen Reminder to check.');
 }

@@ -135,11 +135,6 @@ export async function enablePushNotifications(uid) {
 
 export async function syncGrantedNotificationToken(uid, profile = {}) {
   if (!uid) return null;
-  const preferenceEnabled = profile.pushNotificationsEnabled !== undefined
-    ? profile.pushNotificationsEnabled !== false
-    : profile.reminderEmailEnabled !== false;
-  if (!preferenceEnabled) return null;
-
   const nativeToken = window.__communityEventsNativePushToken;
   if (nativeToken) {
     await savePushToken(uid, nativeToken, window.__communityEventsNativePushPlatform || 'native', 'native');
@@ -239,6 +234,7 @@ export async function startForegroundPushNotifications() {
       try {
         const notification = new Notification(title, options);
         if (registrationNotificationLink(payload.data)) notification.onclick = () => { window.location.assign(registrationNotificationLink(payload.data)); };
+        else if (payload.data?.module === 'events') notification.onclick = () => { window.location.assign('/?notice=' + (payload.data.threadId ? 'host-inbox' : 'notifications') + '&recipient=' + encodeURIComponent(payload.data.recipientUid || '')); };
         else if (payload.data?.type === 'event-reminder') notification.onclick = () => {
           window.location.assign('/?event=' + encodeURIComponent(payload.data.eventId || ''));
         };

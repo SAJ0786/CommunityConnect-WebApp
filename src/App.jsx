@@ -1,3 +1,5 @@
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from './firebase/firebase';
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
@@ -103,6 +105,10 @@ export default function App() {
   const [focusEventId, setFocusEventId] = useState(() => new URLSearchParams(window.location.search).get('event'));
   const [user, setUser]                 = useState(null);
   const [profile, setProfile]           = useState(null);
+  useEffect(() => {
+    if (!user?.uid || user.isAnonymous) return;
+    return onSnapshot(doc(db, 'users', user.uid), snapshot => { if (snapshot.exists() && auth.currentUser?.uid === user.uid) setProfile(snapshot.data()); }, () => {});
+  }, [user?.uid, user?.isAnonymous]);
   const [registrationTarget, setRegistrationTarget] = useState(null);
   const [registrationAction, setRegistrationAction] = useState('register');
   const [registrationRevision, setRegistrationRevision] = useState(0);
@@ -114,6 +120,8 @@ export default function App() {
   const profileRequestRef = useRef(0);
   useEffect(() => {
     if (!REGISTRATION_ENABLED || !user?.uid || !profileVerified) return;
+    const notice = new URLSearchParams(window.location.search);
+    if (notice.get('recipient') === user.uid && ['host-inbox','notifications','favourites'].includes(notice.get('notice'))) { setSelectedExperience('events'); setPage(notice.get('notice')); return; }
     const target = registrationEntry(window.location.search, user.uid);
     if (target) { setRegistrationTarget(target); setPage('registration'); }
   }, [user?.uid, profileVerified]);
@@ -779,6 +787,7 @@ export default function App() {
           {!isGuest && activePage === 'favourites'  && <Favourites    {...shared} />}
           {!isGuest && activePage === 'notifications' && <MemberDirectory key={user.uid} user={user} profile={profile} view="notifications" onOpenNotification={row => {
             if (openRegistrationUpdate(row)) return;
+            if (row.module === 'events') { setPage(row.threadId ? 'host-inbox' : row.type === 'event.favourite_reminder' ? 'favourites' : 'home'); return; }
             const destination = ['owner','detail','inbox','reviews','moderation'].includes(row.destination) ? row.destination : 'owner';
             window.location.hash = `/${destination}/${encodeURIComponent(row.targetId || '')}`;
             selectExperience('businesses');

@@ -56,6 +56,7 @@ export async function updateUserRole(id, role) {
 export async function updateReminderPreference(uid, enabled) {
   return updateDoc(doc(db, 'users', uid), {
     reminderEmailEnabled: enabled,
+    emailNotificationsEnabled: enabled,
     updatedAt: serverTimestamp()
   });
 }
@@ -75,6 +76,7 @@ export async function updateAdminAlertPreference(uid, enabled) {
 }
 
 export async function updateProfile(uid, data) {
+  if (typeof data.emailNotificationsEnabled === 'boolean') data = { ...data, reminderEmailEnabled: data.emailNotificationsEnabled };
   return updateDoc(doc(db, 'users', uid), { ...data, updatedAt: serverTimestamp() });
 }
 

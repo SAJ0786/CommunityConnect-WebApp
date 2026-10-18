@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { EVENT_TYPES } from '../utils/constants';
 import { cityLabel } from '../utils/cities';
 import { createDraft, validateAnswers } from './prototypeModel.mjs';
-import { createSubmission, registrationsCsv } from './registrationClient.mjs';
+import { createSubmission } from './registrationClient.mjs';
 import { eventDraftFromDetail, answersForReview, mergeRegistrationPage, registrantName, registrationReviewDetail } from './registrationViewModel.mjs';
 import { privateVenueLinks } from './privateVenue.mjs';
 import RegistrationEditor from './RegistrationEditor';
@@ -214,10 +214,15 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
         })}/></details>}
     </article>}
     {stage === 'entry' && detail?.form && <form noValidate onSubmit={submit} className="card"><p>{detail.form.purpose}</p><fieldset disabled={busy || retrySubmission} className="registration-fields"><label>Number of attendees<input type="number" min="1" max={detail.canRegister ? detail.event.capacity : detail.ownRegistration?.places} value={places} onChange={e => setPlaces(e.target.value)}/></label>{errors.places && <p role="alert">{errors.places}</p>}{detail.form.fields.map(field => <AnswerField key={field.id} field={field} value={answers[field.id]} error={errors[field.id]} onChange={value => setAnswers(current => ({ ...current, [field.id]: value }))}/>)}</fieldset><p>Availability is confirmed by the server when you submit.</p>{retrySubmission && !busy && <p>The last request is unconfirmed. Retry the same submission, or reload current status before editing.</p>}<button disabled={busy} type="submit">{retrySubmission ? 'Retry same submission' : 'Confirm registration'}</button></form>}
-    {stage === 'responses' && detail?.canManage && <section className="card"><p>Answers retain their original question labels. Only loaded responses are included in the download.</p><button disabled={busy || !responses.length} onClick={() => {
-      const url = URL.createObjectURL(new Blob(['\ufeff' + registrationsCsv(responses)], { type: 'text/csv;charset=utf-8' }));
-      const a = document.createElement('a'); a.href = url; a.download = 'registration-responses.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }}>Download loaded responses CSV</button>{responses.map(row => <details className="card registration-response" key={row.registrationId}>
+    {stage === 'responses' && detail?.canManage && <section className="card"><p>Download all authorized responses in an Excel workbook.</p><button disabled={busy || !responses.length} onClick={() => run(async valid => {
+      let rows = [], cursor = null; const seen = new Set();
+      do { const page = await api.responses(detail.event.id, cursor); if (!valid()) return; rows = mergeRegistrationPage(rows, page.registrations || []); cursor = page.nextCursor; if (cursor && seen.has(cursor)) throw new Error('Response pagination did not advance.'); if (cursor) seen.add(cursor); } while (cursor);
+      const XLSX = await import('xlsx');
+      const labels = [...new Set(rows.flatMap(row => (row.fields || []).map(field => field.label)))];
+      const data = [['Name', 'Status', 'Places', 'Submitted at', ...labels], ...rows.map(row => [registrantName(row), row.status, row.places, row.submittedAt || '', ...labels.map(label => { const fields = (row.fields || []).filter(field => field.label === label); return fields.map(field => answerText(row.answers?.[field.id])).join(' / '); })])];
+      const sheet = XLSX.utils.aoa_to_sheet(data); sheet['!cols'] = data[0].map((_, i) => ({ wch: i === 0 ? 28 : 24 })); sheet['!autofilter'] = { ref: sheet['!ref'] };
+      const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, sheet, 'Responses'); XLSX.writeFile(book, 'registration-responses.xlsx'); if (valid()) setNotice(`${rows.length} responses exported.`);
+    })}>Download all responses Excel</button>{responses.map(row => <details className="card registration-response" key={row.registrationId}>
       <summary>{registrantName(row)}</summary>
       <section aria-label="Submitted registration form"><h3>Registration form</h3><p>{row.status} · {row.places} {row.places === 1 ? 'place' : 'places'}</p><dl>{(row.fields || []).map(field => <div key={field.id}><dt>{field.label}</dt><dd>{answerText(row.answers?.[field.id])}</dd></div>)}</dl>{row.answersDeletedAt ? <p>Answers deleted.</p> : <button disabled={busy} onClick={() => ask('Delete answers', 'This permanently deletes the form answers without changing the reserved places.', async valid => { await api.deleteAnswers(detail.event.id, row.registrationId, row.revision, 'DELETE ANSWERS'); if (valid()) { setResponses(current => current.filter(item => item.registrationId !== row.registrationId)); setNotice('Answers deleted. Reserved places are unchanged.'); } })}>Permanently delete answers only</button>}</section>
     </details>)}{responseCursor && <button disabled={busy} onClick={() => responsePage(responseCursor)}>Load more responses</button>}</section>}

@@ -1,6 +1,6 @@
 const CACHE_VERSION = 2;
 const CACHE_PREFIX = `community-events-v${CACHE_VERSION}`;
-const PROFILE_CACHE_VERSION = 3;
+const PROFILE_CACHE_VERSION = 4;
 const PROFILE_PREFIX = `community-profile-v${PROFILE_CACHE_VERSION}`;
 const FRESH_AGE_MS = 15 * 60 * 1000;
 const MAX_STALE_AGE_MS = 60 * 24 * 60 * 60 * 1000;
@@ -66,6 +66,7 @@ export function writeProfileCache(uid, profile) {
   if (!storage || !uid || !profile) return;
   if (profile.isProfileFallback) return;
   const cachedProfile = {
+    ...Object.fromEntries(['defaultCity', 'defaultModule', 'emailNotificationsEnabled', 'pushNotificationsEnabled', 'eventNotificationsEnabled', 'businessNotificationsEnabled', 'prayerRemindersEnabled'].filter(key => profile[key] !== undefined).map(key => [key, profile[key]])),
     fullName: profile.fullName || '',
     email: profile.email || '',
     phone: profile.phone || profile.phoneNumber || '',

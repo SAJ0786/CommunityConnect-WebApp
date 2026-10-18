@@ -1,3 +1,4 @@
+import { normalisePhone, userMatchesSearch } from '../utils/adminUserSearch.mjs';
 import { EVENT_ADMIN_GROUPS } from '../utils/adminNavigation.mjs';
 import { upcomingEventsCsv } from '../utils/adminEventExport.mjs';
 import DiagnosticsRegister from '../components/DiagnosticsRegister';
@@ -61,31 +62,6 @@ const slugHijriObservance = value => (
     .replace(/^-+|-+$/g, '')
     .slice(0, 48) || `observance-${Date.now()}`
 );
-
-const normalisePhone = value => {
-  let digits = String(value || '').replace(/\D/g, '');
-  if (digits.startsWith('0061')) digits = digits.slice(2);
-  if (digits.startsWith('61') && digits.length >= 10) digits = `0${digits.slice(2)}`;
-  return digits;
-};
-
-const userMatchesSearch = (userRecord, query) => {
-  const textQuery = String(query || '').trim().toLowerCase();
-  if (!textQuery) return true;
-
-  const textFields = [
-    userRecord.fullName,
-    userRecord.displayName,
-    userRecord.name,
-    userRecord.email,
-  ];
-  if (textFields.some(value => String(value || '').toLowerCase().includes(textQuery))) return true;
-
-  const queryDigits = normalisePhone(textQuery);
-  if (!queryDigits) return false;
-  return [userRecord.phone, userRecord.phoneNumber, userRecord.mobile, userRecord.mobileNumber]
-    .some(value => normalisePhone(value).includes(queryDigits));
-};
 
 const csvCell = value => {
   const text = String(value ?? '');

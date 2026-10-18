@@ -1,14 +1,16 @@
 // Install our click handler before Firebase's listener so reminder links are
 // opened on this origin and expand the intended event after sign-in.
 self.addEventListener('notificationclick', event => {
-  const data = event.notification.data || {};
+  const data = event.notification.data?.FCM_MSG?.data || event.notification.data || {};
   const registration = data.module === 'registration' && String(data.type || '').startsWith('registration.')
     && /^[A-Za-z0-9_-]{1,128}$/.test(data.eventId || '') && /^[A-Za-z0-9_-]{1,128}$/.test(data.recipientUid || '');
-  if (data.type !== 'event-reminder' && !registration) return;
+  const events = data.module === 'events' && /^[A-Za-z0-9_-]{1,128}$/.test(data.recipientUid || '');
+  if (data.type !== 'event-reminder' && !registration && !events) return;
   event.stopImmediatePropagation();
   event.notification.close();
   const target = new URL(registration
     ? '/?registration=' + encodeURIComponent(data.eventId) + '&recipient=' + encodeURIComponent(data.recipientUid)
+    : events ? '/?notice=' + encodeURIComponent(data.threadId ? 'host-inbox' : data.type === 'event.favourite_reminder' ? 'favourites' : 'notifications') + '&recipient=' + encodeURIComponent(data.recipientUid)
     : '/?event=' + encodeURIComponent(data.eventId || ''), self.location.origin).href;
   event.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(async list => {
     const existing = list.find(client => new URL(client.url).origin === self.location.origin);

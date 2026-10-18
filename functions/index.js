@@ -1,3 +1,4 @@
+const { queueEmail } = require('./queued-email');
 ﻿const admin      = require("firebase-admin");
 const nodemailer = require("nodemailer");
 const crypto     = require("crypto");
@@ -15,8 +16,8 @@ const db = admin.firestore();
 const REGION = "australia-southeast1";
 
 function pushNotificationsEnabled(user = {}) {
-  if (user.pushNotificationsEnabled !== undefined) return user.pushNotificationsEnabled !== false;
-  return user.reminderEmailEnabled !== false;
+  if (user.pushNotificationsEnabled !== undefined) return user.pushNotificationsEnabled !== false && user.eventNotificationsEnabled !== false;
+  return user.eventNotificationsEnabled !== false;
 }
 
 function getUserFcmTokens(user = {}) {
@@ -385,9 +386,11 @@ async function sendPrivateStreamLinkToHost({
   const dateTime = [eventData.eventDate || '', eventData.startTime || ''].filter(Boolean).join(' ');
   const now = admin.firestore.FieldValue.serverTimestamp();
 
-  await transporter.sendMail({
+  const admins = await db.collection('users').where('role', '==', 'superAdmin').get();
+  const recipients = [...new Set([to, ...admins.docs.filter(doc => isActiveDeliverableUser(doc.data())).map(doc => String(doc.data().email || '').trim()).filter(email => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))])];
+  for (const recipient of recipients) await queueEmail(db, `private-stream:${sessionRef?.id || streamVideoRef?.id || watchUrl}:${recipient}`, '', {
     ...emailEnvelope(secrets, 'updates'),
-    to,
+    to: recipient,
     subject: 'Your private live stream link',
     text: [
       'Your private Community Events live stream is now live.',
@@ -402,7 +405,6 @@ async function sendPrivateStreamLinkToHost({
     ].filter(Boolean).join('\n'),
     html: `
       <div style="font-family:Arial,sans-serif;line-height:1.55;color:#111827">
-        <h2 style="margin:0 0 12px;color:#0f766e">Your private live stream is now live</h2>
         <p>Your private Community Events live stream is ready.</p>
         <p><strong>Event:</strong> ${escapeHtml(eventTitle)}</p>
         ${dateTime ? `<p><strong>Date/Time:</strong> ${escapeHtml(dateTime)}</p>` : ''}
@@ -418,18 +420,20 @@ async function sendPrivateStreamLinkToHost({
         <p style="color:#6b7280;font-size:13px">Community Events Australia</p>
       </div>
     `,
-  });
+  }, true);
 
   const update = {
     [sentFlagField]: now,
     privateLinkEmailRecipient: to,
+    privateLinkEmailState: 'queued',
+    privateLinkEmailQueuedAt: now,
   };
   await Promise.all([
     sessionRef ? sessionRef.set(update, { merge: true }) : Promise.resolve(),
     streamVideoRef ? streamVideoRef.set(update, { merge: true }) : Promise.resolve(),
   ]);
 
-  return { sent: true, to };
+  return { sent: false, queued: true, to };
 }
 
 const PROGRAMS_UPDATE_IMAGE_URL = "https://communityevents.siza.info/images/programs-update-header.jpg";
@@ -2798,6 +2802,7 @@ exports.unsubscribeEmail = onRequest(
     try {
       await db.collection('users').doc(uid).update({
         reminderEmailEnabled: false,
+        emailNotificationsEnabled: false,
         unsubscribedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
       res.set('Content-Type', 'text/html');
@@ -4678,3 +4683,7 @@ exports.nativeStreamEndEvent = onCall(
     return { ok: true };
   }
 );
+
+// Native backend/functions-events is the canonical owner of these deployed entrypoints.
+// Deploy web core by an explicit function allowlist; never delete/replace another codebase.
+for (const name of ['dailyEmailReminders','dailyPushReminders','monthlyHijriReminder','sendRemindersNow','onReminderEmailJobCreated','onEventCreated','onEventDeleted','onUserCreated','onAiReportCreated','sendEditOtp']) delete exports[name];

@@ -1,13 +1,13 @@
 export const NOTIFICATION_PREFERENCES = [
   ['pushNotificationsEnabled', 'Push notifications'],
-  ['smsNotificationsEnabled', 'SMS notifications'],
+  ['adminAlertEmailEnabled', 'Administrator alert emails'],
   ['emailNotificationsEnabled', 'Email notifications'],
   ['eventNotificationsEnabled', 'Community Events updates'],
   ['prayerRemindersEnabled', 'Prayer-time reminders'],
   ['businessNotificationsEnabled', 'Business Directory updates'],
 ];
 export function readNotificationPreferences(profile = {}) {
-  return Object.fromEntries(NOTIFICATION_PREFERENCES.map(([key]) => [key, profile[key] !== false]));
+  return Object.fromEntries(NOTIFICATION_PREFERENCES.map(([key]) => [key, (key === 'emailNotificationsEnabled' ? profile.emailNotificationsEnabled ?? profile.reminderEmailEnabled : profile[key]) !== false]));
 }
 export function notificationPreferencePayload(values, defaultModule) {
   if (!['events', 'directory'].includes(defaultModule)) throw new Error('Choose a home module.');

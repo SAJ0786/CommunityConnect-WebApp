@@ -57,7 +57,7 @@ export default function Profile({ user, profile, setProfile }) {
   const [pushMessage, setPushMessage] = useState('');
   const [pushBusy, setPushBusy] = useState('');
   const isAdmin = isAdminRole(profile?.role);
-  const emailReminderEnabled = profile?.reminderEmailEnabled !== false;
+  const emailReminderEnabled = (profile?.emailNotificationsEnabled ?? profile?.reminderEmailEnabled) !== false;
   const pushEnabled = profile?.pushNotificationsEnabled !== undefined
     ? profile.pushNotificationsEnabled !== false
     : emailReminderEnabled;
@@ -126,7 +126,7 @@ export default function Profile({ user, profile, setProfile }) {
     setPreferenceError('');
     try {
       await updateReminderPreference(user.uid, next);
-      setProfile({ ...profile, reminderEmailEnabled: next });
+      setProfile({ ...profile, reminderEmailEnabled: next, emailNotificationsEnabled: next });
     } catch (error) {
       setPreferenceError(error.message || 'Could not update email reminders.');
     } finally {
