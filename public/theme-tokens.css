@@ -2,6 +2,9 @@
 /* Shared blue palette for every Community Connect web screen. Colour literals belong
  * here, not in feature UI. Future schemes override these semantic properties. */
 :root {
+  --cc-quick-tile-height: calc(var(--cc-quick-icon-size) + 2.6 * var(--cc-quick-label-size) + 21px);
+  --cc-quick-icon-size: 31px;
+  --cc-quick-label-size: .67rem;
   --cc-primary: #2563eb;
   --cc-primary-strong: #1d4ed8;
   --cc-primary-soft: #e8f0ff;
