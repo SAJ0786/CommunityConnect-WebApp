@@ -48,6 +48,22 @@ function fixture({manager=false,registered=false,closed=false,failFirstSubmissio
   return {api,calls,detail,setPending:()=>{event.status='pending';}};
 }
 async function mount(f,extra={}){let view;await act(async()=>{view=Renderer.create(React.createElement(Workspace,{api:f.api,enabled:true,user:{uid:'fixture'},profile:{role:'superAdmin'},city:'sydney',onBack:()=>{},...extra}));});return view;}
+test('registration back navigation is one accessible icon in the top-left header',async()=>{
+  let back=0;const view=await mount(fixture(),{onBack:()=>back++});
+  const panel=view.root.findByProps({className:'cc-page-panel'});
+  const arrow=panel.findAllByType('button').find(node=>node.props['aria-label']==='Back to Events');
+  assert.ok(arrow);assert.equal(text(arrow),'');assert.ok(arrow.findAllByType('svg').length===1);
+  assert.equal(view.root.findAllByType('button').filter(node=>node.props['aria-label']==='Back to Events').length,1);
+  await act(async()=>arrow.props.onClick());assert.equal(back,1);view.unmount();
+});
+test('registration poster selection keeps the panel and removes the duplicate upload button',async()=>{
+  const view=await mount(fixture({manager:true}),{operationsOnly:true,initialEventId:'example',initialAction:'edit'});
+  const panel=view.root.findByProps({className:'event-poster-control'});
+  assert.equal(panel.findAllByType('button').filter(node=>node.props['aria-label']==='Choose event poster').length,1);
+  assert.equal(panel.findAllByType('button').some(node=>/Upload your event poster|Choose another photo/.test(text(node))),false);
+  assert.equal(view.root.findAllByType('button').some(node=>node.props['aria-label']==='Back to event'),false);
+  view.unmount();
+});
 async function card(view){await click(view,'Load more events');await click(view,'View event');}
 test('disabled route makes no calls; empty scan page retains Load more and public card hides venue',async()=>{
   const f=fixture();const off=await mount(f,{enabled:false});assert.equal(f.calls.length,0);off.unmount();

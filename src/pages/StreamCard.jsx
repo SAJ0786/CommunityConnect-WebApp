@@ -1,3 +1,4 @@
+import BackControl from '../components/BackControl';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { endLive } from '../services/eventService';
 import { httpsCallable } from 'firebase/functions';
@@ -272,16 +273,11 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
       flexDirection:'column', gap:16, fontFamily:'var(--font,sans-serif)',
       height:'100dvh' }}>
       <div style={{ fontSize:'3.25rem' }}>✅</div>
-      <h3 style={{ color:'var(--cc-on-media)', fontWeight:900, fontSize:'1.25rem', margin:0 }}>Stream Ended</h3>
+      <BackControl onClick={onClose} label="Back to Home" media floating/><h3 style={{ color:'var(--cc-on-media)', fontWeight:900, fontSize:'1.25rem', margin:0 }}>Stream Ended</h3>
       <p style={{ color:'var(--cc-media-muted)', fontSize:'0.875rem', textAlign:'center', margin:0, padding:'0 24px' }}>
         Thank you for streaming with Community Events Australia!
       </p>
-      <button onClick={onClose}
-        style={{ background:'var(--cc-accent-strong)', color:'var(--cc-on-media)', border:'none',
-          borderRadius:12, padding:'12px 28px', fontSize:'0.9375rem',
-          fontWeight:900, cursor:'pointer', marginTop:8 }}>
-        ← Back to Home
-      </button>
+
     </div>
   );
 
@@ -300,15 +296,11 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
         <div style={{ background:'var(--cc-accent-strong)', padding:'10px 14px', flexShrink:0,
           display:'flex', alignItems:'center', justifyContent:'space-between',
           paddingTop:'max(10px, env(safe-area-inset-top))' }}>
+          <BackControl onClick={onClose} label="Back to Home" media/>
           <div style={{ color:'var(--cc-on-media)', fontWeight:900, fontSize:'0.875rem', display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ animation:'liveBlink 1s infinite' }}>🔴</span>
             LIVE — {event.eventTypeDisplay || event.eventType || 'Stream'}
           </div>
-          <button onClick={onClose}
-            style={{ background:'color-mix(in srgb, var(--cc-on-media) 25%, transparent)', border:'none', color:'var(--cc-on-media)',
-              borderRadius:8, padding:'6px 14px', fontSize:'0.8125rem', fontWeight:900, cursor:'pointer' }}>
-            ← Home
-          </button>
         </div>
         <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center',
           justifyContent:'center', color:'var(--cc-on-media)', gap:18, padding:24, textAlign:'center' }}>
@@ -487,20 +479,13 @@ export default function StreamCard({ event, role, onClose, onMinimise, onEnded, 
         paddingTop:'max(10px, env(safe-area-inset-top))',
         ...topControlsCollapseStyle,
       }}>
+        {onMinimise && <BackControl onClick={onMinimise} label="Back to app" media/>}
         <div style={{ color:'var(--cc-on-media)', fontWeight:900, fontSize:'0.875rem', display:'flex', alignItems:'center', gap:8 }}>
           <span style={{ animation:'liveBlink 1s infinite' }}>🔴</span>
           {phase === 'live' ? 'YOU ARE LIVE' : phase === 'reconnecting' ? 'RECONNECTING…' : phase === 'error' ? 'INTERRUPTED' : 'CONNECTING…'}
         </div>
 
         <div style={{ display:'flex', gap:8 }}>
-          {onMinimise && (
-            <button onClick={onMinimise}
-              style={{ background:'color-mix(in srgb, var(--cc-on-media) 25%, transparent)', border:'none',
-                color:'var(--cc-on-media)', borderRadius:8, padding:'6px 12px',
-                fontSize:'0.8125rem', fontWeight:900, cursor:'pointer' }}>
-              ← App
-            </button>
-          )}
 
           <button onClick={() => setConfirm(true)}
             style={{ background:'var(--cc-surface)', border:'2px solid var(--cc-surface)', color:'var(--cc-danger)',

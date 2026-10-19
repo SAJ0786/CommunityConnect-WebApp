@@ -1,4 +1,5 @@
 import React from 'react';
+import BackControl from './BackControl';
 import { CalendarDays, ClipboardList, Heart, Home, Search, ShieldCheck, UserRound, Radio, Mail, PlusCircle, Moon, Download, Share2 } from 'lucide-react';
 import '../styles/page-panel.css';
 
@@ -22,10 +23,11 @@ const pages = {
   bulkshare: ['Share events', 'Filter events, select the ones you want, then share or copy.', Share2],
 };
 
-export default function PagePanel({ page, title, subtitle, Icon, headingId }) {
+export default function PagePanel({ page, title, subtitle, Icon, headingId, onBack, backLabel = 'Back', backDisabled = false }) {
   const entry = pages[page] || ['Community Connect', 'Your community, connected.', Home];
   const Symbol = Icon || entry[2];
   return <section className="cc-page-panel" aria-label={title || entry[0]}>
+    {onBack && <BackControl onClick={onBack} label={backLabel} disabled={backDisabled}/>}
     <span className="cc-page-panel-icon"><Symbol size={22} aria-hidden="true"/></span>
     <div><span className="cc-page-panel-eyebrow">COMMUNITY CONNECT</span><h1 id={headingId}>{title || entry[0]}</h1><p>{subtitle || entry[1]}</p></div>
   </section>;

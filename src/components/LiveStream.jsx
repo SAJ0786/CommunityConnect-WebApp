@@ -1,3 +1,4 @@
+import BackControl from './BackControl';
 import React, { useState, useEffect } from 'react';
 import { goLive, endLive } from '../services/eventService';
 import { NativeStreamer } from '../services/nativeStreamService';
@@ -118,6 +119,7 @@ function StreamMethodDialog({
           </>
         ) : (
           <form onSubmit={onExternalStart}>
+            <BackControl onClick={onBack} disabled={loading} label="Back"/>
             <h3 style={{ margin:'0 0 8px', fontSize:'1.125rem' }}>Connect YouTube Live</h3>
             <p style={{ margin:'0 0 16px', color:'var(--muted)', fontSize:'0.8125rem', lineHeight:1.5 }}>
               Start the broadcast on the other device, then paste its YouTube video URL below.
@@ -131,9 +133,6 @@ function StreamMethodDialog({
                 background:'var(--surface)', color:'var(--text)', padding:'11px 12px', fontSize:'0.875rem' }} />
             {error && <div style={{ color:'var(--cc-danger)', fontSize:'0.75rem', marginTop:8, lineHeight:1.4 }}>{error}</div>}
             <div style={{ display:'flex', gap:10, marginTop:18 }}>
-              <button type="button" onClick={onBack} disabled={loading} style={{ flex:1, padding:11,
-                border:'1px solid var(--border)', borderRadius:9, background:'transparent', color:'var(--text)',
-                fontWeight:800, cursor:'pointer' }}>Back</button>
               <button type="submit" disabled={loading || !url.trim()} style={{ flex:2, padding:11, border:0,
                 borderRadius:9, background:'var(--cc-accent-strong)', color:'var(--cc-on-primary)', fontWeight:900,
                 opacity:loading || !url.trim() ? 0.65 : 1, cursor:'pointer' }}>

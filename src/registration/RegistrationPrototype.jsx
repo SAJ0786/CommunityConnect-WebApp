@@ -1,5 +1,6 @@
+import BackControl from '../components/BackControl';
 import React, { useRef, useState } from 'react';
-import { CalendarDays, Repeat2, ClipboardList, ArrowLeft, ArrowRight, Plus, Trash2, Eye, ShieldCheck, Check, Users, Bookmark, ChevronUp, ChevronDown } from 'lucide-react';
+import { CalendarDays, Repeat2, ClipboardList, ArrowRight, Plus, Trash2, Eye, ShieldCheck, Check, Users, Bookmark, ChevronUp, ChevronDown } from 'lucide-react';
 import { FIELD_TYPES, STANDARD_FIELDS, FORM_TEMPLATES, TERMS_LIMIT, NOTES_LIMIT, templateFields, consentLast, publicEvent, resolvedEventType, createDraft, makeField, moveField, validateDraft, validateAnswers, snapshotBooking } from './prototypeModel.mjs';
 import { EVENT_TYPES } from '../utils/constants';
 import './registration.css';
@@ -76,7 +77,7 @@ export default function RegistrationPrototype({ eventTypes = EVENT_TYPES }) {
     <main className="rp-main">
       <aside className="rp-sidebar"><p className="rp-eyebrow">YOUR EVENT, YOUR QUESTIONS</p><h2>A place for everyone.</h2><p>Create a registration experience that fits your community.</p><nav aria-label="Prototype screens">{[0, 1, 6, 2, 7, 8, 3, 4, 5].map((index, position) => <button key={index} aria-current={stage === index ? 'step' : undefined} disabled={([4, 5].includes(index) && !booking) || (index === 7 && !published)} onClick={() => index === 3 ? preview() : changeStage(index)}><span>{position + 1}</span>{stages[index]}</button>)}</nav><p className="rp-small">Role switching is a demo only. Real access will be checked by the server.</p></aside>
       <section className="rp-workspace">
-        <div className="rp-title"><div><p className="rp-eyebrow">{stage === 0 ? 'GET STARTED' : 'EVENT REGISTRATION'}</p><h1 ref={heading} tabIndex={-1}>{stages[stage]}</h1></div>{stage > 0 && <button className="rp-secondary" onClick={() => changeStage(({ 1: 0, 6: 1, 2: 6, 7: 2, 8: published ? 7 : 1, 3: 8, 4: 3, 5: 8 })[stage])}><ArrowLeft size={16} /> Back</button>}</div>
+        <div className="rp-title">{stage > 0 && <BackControl onClick={() => changeStage(({ 1: 0, 6: 1, 2: 6, 7: 2, 8: published ? 7 : 1, 3: 8, 4: 3, 5: 8 })[stage])} label="Back"/>}<div><p className="rp-eyebrow">{stage === 0 ? 'GET STARTED' : 'EVENT REGISTRATION'}</p><h1 ref={heading} tabIndex={-1}>{stages[stage]}</h1></div></div>
         {notice && <p role="status" className="rp-notice">{notice}</p>}
         {errors.draft && <p role="alert" className="rp-error">{errors.draft}</p>}
         {stage === 0 && <><p>Choose how this event should be created.</p><div className="rp-choices">

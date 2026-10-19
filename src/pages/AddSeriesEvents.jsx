@@ -1,3 +1,4 @@
+import BackControl from '../components/BackControl';
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import EventForm from '../components/EventForm';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
@@ -287,11 +288,11 @@ export default function AddSeriesEvents({ user, profile, setPage }) {
   if (done) return (
     <div className="card center" style={{ marginTop: 32 }}>
       <div style={{ fontSize: '3rem', marginBottom: 12 }}>✅</div>
-      <h3 style={{ margin: '0 0 8px' }}>Series Created!</h3>
+      <BackControl onClick={() => setPage('home')} label="Back to Home"/><h3 style={{ margin: '0 0 8px' }}>Series Created!</h3>
       <p className="small" style={{ color: 'var(--muted)', marginBottom: 16 }}>
         {preview.length} events added from {getStart()} to {getEnd()}.
       </p>
-      <button onClick={() => setPage('home')}>Back to Home</button>
+
     </div>
   );
 

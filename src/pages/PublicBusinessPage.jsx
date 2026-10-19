@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Share2, Link2 } from 'lucide-react';
+import { Share2, Link2 } from 'lucide-react';
+import BackControl from '../components/BackControl';
 import BusinessContactLinks from '../components/BusinessContactLinks';
 import PublicPromotionList from '../components/PublicPromotionList';
 import { BusinessLogo, BusinessCover } from '../components/BusinessIdentity';
@@ -40,11 +41,11 @@ export default function PublicBusinessPage({ business, loading, error, fromCache
   }, [business?.id, business?.name]);
   const back = PUBLIC_DIRECTORY_PATH + (returnQuery || (business ? directoryQuery({ city: business.city }) : ''));
   return <Container className="business-directory" aria-labelledby="business-title">
-    <p><a className="directory-link" href={onBack ? '#/home/' : back} onClick={onBack ? event => {
+    <BackControl label="Back to businesses" href={onBack ? '#/home/' : back} onClick={onBack ? event => {
       if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault();
       onBack();
-    } : undefined}><ArrowLeft size={18} aria-hidden="true" /><span>Back to businesses</span></a></p>
+    } : undefined}/>
     {loading ? <p role="status" className="directory-state">Loading business…</p>
       : error ? <div role="alert" className="directory-state directory-error"><h1 id="business-title">Business unavailable</h1><p>We couldn’t load this business. Please check your connection and try again.</p><button onClick={onRetry}>Try again</button></div>
       : !business ? <div className="directory-state"><h1 id="business-title">{fromCache ? 'Business not available offline' : 'Business not available'}</h1><p>{fromCache ? 'Reconnect to check this listing.' : 'This link may be incorrect, or the listing may no longer be public.'}</p>{fromCache && <button onClick={onRetry}>Try again</button>}</div>

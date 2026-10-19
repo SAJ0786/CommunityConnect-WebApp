@@ -1,3 +1,4 @@
+import BackControl from '../components/BackControl';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   browserLocalPersistence,
@@ -95,7 +96,7 @@ export default function AuthPage({ onAuthComplete, authError = '', experienceTit
     <div className="auth-page auth-theme">
     <div className="auth-card">
       <div id="recaptcha-container" />
-      {step === 'main' && onChooseExperience && <button className="btn-light" onClick={onChooseExperience}>← Change experience</button>}
+      {step === 'main' && onChooseExperience && <BackControl onClick={onChooseExperience} label="Change experience"/>}
       {import.meta.env.VITE_LOCAL_PREVIEW === 'true' && ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname) &&
         <p className="small" role="note">Local preview: use a configured test number. Real SMS sign-in requires an authorised hosted preview.</p>}
       <p className="auth-experience">Continue to {experienceTitle}</p>
@@ -151,8 +152,7 @@ export default function AuthPage({ onAuthComplete, authError = '', experienceTit
 
       {/* ── PHONE ── */}
       {step === 'phone' && (<>
-        <button className="btn-muted" style={{ marginBottom: 12, fontSize: '0.8125rem' }}
-          onClick={() => { clearRc(); setStep('main'); setError(''); setPhone(''); }}>← Back</button>
+        <BackControl onClick={() => { clearRc(); setStep('main'); setError(''); setPhone(''); }} label="Back"/>
         <h3 style={{ margin: '0 0 8px' }}>📱 Mobile Sign In</h3>
         <p className="small" style={{ margin: '0 0 16px', color: 'var(--muted)', lineHeight: 1.5 }}>
           Enter your Australian mobile number to receive a verification code.
@@ -170,6 +170,7 @@ export default function AuthPage({ onAuthComplete, authError = '', experienceTit
 
       {/* ── OTP ── */}
       {step === 'otp' && (<>
+        <BackControl onClick={() => { setStep('phone'); setOtp(''); setError(''); }} disabled={!!loading} label="Back"/>
         <h3 style={{ margin: '0 0 8px' }}>Enter Verification Code</h3>
         <p className="small" style={{ margin: '0 0 14px', color: 'var(--muted)', lineHeight: 1.5 }}>
           A 6-digit code was sent to <strong>{formatAU(phone)}</strong>.
@@ -180,8 +181,7 @@ export default function AuthPage({ onAuthComplete, authError = '', experienceTit
           onKeyDown={e => e.key === 'Enter' && verifyOtp()} />
         {displayError && <div className="error" style={{ marginBottom: 10 }}>{displayError}</div>}
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button className="btn-muted" disabled={!!loading} style={{ flex: 1 }}
-            onClick={() => { setStep('phone'); setOtp(''); setError(''); }}>← Back</button>
+
           <button style={{ flex: 2 }} disabled={otp.length !== 6 || !!loading} onClick={verifyOtp}>
             {loading === 'verify' ? 'Verifying…' : '✅ Verify'}
           </button>

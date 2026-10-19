@@ -1,3 +1,4 @@
+import BackControl from '../components/BackControl';
 import {ArrowUp,ArrowDown,Trash2} from 'lucide-react';
 import EventPosterPicker from '../components/EventPosterPicker';
 import React, { useEffect, useId, useRef, useState } from 'react';
@@ -10,7 +11,7 @@ import { REGISTRATION_FREQUENCIES, registrationSeriesPlan } from './registration
 import { getHijriSettings } from '../services/settingsService';
 
 // Private drafts stay in component memory only, never localStorage/IndexedDB.
-export default function RegistrationEditor({ initialDraft, initialStep = 'event', hasPoster = false, onRemovePoster, user, profile, templates, templateCursor, onMoreTemplates, busy, onSave, onSaveTemplate, onCancel }) {
+export default function RegistrationEditor({ initialDraft, initialStep = 'event', hasPoster = false, onRemovePoster, user, profile, templates, templateCursor, onMoreTemplates, busy, onSave, onSaveTemplate, onCancel, showBackControl = true }) {
   const id = useId();
   const [draft, setDraft] = useState(initialDraft), [step, setStep] = useState(initialStep);
   const [error, setError] = useState(''), [templateName, setTemplateName] = useState('');
@@ -51,7 +52,7 @@ export default function RegistrationEditor({ initialDraft, initialStep = 'event'
   if (step === 'preview' && draft.frequency === 'recurring' && calendarSettings) {
     try { seriesPlan = registrationSeriesPlan({ ...draft, occurrenceSettings:{} }, calendarSettings); } catch (problem) { seriesError = problem.message; }
   }
-  return <section><div className="registration-actions">{onCancel && <button type="button" disabled={busy} className="btn-light" onClick={onCancel}>Back to event</button>}{step !== 'event' && <button type="button" disabled={busy} className="btn-light" onClick={() => setStep('event')}>Event details</button>}{step === 'preview' && <button type="button" onClick={() => setStep('form')}>Edit form</button>}</div>
+  return <section><div className="registration-actions">{showBackControl && onCancel && <BackControl onClick={onCancel} disabled={busy} label="Back to event"/>}{step !== 'event' && <button type="button" disabled={busy} className="btn-light" onClick={() => setStep('event')}>Event details</button>}{step === 'preview' && <button type="button" onClick={() => setStep('form')}>Edit form</button>}</div>
     {error && <p role="alert">{error}</p>}<fieldset disabled={busy} className="registration-fields">
       {step === 'event' && <div>
         <EventForm initialEvent={registrationEventForm(draft)} user={user} profile={profile} registrationMode saving={busy} notesMaxLength={NOTES_LIMIT}
@@ -67,7 +68,7 @@ export default function RegistrationEditor({ initialDraft, initialStep = 'event'
               {draft.frequency === 'recurring' && <><label htmlFor={id + '-repeat'}>Repeat every</label><select id={id + '-repeat'} value={draft.repeatFrequency || 'week'} onChange={e => setDraft(current => ({ ...current, repeatFrequency:e.target.value, occurrenceCount:e.target.value === 'year' ? Math.min(5, Number(current.occurrenceCount) || 4) : current.occurrenceCount, occurrenceSettings:{} }))}>{REGISTRATION_FREQUENCIES.map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select><label>Number of occurrences<input type="number" min="2" max={draft.repeatFrequency === 'year' ? 5 : 100} value={draft.occurrenceCount || ''} onChange={e => update('occurrenceCount', e.target.value)}/></label><p>Each occurrence has separate registration, capacity, closing time and approval. Review its dates and settings before saving. Recurrence follows your selected Gregorian or Hijri calendar.</p></>}</>,
             settings: <><label>Capacity (places)<input type="number" min="1" max="10000" value={draft.capacity} onChange={e => update('capacity', e.target.value)}/></label><label className="registration-check"><input type="checkbox" checked={draft.allowCancellation} onChange={e => update('allowCancellation', e.target.checked)}/>Allow attendee cancellation before event day</label></>,
           }}
-          posterControls={<EventPosterPicker uri={draft.poster?.uri} hasPoster={hasPoster} privatePoster disabled={busy} onChange={readPoster} onRemove={draft.poster ? () => { posterRead.current++; update('poster', null); } : onRemovePoster} />}/>
+          posterControls={<EventPosterPicker uri={draft.poster?.uri} hasPoster={hasPoster} privatePoster showChooseButton={false} disabled={busy} onChange={readPoster} onRemove={draft.poster ? () => { posterRead.current++; update('poster', null); } : onRemovePoster} />}/>
 
         {notesError && <p role="alert">{notesError}</p>}
       </div>}

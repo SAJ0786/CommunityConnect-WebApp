@@ -1,3 +1,4 @@
+import BackControl from '../components/BackControl';
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import EventForm from '../components/EventForm';
@@ -253,14 +254,14 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
     return (
       <div className="card center" style={{ marginTop: 32 }}>
         <div style={{ fontSize: '3rem', marginBottom: 12 }}>✅</div>
-        <h3 style={{ margin: '0 0 8px' }}>Recurring Events Created</h3>
+        <BackControl onClick={() => {
+          if (onSaved) onSaved();
+          else setPage('home');
+        }} label="Back to Home"/><h3 style={{ margin: '0 0 8px' }}>Recurring Events Created</h3>
         <p className="small" style={{ color: 'var(--muted)', marginBottom: 16 }}>
           {doneCount} event{doneCount === 1 ? '' : 's'} added successfully.
         </p>
-        <button type="button" onClick={() => {
-          if (onSaved) onSaved();
-          else setPage('home');
-        }}>Back to Home</button>
+
       </div>
     );
   }

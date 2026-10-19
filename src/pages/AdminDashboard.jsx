@@ -1,3 +1,4 @@
+import BackControl from '../components/BackControl';
 import ExperienceSwitch from '../components/ExperienceSwitch';
 import { normalisePhone, userMatchesSearch } from '../utils/adminUserSearch.mjs';
 import { EVENT_ADMIN_GROUPS } from '../utils/adminNavigation.mjs';
@@ -1371,7 +1372,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
   return (
     <div className="cc-events-admin">
       <header className="cc-admin-header"><p>{profile?.fullName || user?.email} · <RoleBadge role={profile?.role}/></p><p>{isSuperAdmin ? 'All locations' : adminCity} · Events</p></header>
-      {tab === 'overview' ? <AdminActionPanels groups={adminGroups} onSelect={setTab}/> : <nav className="cc-admin-tool-nav" aria-label="Admin tools"><button className="btn-light" onClick={() => setTab('overview')}>← Admin Dashboard</button><span>{adminGroups.flatMap(group => group.items).find(item => item[0] === tab)?.[1]}</span></nav>}
+      {tab === 'overview' ? <AdminActionPanels groups={adminGroups} onSelect={setTab}/> : <nav className="cc-admin-tool-nav" aria-label="Admin tools"><BackControl onClick={() => setTab('overview')} label="Admin Dashboard"/><span>{adminGroups.flatMap(group => group.items).find(item => item[0] === tab)?.[1]}</span></nav>}
 
       {tab === 'troubleshooting' && <DiagnosticsRegister user={user} profile={profile}/>}
       {tab === 'tools' && <><CityManagementPanel profile={profile}/><YouTubeConnectCard isSuperAdmin={isSuperAdmin}/><div className="card"><h3>Utilities</h3><button className="btn-light" onClick={() => setTab('import')}>Event Import &amp; Export</button>{isSuperAdmin && <button className="btn-light" onClick={() => setTab('repair')}>Data Repair</button>}</div></>}

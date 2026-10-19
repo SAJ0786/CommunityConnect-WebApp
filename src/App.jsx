@@ -1,3 +1,4 @@
+import BackControl from './components/BackControl';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from './firebase/firebase';
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -747,22 +748,12 @@ export default function App() {
         {activePage !== 'businesses' && <EventsSidebar page={activePage} onNavigate={setPage} isGuest={isGuest} profile={profile}/>}
         <div className={`app-page-main ${activePage === 'home' ? 'is-home' : 'is-subpage'} page-${activePage}`} style={{ flex:1, minWidth:0 }}>
           {/* Prominent back button on all sub-pages (not Home) */}
-          {!['home', 'businesses'].includes(activePage) && (
+          {!['home', 'businesses', 'registration', 'registration-create'].includes(activePage) && (
             <div style={{ padding:'10px 16px 4px' }}>
-              <button onClick={() => {
+              <BackControl onClick={() => {
                 if (activePage === 'add' && window.__communityAddEventBack?.()) return;
                 setPage(activePage === 'edit' ? 'my' : 'home');
-              }}
-                style={{
-                  display:'inline-flex', alignItems:'center', gap:8,
-                  background:'var(--cc-surface)', border:'1px solid var(--border,var(--cc-border))',
-                  borderRadius:12, padding:'9px 16px 9px 12px', cursor:'pointer',
-                  fontSize:'0.875rem', fontWeight:800, color:'var(--teal,var(--cc-accent-strong))',
-                  boxShadow:'0 2px 8px var(--cc-shadow-color)',
-                }}>
-                <span style={{ fontSize:'1.25rem', lineHeight:1 }}>‹</span>
-                Back
-              </button>
+              }} label="Back"/>
             </div>
           )}
 
@@ -818,7 +809,7 @@ export default function App() {
               <p className="small" style={{ marginBottom: 16 }}>
                 Please create an account or log in to access this feature.
               </p>
-              <button onClick={() => setPage('home')}>← Back to Events</button>
+
             </div>
           )}
         </div>

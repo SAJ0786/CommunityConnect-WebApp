@@ -1,6 +1,7 @@
 import CitySelector from '../components/CitySelector';
 import { CITY_OPTIONS, DEFAULT_CITY } from '../utils/cities';
 import React, { useEffect, useRef, useState } from 'react';
+import BackControl from '../components/BackControl';
 import EventCard from '../components/EventCard';
 import { useRegistration, useRegistrationFeed } from './RegistrationContext';
 import { registrationReviewDetail } from './registrationViewModel.mjs';
@@ -70,10 +71,10 @@ export default function RegistrationEventPanel({ scope, city, user, profile, onC
       {event.canApprove && <button disabled={busy} onClick={() => prepareApproval(event)}>Review for approval</button>}
     </div>)}
     {review && <section aria-label="Review event approval">
+      <BackControl disabled={busy} onClick={() => setReview(null)} label="Back to registration events"/>
       <h3>Review event</h3>
       <RegistrationReview detail={review} poster={poster} busy={busy} onPoster={loadPoster}/>
       <p>Review these event details, private poster and registration form before publishing.</p>
-      <button disabled={busy} onClick={() => setReview(null)}>Go back</button>
       <button disabled={busy || !review.form || !review.privateDetails || (review.privateDetails.hasPoster && !poster)} onClick={approve}>Approve event</button>
       <label>Feedback for organiser<textarea maxLength={2000} value={feedback} onChange={event => setFeedback(event.target.value)} disabled={busy}/></label>
       <div className="registration-actions"><button disabled={busy || !feedback.trim()} onClick={() => decide('rejected')}>Reject event</button><button disabled={busy || !feedback.trim()} onClick={() => decide('changes-requested')}>Suggest changes</button></div>

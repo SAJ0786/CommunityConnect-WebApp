@@ -41,7 +41,7 @@ export default function Favourites({ user, profile, events, setPage, setEditingE
           <p className="small" style={{ color:'var(--muted)', marginBottom:16 }}>
             Tap the ⭐ button on any event card to save it here for quick access.
           </p>
-          <button onClick={() => setPage('home')}>← Browse Events</button>
+
         </div>
       )}
 
