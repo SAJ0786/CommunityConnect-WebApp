@@ -140,3 +140,11 @@ test('organiser participant fields expand to five distinct sets and preserve ans
   const reviewed=answersForReview({form:{fields},ownRegistration:{places:5,fields:expanded,answers}});assert.equal(reviewed['participant:5:name'],'Child 5');assert.equal(reviewed.consent,false);
   assert.deepEqual(registrationFieldGroups(fields,2).map(g=>g.label),['Booking details','Participant 1','Participant 2','Agreement']);
 });
+
+test('registration suburb follows the selected address and never retains a stale public location', () => {
+  const draft = { ...createDraft(), address:'Old private address', suburb:'Old public suburb' };
+  const form = { address:{ fullAddress:'New private address', suburb:'  Parramatta  ' } };
+  assert.equal(registrationDraftFromEventForm(draft,form).suburb,'Parramatta');
+  assert.equal(registrationDraftFromEventForm({...draft,address:form.address.fullAddress},form).suburb,'Parramatta');
+  assert.equal(registrationDraftFromEventForm(draft,{address:{fullAddress:'Unselected address'}}).suburb,'');
+});

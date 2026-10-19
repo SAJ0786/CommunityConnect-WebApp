@@ -22,7 +22,7 @@ export function registrationDraftFromEventForm(draft, form) {
     date: form.eventDate, startTime: form.startTime || '', endTime: form.endTime || '',
     eventType: form.eventType, customEventType: form.customEventType || '', notes: form.notes || '',
     venue: form.address, address: form.address?.fullAddress || '',
-    suburb: form.address?.fullAddress !== draft.address ? form.address?.suburb || draft.suburb : draft.suburb };
+    suburb: form.address?.suburb?.trim() || '' };
 }
 
 export function validateRegistrationDraft(draft) {
