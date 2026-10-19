@@ -10,8 +10,8 @@ export default function ConnectedDirectoryWorkspace({ gateway, findAddresses, on
   const [state, setState] = useState({ data: emptyDirectoryData(), status: 'loading', profile: null });
   useEffect(() => {
     setState({ data: emptyDirectoryData(), status: 'loading', profile: null });
-    return gateway.subscribe(setState);
-  }, [gateway, retry]);
+    return gateway.subscribe(setState, {notificationsOnly:view === 'notifications'});
+  }, [gateway, retry, view]);
   const [notificationError, setNotificationError] = useState('');
   if (view === 'notifications') return <main className="cc-notifications bw-shell"><PagePanel page="notifications" subtitle="Updates from Events and the Business Directory."/>
     {state.error || notificationError ? <p role="alert" className="bw-error">{state.error || notificationError}</p> : null}

@@ -10,6 +10,7 @@ export function registrationFixture(date, user, role, guest, registered = false,
   const decorate = row => ({ ...row, registrationOnly:true, canManage:manage(row), ...(manage(row) && hasChanges(row) ? {hasPendingChanges:true} : {}), canApprove:member && role === 'superAdmin' && (row.status === 'pending' || hasChanges(row)),
     isRegistered:attending && row.id === 'registration-approved', canRegister:row.status === 'approved', canEditRegistration:attending, ...(manage(row) || attending ? { hasPoster } : {}) });
   const fields = participants ? [{id:'email',type:'email',label:'Booking email',required:true},{id:'name',type:'text',label:'Full name',required:true,perParticipant:true},{id:'age',type:'number',label:'Age',required:true,perParticipant:true}] : [{ id:'name', type:'text', label:'Your name', required:true }];
+  fields.push({id:'consent',type:'consent',label:'Parent or guardian consent',required:true,terms:'By registering, I confirm that I am authorised to book these places and that the participant details are correct. I understand that attendees must follow the organiser’s instructions and that I should contact the host about any access or participation needs before the event. I have reviewed the event information and agree to these registration terms.'});
   const api = {
     list: async ({ scope, city }) => {
       calls.push(['list',scope,city]);

@@ -148,3 +148,11 @@ test('registration suburb follows the selected address and never retains a stale
   assert.equal(registrationDraftFromEventForm({...draft,address:form.address.fullAddress},form).suburb,'Parramatta');
   assert.equal(registrationDraftFromEventForm(draft,{address:{fullAddress:'Unselected address'}}).suburb,'');
 });
+
+test('an organiser who also booked retains attendee history alongside response management',()=>{
+ const handlers={uid:'host',register(){},registrationHistory(){},responses(){},editForm(){}};
+ const actions=eventActions({event:{registrationOnly:true,ownerUid:'host',isRegistered:true,status:'approved'},member:true,manage:true,handlers});
+ assert.ok(actions.some(row=>row.id==='responses'&&!row.disabled));
+ assert.ok(actions.some(row=>row.id==='registrationHistory'&&!row.disabled));
+ assert.ok(actions.some(row=>row.id==='register'&&!row.disabled));
+});

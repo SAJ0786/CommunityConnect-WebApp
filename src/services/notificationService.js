@@ -1,5 +1,5 @@
 import { registrationNotificationLink } from '../registration/registrationLinks.mjs';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, collection, query, where, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions, getMessagingInstance, getToken, onMessage } from '../firebase/firebase';
 import { registerMessagingWorker } from './workerRegistration.mjs';
@@ -266,4 +266,10 @@ function getPlatform() {
   if (/iphone|ipad|ipod/i.test(ua)) return 'ios';
   if (/android/i.test(ua)) return 'android';
   return 'web';
+}
+
+export function listenBellUnread(uid, onCount, onError = () => {}) {
+  if (!uid) { onCount(0); return () => {}; }
+  return onSnapshot(query(collection(db, 'userNotifications'), where('recipientUid','==',uid)),
+    snapshot => onCount(snapshot.docs.filter(doc => doc.data().read !== true).length), onError);
 }

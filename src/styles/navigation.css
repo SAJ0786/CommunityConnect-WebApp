@@ -75,3 +75,9 @@
 .cc-quick-access button > .cc-quick-icon { width:36px; height:36px; flex:none; border-radius:12px; }
 .cc-quick-access button > .cc-quick-label { display:block; width:100%; height:auto; min-height:1.4em; border-radius:0; background:transparent; color:var(--cc-text); overflow-wrap:normal; word-break:normal; text-align:center; line-height:1.4; }
 .cc-quick-access button:nth-child(n) > .cc-quick-label { background:transparent; color:var(--cc-text); }
+
+.cc-bell-button { position:relative; }
+.cc-bell-count { position:absolute; top:-4px; right:-4px; min-width:20px; height:20px; padding:0 4px; border-radius:var(--cc-radius-small); display:grid; place-items:center; background:var(--cc-danger); color:var(--cc-on-primary); font-size:.65rem; font-weight:700; border:2px solid var(--cc-surface); }
+
+.cc-registration-card-shortcuts { display:flex; justify-content:flex-end; margin:8px 0 16px; }
+.cc-registration-card-shortcuts button { display:flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 16px; border:1px solid var(--cc-primary-border); border-radius:var(--cc-radius-control); background:var(--cc-primary-soft); color:var(--cc-primary-strong); }

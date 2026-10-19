@@ -102,7 +102,7 @@ export default function EventCard({
   const isPrivate     = event.organiserType === 'private';
   const showReligious = RELIGIOUS_EVENT_TYPES.includes(event.eventType);
   const member = Boolean(!isGuest && user?.uid && !user.isAnonymous && profile?.isActive !== false);
-  const manage = member && (event.registrationOnly ? Boolean(registrationDetail?.canManage ?? event.canManage) && !event.deletedAt && event.status !== 'cancelled' : canEditEvent(profile, event, user?.uid));
+  const manage = member && (event.registrationOnly ? Boolean(registrationDetail?.canManage ?? event.canManage ?? (event.ownerUid === user?.uid)) && !event.deletedAt && event.status !== 'cancelled' : canEditEvent(profile, event, user?.uid));
   const admin = member && canAdminAccessEvent(profile, event);
   const readOnly = import.meta.env.VITE_READ_ONLY_PREVIEW === 'true';
   const [showLiveControls, setShowLiveControls] = useState(false);

@@ -79,7 +79,7 @@ export function createDirectoryGateway({ db, user, assertOpen = () => {}, storag
   }
 
   let refresh = () => {};
-  function subscribe(onState) {
+  function subscribe(onState, { notificationsOnly = false } = {}) {
     let active = true, stops = [], data = emptyDirectoryData(), profile = null;
     const ready = new Set(), cached = new Set();
     let expected = 0;
@@ -107,7 +107,8 @@ export function createDirectoryGateway({ db, user, assertOpen = () => {}, storag
       if (!active || closed) return;
       profile = member;
       const admin = ['admin', 'superAdmin'].includes(member.role);
-      expected = admin ? 11 : 9;
+      expected = notificationsOnly ? 2 : admin ? 11 : 9;
+      if (!notificationsOnly) {
       feed('categories', doc(db, 'settings', 'businessCategories'), snapshot => mergeDirectoryCategories(snapshot.exists() ? snapshot.data() : {}));
       const own = name => query(collection(db, name), where('ownerId', '==', user.uid));
       // Candidate promotion review follows native central admin permissions. Listing tools remain city-scoped.
@@ -130,6 +131,7 @@ export function createDirectoryGateway({ db, user, assertOpen = () => {}, storag
         profile = { ...current, uid: user.uid };
         return Array.isArray(current.savedBusinesses) ? current.savedBusinesses : [];
       });
+      }
       let regular = [], moderation = [];
       emitNotifications = () => {
         data.notifications = [...regular.filter(row => !dismissed.has(row.id)), ...moderation]
@@ -146,6 +148,7 @@ export function createDirectoryGateway({ db, user, assertOpen = () => {}, storag
       // Both notification sources contribute to one visible list and readiness.
       feed('notifications', query(collection(db, 'userNotifications'), where('recipientUid', '==', user.uid)), snapshot => notificationMap('regular', snapshot));
       feed('_moderation', query(collection(db, 'businessModerationNotices'), where('ownerUid', '==', user.uid)), snapshot => notificationMap('moderation', snapshot));
+      if (notificationsOnly) return;
       feed('threads', query(collection(db, 'businessMessageThreads'), where('participantUids', 'array-contains', user.uid)), snapshot => rows(snapshot).filter(row => [row.ownerUid, row.senderUid].includes(user.uid)).map(row => ({
         ...row, messages: [], unread: Number(row.unreadBy?.[user.uid] || 0),
         updatedMillis: timestampMillis(row.updatedAt || row.createdAt), blocked: row.blockedBy?.[user.uid] === true,

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import EventCard from '../components/EventCard';
+import { ClipboardList } from 'lucide-react';
 import { getMyEvents, toggleEventVisibility } from '../services/eventService';
 import { useRegistration, useRegistrationFeed } from '../registration/RegistrationContext';
 import { compareEventsByDateTime } from '../services/dateUtils';
@@ -100,6 +101,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
               onStreamStart={onStreamStart}
               savedIds={savedIds} onSaveToggle={onSaveToggle} onCalendar={() => setPage('calendar')}
             />
+            {e.registrationOnly && expandedId !== e.id && (e.canManage ?? (e.ownerUid === user?.uid)) && <div className="cc-registration-card-shortcuts"><button type="button" disabled={!registration?.open} onClick={() => registration.open(e, 'responses')}><ClipboardList size={19} aria-hidden="true"/>Registration responses</button></div>}
           </div>
         </div>
       ))}

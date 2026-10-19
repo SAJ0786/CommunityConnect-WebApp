@@ -614,7 +614,7 @@ export default function App() {
     if (!REGISTRATION_ENABLED || row.module !== 'registration') return false;
     const target = registrationEntry('?registration=' + encodeURIComponent(row.eventId || row.targetId || '') + '&recipient=' + encodeURIComponent(row.recipientUid || user.uid), user.uid);
     if (!target) return false;
-    selectExperience('events'); setFocusEventId(target); setPage('home'); return true;
+    selectExperience('events'); setRegistrationTarget(target); setRegistrationAction(row.type === 'registration.booking' ? 'responses' : 'history'); setPage('registration'); return true;
   };
   const isGuest    = authMode === 'guest';
   const openRegistration = (event, action = 'register') => {

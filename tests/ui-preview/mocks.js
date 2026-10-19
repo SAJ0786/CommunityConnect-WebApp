@@ -52,6 +52,7 @@ const addMessage = (id, text) => {
 };
 export function service(name) {
   const values = {
+    listenBellUnread: (_uid,next) => { next(3); return () => {}; },
     getHijriSettings: async () => ({ overrides: [] }),
     getOrganisations: async () => [],
     getMyEvents: async () => window.__uiEvents || [],

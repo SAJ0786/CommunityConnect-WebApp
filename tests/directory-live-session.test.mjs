@@ -27,3 +27,13 @@ test('live directory invalidates pending actions when the signed-in identity cha
   await assert.rejects(gateway.loadOperations({view:'moderation'}),/account changed/);
   assert.equal(state.calls.length,0);
 });
+
+test('notification view listens only to account notices and moderation, independent of business collections',async()=>{
+ const state=setup(),gateway=state.create(),seen=[];
+ const stop=gateway.subscribe(value=>seen.push(value),{notificationsOnly:true});
+ for(let i=0;i<5;i++)await new Promise(setImmediate);
+ assert.deepEqual([...state.transport.listeners].map(item=>item.target.path).sort(),['businessModerationNotices','userNotifications']);
+ assert.equal(seen.at(-1).status,'ready');
+ assert.ok(seen.at(-1).profile.uid);
+ stop();gateway.close();assert.equal(state.transport.listeners.size,0);
+});

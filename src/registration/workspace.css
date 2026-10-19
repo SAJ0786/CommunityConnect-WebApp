@@ -123,3 +123,6 @@
  .registration-workspace .registration-participant-group { padding:14px; }
  .registration-progress li { font-size:.7rem; }
 }
+
+/* Agreements use the entire group width, including desktop two-column forms. */
+.registration-participant-group > .registration-answer[data-field-type="consent"] { grid-column:1 / -1; }
