@@ -1,4 +1,5 @@
 // UI availability is additional to server rules, never a replacement for them.
+import { registrationUnavailable } from '../registration/registrationStatus.mjs';
 import { REGISTRATION_REMINDER_HOLD } from '../config/releaseGates.mjs';
 export function eventActions({ event, member, manage, admin, arrangeNiaz = manage, readOnly, registrationRemindersEnabled = false, handlers = {} }) {
   const hostUid = event.createdByUserId || event.ownerUid || event.createdByUid || event.userId;
@@ -38,8 +39,8 @@ export function eventActions({ event, member, manage, admin, arrangeNiaz = manag
         action('responses', 'Registration responses', true)] : []),
       ...(event.showApproval ? [action('approve', 'Approve event', member && event.canApprove && (event.status === 'pending' || event.hasPendingChanges) && !event.deletedAt, true,
         event.status === 'approved' && !event.hasPendingChanges ? 'This event is already approved.' : 'Only Superadmin can approve an event awaiting review.')] : []),
-      ...(event.isRegistered || event.status === 'cancelled' ? [action('registrationHistory', 'My registration', member)] : []),
+      ...(event.isRegistered || event.status === 'cancelled' ? [action('registrationHistory', registrationUnavailable(event) ? 'Registration history' : 'My registration', member)] : []),
     ] : []),
     ...(series && (!event.registrationOnly || manage) ? [action('deleteSeries', 'Delete Series', member && admin, true)] : []),
-  ];
+  ].filter(item => !registrationUnavailable(event) || ['contact','responses','registrationHistory'].includes(item.id));
 }

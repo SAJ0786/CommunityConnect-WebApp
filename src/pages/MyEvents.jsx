@@ -1,3 +1,4 @@
+import { registrationUnavailable } from '../registration/registrationStatus.mjs';
 import React, { useState, useEffect } from 'react';
 import EventCard from '../components/EventCard';
 import ExperienceSwitch from '../components/ExperienceSwitch';
@@ -16,9 +17,12 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
   const attending = useRegistrationFeed(registration?.api, 'attending', undefined, registration?.revision);
   const unique = rows => [...new Map(rows.map(event => [event.id,event])).values()].sort(compareEventsByDateTime);
   const organising = unique([...(sourceUid === user?.uid ? myEvents : []), ...hosted.events]);
-  const bookings = unique(attending.events);
-  const selected = selection && selection.uid === user?.uid ? selection.view : organising.length || !bookings.length ? 'organising' : 'attending';
-  const allEvents = selected === 'organising' ? organising : bookings;
+  const bookings = unique(attending.events.filter(event => !registrationUnavailable(event)));
+  const history = unique(attending.events.filter(registrationUnavailable));
+  const [historySelection, setHistorySelection] = useState(null);
+  const historyOpen = historySelection === user?.uid;
+  const selected = selection && selection.uid === user?.uid ? selection.view : organising.length || !(bookings.length || history.length) ? 'organising' : 'attending';
+  const allEvents = selected === 'organising' ? organising : historyOpen ? history : bookings;
   useEffect(() => {
     let current = true;
     setSourceUid(user?.uid || null);setMyEvents([]);setExpandedId(null);
@@ -59,6 +63,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
         {id:'my-attending',label:`My registrations (${bookings.length})`,selected:selected === 'attending',controls:'my-event-list',onClick:()=>{setSelection({uid:user.uid,view:'attending'});setExpandedId(null);}},
       ]}/>
       <p className="small">{selected === 'organising' ? 'Events you submitted. Manage their details and registration responses.' : 'Events you booked places for. Open an event to view or edit your registration.'}</p>
+      {selected === 'attending' && history.length > 0 && <button type="button" className="cc-registration-history-toggle" aria-pressed={historyOpen} onClick={() => {setHistorySelection(historyOpen ? null : user.uid);setExpandedId(null);}}>{historyOpen ? 'Back to active registrations' : `Registration history (${history.length})`}</button>}
       <section id="my-event-list" role="tabpanel" aria-labelledby={selected === 'organising' ? 'my-organising' : 'my-attending'}>
       {loading && (
         <div className="card center">

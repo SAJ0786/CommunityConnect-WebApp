@@ -84,7 +84,7 @@ function Preview() {
   auth.currentUser = guest ? null : persona === 'member' ? {...user,uid:'synthetic-viewer'} : user;
   const registrationReview = new URLSearchParams(location.search).has('registration');
   const fixture = useMemo(() => registrationReview ? registrationFixture(date, auth.currentUser || user, profile.role, guest,
-    new URLSearchParams(location.search).has('registered'), new URLSearchParams(location.search).has('changes'), new URLSearchParams(location.search).has('participants'), new URLSearchParams(location.search).has('series')) : null, [registrationReview, guest, persona]);
+    new URLSearchParams(location.search).has('registered'), new URLSearchParams(location.search).has('changes'), new URLSearchParams(location.search).has('participants'), new URLSearchParams(location.search).has('series'), new URLSearchParams(location.search).has('deleted')) : null, [registrationReview, guest, persona]);
   if (fixture) window.__registrationCalls = fixture.calls;
   window.__uiReviewStatus = status;
   const Screen = screens[page] || Home;

@@ -43,3 +43,6 @@
 .event-series-dialog ul { padding-left:22px; max-height:40dvh; overflow:auto; }
 .event-series-dialog li { margin:8px 0; font-weight:400; }
 .event-series-dialog button { margin:6px 8px 0 0; }
+
+.event-registration-caption { display:flex; width:100%; justify-content:flex-start; min-height:44px; margin:8px 0 0; padding:8px 4px; border:0; border-top:1px solid var(--cc-border); border-radius:0; background:transparent; color:var(--cc-primary-strong); box-shadow:none; font-family:inherit; font-weight:600; font-size:.75rem; line-height:1.4; }
+.cc-registration-history-toggle { margin:0 0 12px; background:var(--cc-surface); color:var(--cc-primary-strong); border:1px solid var(--cc-border); box-shadow:none; }

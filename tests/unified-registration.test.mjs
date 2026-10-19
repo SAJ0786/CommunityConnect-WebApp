@@ -95,7 +95,13 @@ test('card approval shortcut is visible to admin surfaces and enabled only by pe
   assert.equal(approval({ ...base, status:'approved', hasPendingChanges:true }).disabled,false);
   assert.match(approval({ ...base, status:'approved', canApprove:false }).reason,/already approved/);
   assert.equal(approval({ ...base, canApprove:false }).disabled,true);
-  assert.equal(approval({ ...base, deletedAt:'now' }).disabled,true);
+  assert.equal(approval({ ...base, deletedAt:'now' }),undefined);
+});
+
+test('unavailable registration cards expose history and contact, with no edit, share, calendar or reminder controls', () => {
+  const actions=eventActions({event:{registrationOnly:true,status:'cancelled',deleted:true,isRegistered:true,showApproval:true},member:true,manage:true,admin:true,handlers:{registrationHistory(){},contact(){},responses(){}}});
+  assert.deepEqual(actions.map(action=>action.id),['contact','responses','registrationHistory']);
+  assert.equal(actions.find(action=>action.id==='registrationHistory').label,'Registration history');
 });
 test('pending snapshot selection is manager-only and never mutates published detail', () => {
   const published={event:{title:'Published',revision:3},form:{version:1},privateDetails:{address:'Published venue'},

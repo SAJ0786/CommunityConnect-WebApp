@@ -1,4 +1,4 @@
-export function registrationFixture(date, user, role, guest, registered = false, staged = false, participants = false, series = false) {
+export function registrationFixture(date, user, role, guest, registered = false, staged = false, participants = false, series = false, deleted = false) {
   const calls = [];
   const rows = new Map([
     ['registration-approved', { id:'registration-approved', title:'Registration Workshop', date, eventType:'Workshop', city:'sydney', suburb:'Parramatta', status:'approved', revision:1, ownerUid:'synthetic-member', capacity:30, formVersion:1, startTime:'18:00', endTime:'19:00', startAt:`${date}T07:00:00Z`, endAt:`${date}T08:00:00Z` }],
@@ -6,11 +6,12 @@ export function registrationFixture(date, user, role, guest, registered = false,
   ]);
   if(series){for(const row of rows.values())row.seriesId='synthetic-series';for(const [id,status,offset] of [['series-approved','approved',7],['series-pending','pending',14]])rows.set(id,{...rows.get('registration-approved'),id,title:'Series Workshop',status,date:new Date(Date.parse(`${date}T00:00:00Z`)+offset*86400000).toISOString().slice(0,10)});}
   const seriesBookings=new Set();
+  if (deleted) Object.assign(rows.get('registration-approved'),{status:'cancelled',deleted:true});
   let attending = registered, hasPoster = true;
   const member = !guest, manage = row => member && (row.ownerUid === user.uid || ['admin','superAdmin'].includes(role));
   const hasChanges = row => staged && row.id === 'registration-approved';
   const decorate = row => ({ ...row, registrationOnly:true, submittedByName:'Example Organiser', canManage:manage(row), ...(manage(row) && hasChanges(row) ? {hasPendingChanges:true} : {}), canApprove:member && role === 'superAdmin' && (row.status === 'pending' || hasChanges(row)),
-    isRegistered:attending && row.id === 'registration-approved', canRegister:row.status === 'approved', canEditRegistration:attending, ...(manage(row) || attending ? { hasPoster } : {}) });
+    isRegistered:attending && row.id === 'registration-approved', canRegister:row.status === 'approved', canEditRegistration:attending && row.status === 'approved', ...(row.status === 'approved' && (manage(row) || attending) ? { hasPoster } : {}) });
   const fields = participants ? [{id:'email',type:'email',label:'Booking email',required:true},{id:'name',type:'text',label:'Full name',required:true,perParticipant:true},{id:'age',type:'number',label:'Age',required:true,perParticipant:true}] : [{ id:'name', type:'text', label:'Your name', required:true }];
   fields.push({id:'consent',type:'consent',label:'Parent or guardian consent',required:true,terms:'By registering, I confirm that I am authorised to book these places and that the participant details are correct. I understand that attendees must follow the organiser’s instructions and that I should contact the host about any access or participation needs before the event. I have reviewed the event information and agree to these registration terms.'});
   const api = {
@@ -23,8 +24,8 @@ export function registrationFixture(date, user, role, guest, registered = false,
     },
     load: async (id,includeOccurrences,includeSeriesReview) => {
       calls.push(['load',id]); const row = rows.get(id); if (!row) throw Error('Event not found.');
-      const allowed = manage(row) || attending, event = decorate(row);
-      return { event, canManage:manage(row), canApprove:event.canApprove, canRegister:row.status === 'approved', canEditRegistration:attending,
+      const allowed = row.status === 'approved' && (manage(row) || attending), event = decorate(row);
+      return { event, canManage:manage(row), canApprove:event.canApprove, canRegister:row.status === 'approved', canEditRegistration:attending && row.status === 'approved', canCancel:attending,
         form:{ version:1, purpose:'Arrange the workshop.', fields },
         ...(series&&includeOccurrences?{occurrences:[...rows.values()].filter(item=>item.status==='approved').map(item=>({eventId:item.id,date:item.date,startTime:item.startTime,formVersion:1,availablePlaces:30,selectable:!seriesBookings.has(item.id),registered:seriesBookings.has(item.id),reason:seriesBookings.has(item.id)?'Already registered':''}))}:{}),
         ...(series&&includeSeriesReview&&role==='superAdmin'?{reviewOccurrences:[...rows.values()].filter(item=>item.status==='pending').map(item=>({eventId:item.id,date:item.date,revision:item.revision}))}:{}),
@@ -34,7 +35,7 @@ export function registrationFixture(date, user, role, guest, registered = false,
         ...(allowed ? { privateDetails:{ address:'1 Fictional Street, Parramatta NSW', hasPoster, venue:{ fullAddress:'1 Fictional Street, Parramatta NSW', suburb:'Parramatta', state:'NSW', postcode:'2150', latitude:-33.8, longitude:151 } } } : {}) };
     },
     poster: async id => {
-      calls.push(['poster',id]); if (!manage(rows.get(id)) && !attending) throw Error('Poster not authorised.');
+      calls.push(['poster',id]); if (rows.get(id).status !== 'approved' || (!manage(rows.get(id)) && !attending)) throw Error('Poster not authorised.');
       return { mime:'image/png', base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG6kAAAAASUVORK5CYII=' };
     },
     approve: async (id, revision) => { calls.push(['approve',id,revision]); if (role !== 'superAdmin') throw Error('Superadmin required.'); rows.set(id, { ...rows.get(id), ...(staged && id === 'registration-approved' ? {title:'Submitted Registration Workshop',startTime:'20:00'} : {}), status:'approved', revision:revision + 1 }); if(id==='registration-approved')staged=false; },

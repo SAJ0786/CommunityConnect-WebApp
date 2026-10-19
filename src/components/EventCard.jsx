@@ -1,3 +1,4 @@
+import { registrationUnavailable, registrationStatusLabel } from '../registration/registrationStatus.mjs';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { canEditEvent, canAdminAccessEvent, canArrangeEventNiaz, getSharePrivacy, getDisplayPrivacy } from '../utils/permissions';
 import { getEventMetroArea } from '../utils/cities';
@@ -51,6 +52,7 @@ export default function EventCard({
   savedIds = [], onSaveToggle, onStreamStart, onCalendar, onContactHost, onReminder, onNiazArrangement, onEditSeries, onDeleteSeries, imagePriority = false
 }) {
   const registration = useRegistration();
+  const [thumbnail, setThumbnail] = useState(null);
   const [privateState, setPrivateState] = useState(null);
   const [pageVisible, setPageVisible] = useState(() => !document.hidden);
   const [registrationError, setRegistrationError] = useState('');
@@ -64,7 +66,7 @@ export default function EventCard({
     imageUrl: '',
   } : sourceEvent;
   useEffect(() => {
-    const visibility = () => { setPageVisible(!document.hidden); setPrivateState(null); };
+    const visibility = () => { setPageVisible(!document.hidden); setPrivateState(null); setThumbnail(null); };
     document.addEventListener('visibilitychange', visibility);
     return () => document.removeEventListener('visibilitychange', visibility);
   }, []);
@@ -75,7 +77,7 @@ export default function EventCard({
     registration.api.load(sourceEvent.id).then(async detail => {
       if (!current) return;
       setPrivateState({ key: registrationKey, detail, poster: null });
-      if (detail.privateDetails?.hasPoster) {
+      if (detail.privateDetails?.hasPoster && thumbnail?.key !== registrationKey) {
         const poster = await registration.api.poster(sourceEvent.id);
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(poster.mime)) throw new Error('Unsupported event poster format.');
         if (current) setPrivateState({ key: registrationKey, detail, poster: `data:${poster.mime};base64,${poster.base64}` });
@@ -83,6 +85,14 @@ export default function EventCard({
     }).catch(error => { if (current) { setPrivateState(null); setRegistrationError(error.message); } });
     return () => { current = false; };
   }, [registration?.api, registrationKey, sourceEvent.registrationOnly, sourceEvent.hasPoster, pageVisible, isExpanded]);
+  useEffect(() => {
+    let current = true; setThumbnail(null);
+    if (!sourceEvent.registrationOnly || !registration?.api || !pageVisible || !user?.uid || !sourceEvent.hasPoster || registrationUnavailable(sourceEvent) || !(sourceEvent.isRegistered || sourceEvent.canManage)) return;
+    registration.api.poster(sourceEvent.id).then(poster => {
+      if (current && ['image/jpeg','image/png','image/webp'].includes(poster.mime)) setThumbnail({key:registrationKey,src:`data:${poster.mime};base64,${poster.base64}`});
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [registration?.api, registrationKey, sourceEvent.hasPoster, sourceEvent.isRegistered, sourceEvent.canManage, sourceEvent.status, sourceEvent.deleted, pageVisible, user?.uid]);
   const [seriesArchiveOpen, setSeriesArchiveOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false), [seriesEditBusy, setSeriesEditBusy] = useState(false), [actionError, setActionError] = useState('');
   const [reminderOpen, setReminderOpen] = useState(false);
@@ -113,7 +123,7 @@ export default function EventCard({
   // Poster image — Firestore organisation logos resolve asynchronously, while
   // uploaded posters and bundled fallbacks can render immediately.
   const [eventImage, setEventImage] = useState(() => getEventImage(event, isGuest));
-  const privatePoster = registrationDetail && privateState?.poster;
+  const privatePoster = (registrationDetail && privateState?.poster) || (pageVisible && sourceEvent.hasPoster && !registrationUnavailable(sourceEvent) && (sourceEvent.isRegistered || sourceEvent.canManage) && thumbnail?.key === registrationKey && thumbnail.src);
   const { src: posterSrc, isLogo: posterIsLogo } = privatePoster ? { src: privatePoster, isLogo: false } : eventImage;
   const hasPoster = !posterIsLogo;
 
@@ -274,7 +284,7 @@ export default function EventCard({
         marginBottom: 8,
       }}>
       {event.registrationOnly && manage && (event.status === 'pending' || event.hasPendingChanges || event.reviewDecision) && <span className="registration-approval-badge">{event.reviewDecision === 'rejected' ? 'Unapproved' : event.reviewDecision === 'changes-requested' ? 'Changes requested' : 'Needs approval'}</span>}
-      {event.registrationOnly && event.status === 'cancelled' && <p role="status">Event deleted or cancelled. No places reserved.</p>}
+      {event.registrationOnly && registrationUnavailable(event) && <p role="status">{registrationStatusLabel(event)} · No places reserved</p>}
 
       <div className="event-native-summary">
         <div className="event-native-poster">
@@ -305,6 +315,8 @@ export default function EventCard({
         </div>
       </div>
 
+      {event.registrationOnly && event.isRegistered && !isExpanded && <button type="button" className="event-registration-caption" onClick={click => { click.stopPropagation(); registration?.open?.(event,'history'); }}>{registrationUnavailable(event) ? 'Registration history' : 'View my registration'}</button>}
+
       {/* ── EXPANDED BODY ── */}
       <div style={{
         overflow: isExpanded ? 'visible' : 'hidden',
@@ -321,7 +333,7 @@ export default function EventCard({
             const action = actions.find(item => item.id === id);
             return action?.disabled && action.reason ? <p className="event-action-note" role="note" key={id}>{action.reason}</p> : null;
           })}
-          {showLiveControls && !actions.find(action => action.id === 'live').disabled && <div onClick={click => click.stopPropagation()}>
+          {showLiveControls && actions.some(action => action.id === 'live' && !action.disabled) && <div onClick={click => click.stopPropagation()}>
             <Suspense fallback={<span className="small">Loading live controls…</span>}>
               {event.isLive && event.liveWatchUrl && event.liveAppVisibility !== 'private' && !(event.registrationOnly && manage)
                 ? <WatchLiveButton event={event} isGuest={!member} onWatchStarted={onStreamStart} />
