@@ -55,7 +55,7 @@ export function service(name) {
     listenBellUnread: (_uid,next) => { next(3); return () => {}; },
     getHijriSettings: async () => ({ overrides: [] }),
     getOrganisations: async () => [],
-    getMyEvents: async () => window.__uiEvents || [],
+    getMyEvents: async uid => (window.__uiEvents || []).filter(event => event.createdByUserId === uid),
     sendHostMessage: async (eventId, text) => {
       const uid = member(), event = window.__uiEvents.find(row => row.id === eventId);
       if (!event || event.createdByUserId === uid) throw new Error('Choose another linked host.');

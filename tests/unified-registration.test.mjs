@@ -156,3 +156,9 @@ test('an organiser who also booked retains attendee history alongside response m
  assert.ok(actions.some(row=>row.id==='registrationHistory'&&!row.disabled));
  assert.ok(actions.some(row=>row.id==='register'&&!row.disabled));
 });
+
+test('registration attendees never see disabled organiser edit or delete actions',()=>{
+ const rows=eventActions({event:{registrationOnly:true,isRegistered:true,status:'approved'},member:true,manage:false,handlers:{uid:'attendee',register(){},registrationHistory(){}}});
+ for(const id of ['edit','editSeries','copy','delete','deleteSeries','responses','editForm'])assert.equal(rows.some(row=>row.id===id),false,id);
+ assert.ok(rows.some(row=>row.id==='registrationHistory'&&!row.disabled));
+});

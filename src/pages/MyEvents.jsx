@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import EventCard from '../components/EventCard';
+import ExperienceSwitch from '../components/ExperienceSwitch';
 import { ClipboardList } from 'lucide-react';
 import { getMyEvents, toggleEventVisibility } from '../services/eventService';
 import { useRegistration, useRegistrationFeed } from '../registration/RegistrationContext';
@@ -9,18 +10,25 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
   const [myEvents,  setMyEvents]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  const [sourceUid,setSourceUid] = useState(null), [selection,setSelection] = useState(null);
   const registration = useRegistration();
   const hosted = useRegistrationFeed(registration?.api, 'mine', undefined, registration?.revision);
   const attending = useRegistrationFeed(registration?.api, 'attending', undefined, registration?.revision);
-  const allEvents = [...new Map([...myEvents, ...attending.events, ...hosted.events].map(event => [event.id, event])).values()].sort(compareEventsByDateTime);
-
+  const unique = rows => [...new Map(rows.map(event => [event.id,event])).values()].sort(compareEventsByDateTime);
+  const organising = unique([...(sourceUid === user?.uid ? myEvents : []), ...hosted.events]);
+  const bookings = unique(attending.events);
+  const selected = selection && selection.uid === user?.uid ? selection.view : organising.length || !bookings.length ? 'organising' : 'attending';
+  const allEvents = selected === 'organising' ? organising : bookings;
   useEffect(() => {
-    if (!user?.uid) return;
+    let current = true;
+    setSourceUid(user?.uid || null);setMyEvents([]);setExpandedId(null);
+    if (!user?.uid) { setLoading(false); return; }
     setLoading(true);
     getMyEvents(user.uid)
-      .then(setMyEvents)
-      .catch(() => setMyEvents([]))
-      .finally(() => setLoading(false));
+      .then(rows => { if(current) setMyEvents(rows); })
+      .catch(() => { if(current) setMyEvents([]); })
+      .finally(() => { if(current) setLoading(false); });
+    return () => { current = false; };
   }, [user?.uid]);
 
   const handleToggle = async (event) => {
@@ -46,6 +54,12 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
 
   return (
     <>
+      <ExperienceSwitch label="My event lists" options={[
+        {id:'my-organising',label:`Events I organise (${organising.length})`,selected:selected === 'organising',controls:'my-event-list',onClick:()=>{setSelection({uid:user.uid,view:'organising'});setExpandedId(null);}},
+        {id:'my-attending',label:`My registrations (${bookings.length})`,selected:selected === 'attending',controls:'my-event-list',onClick:()=>{setSelection({uid:user.uid,view:'attending'});setExpandedId(null);}},
+      ]}/>
+      <p className="small">{selected === 'organising' ? 'Events you submitted. Manage their details and registration responses.' : 'Events you booked places for. Open an event to view or edit your registration.'}</p>
+      <section id="my-event-list" role="tabpanel" aria-labelledby={selected === 'organising' ? 'my-organising' : 'my-attending'}>
       {loading && (
         <div className="card center">
           <p style={{ color: 'var(--muted)' }}>Loading your events…</p>
@@ -56,8 +70,8 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
       {(hosted.loading || attending.loading) && <p role="status">Loading your registration events...</p>}
       {!loading && !hosted.loading && !attending.loading && allEvents.length === 0 && (
         <div className="card center">
-          <p style={{ color: 'var(--muted)', marginBottom: 12 }}>You haven't added any events yet.</p>
-          <button onClick={() => setPage('add')}>➕ Add Your First Event</button>
+          <p style={{ color: 'var(--muted)', marginBottom: 12 }}>{selected === 'organising' ? 'You haven’t submitted any events yet.' : 'You have no event registrations yet.'}</p>
+          {selected === 'organising' && <button onClick={() => setPage('add')}>Add your first event</button>}
         </div>
       )}
 
@@ -106,6 +120,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
         </div>
       ))}
       </div>}
+      </section>
     </>
   );
 }

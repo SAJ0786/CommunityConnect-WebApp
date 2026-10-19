@@ -384,9 +384,9 @@ export default function EventCard({
             </p>
           ))}
           {/* On behalf */}
-          {event.isOnBehalfOf && (
+          {(event.isOnBehalfOf || event.registrationOnly) && (
             <p style={{ margin:'0 0 4px', fontSize:'0.75rem', color:'var(--muted)', fontFamily:'var(--font)' }}>
-              {event.registrationOnly ? 'Added on behalf of the host' : <>Submitted by {event.submittedByName || event.createdByUserEmail}</>}
+              Submitted by {event.submittedByName || (event.registrationOnly ? 'Name unavailable' : event.createdByUserEmail)}
             </p>
           )}
 

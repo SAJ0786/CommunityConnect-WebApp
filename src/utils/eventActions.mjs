@@ -25,10 +25,12 @@ export function eventActions({ event, member, manage, admin, arrangeNiaz = manag
         : !event.startTime || !event.startAt ? 'The host must provide an exact start time before a reminder can be scheduled.' : REGISTRATION_REMINDER_HOLD : 'Sign in to set reminders.'),
     action('calendar', 'Sync Calendar', member, false, 'Sign in to sync your calendar.'),
     action('niaz', 'Niaz Arrangement', member && arrangeNiaz),
+    ...(!event.registrationOnly || manage ? [
     action('edit', 'Edit', member && manage, true),
     ...(series ? [action('editSeries', 'Edit Series', member && manage, true)] : []),
     action('copy', 'Copy', member && admin && (!event.registrationOnly || manage), true),
-    action('delete', 'Delete', member && manage, true),
+    action('delete', 'Delete', member && manage, true)
+    ] : []),
     ...(event.registrationOnly ? [
       action('register', event.isRegistered ? 'Edit registrations' : 'Register for event',
         !event.deletedAt && event.status === 'approved' && (!member || (event.isRegistered ? event.canEditRegistration !== false : event.canRegister !== false)), true, 'Registration is closed or unavailable.'),
@@ -38,6 +40,6 @@ export function eventActions({ event, member, manage, admin, arrangeNiaz = manag
         event.status === 'approved' && !event.hasPendingChanges ? 'This event is already approved.' : 'Only Superadmin can approve an event awaiting review.')] : []),
       ...(event.isRegistered || event.status === 'cancelled' ? [action('registrationHistory', 'My registration', member)] : []),
     ] : []),
-    ...(series ? [action('deleteSeries', 'Delete Series', member && admin, true)] : []),
+    ...(series && (!event.registrationOnly || manage) ? [action('deleteSeries', 'Delete Series', member && admin, true)] : []),
   ];
 }
