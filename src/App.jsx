@@ -112,7 +112,7 @@ export default function App() {
     return onSnapshot(doc(db, 'users', user.uid), snapshot => { if (snapshot.exists() && auth.currentUser?.uid === user.uid) setProfile(snapshot.data()); }, () => {});
   }, [user?.uid, user?.isAnonymous]);
   const [registrationTarget, setRegistrationTarget] = useState(null);
-  const [registrationAction, setRegistrationAction] = useState('register');
+  const [registrationAction, setRegistrationAction] = useState('history');
   const [registrationRevision, setRegistrationRevision] = useState(0);
   const [profileVerified, setProfileVerified] = useState(false);
   const registrationApi = useMemo(() => !REGISTRATION_ENABLED || !user?.uid ? null : createRegistrationClient(
@@ -125,7 +125,7 @@ export default function App() {
     const notice = new URLSearchParams(window.location.search);
     if (notice.get('recipient') === user.uid && ['host-inbox','notifications','favourites'].includes(notice.get('notice'))) { setSelectedExperience('events'); setPage(notice.get('notice')); return; }
     const target = registrationEntry(window.location.search, user.uid);
-    if (target) { setRegistrationTarget(target); setPage('registration'); }
+    if (target) { setRegistrationTarget(target); setRegistrationAction('history'); setPage('registration'); }
   }, [user?.uid, profileVerified]);
   const [events, setEvents]             = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -614,10 +614,10 @@ export default function App() {
     if (!REGISTRATION_ENABLED || row.module !== 'registration') return false;
     const target = registrationEntry('?registration=' + encodeURIComponent(row.eventId || row.targetId || '') + '&recipient=' + encodeURIComponent(row.recipientUid || user.uid), user.uid);
     if (!target) return false;
-    selectExperience('events'); setRegistrationTarget(target); setRegistrationAction(row.type === 'registration.booking' ? 'responses' : 'history'); setPage('registration'); return true;
+    selectExperience('events'); setRegistrationTarget(target); setRegistrationAction('history'); setPage('registration'); return true;
   };
   const isGuest    = authMode === 'guest';
-  const openRegistration = (event, action = 'register') => {
+  const openRegistration = (event, action = 'history') => {
     if (isGuest) { signOut(auth).catch(error => window.showToast?.(error.message, 'error')); return; }
     setRegistrationTarget(event.id); setRegistrationAction(action); setPage('registration');
   };

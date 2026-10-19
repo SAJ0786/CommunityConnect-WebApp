@@ -68,7 +68,7 @@ export default function RegistrationEventPanel({ scope, city, user, profile, onC
     {!loading && !error && !events.length && <p>No registration events in this city.</p>}
     {events.map(event => <div key={event.id} id={`event-${event.id}`}><EventCard event={event} user={user} profile={profile}
       isExpanded={expanded === event.id} onExpand={setExpanded} onCalendar={onCalendar} onApprove={prepareApproval}/>
-      {event.canApprove && <button disabled={busy} onClick={() => prepareApproval(event)}>Review for approval</button>}
+      {event.canApprove && expanded !== event.id && <button disabled={busy} onClick={() => setExpanded(event.id)}>View event awaiting approval</button>}
     </div>)}
     {review && <section aria-label="Review event approval">
       <BackControl disabled={busy} onClick={() => setReview(null)} label="Back to registration events"/>

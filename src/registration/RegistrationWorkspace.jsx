@@ -6,6 +6,7 @@ import { createDraft, validateAnswers, registrationFieldGroups } from './prototy
 import { createSubmission } from './registrationClient.mjs';
 import { eventDraftFromDetail, answersForReview, mergeRegistrationPage, registrantName, registrationReviewDetail } from './registrationViewModel.mjs';
 import { privateVenueLinks } from './privateVenue.mjs';
+import { registrationEntryAllowed, registrationEventEnded } from './registrationStatus.mjs';
 import RegistrationEditor from './RegistrationEditor';
 import AnswerField from './AnswerField';
 import RegistrationReview from './RegistrationReview';
@@ -52,9 +53,10 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     const fresh = await api.load(id, action === 'register');
     if (!valid()) return;
     setDetail(fresh); setStage('card'); submission.current = null; setRetrySubmission(false);
+    if (registrationEventEnded(fresh) && action !== 'responses') return;
     if (action === 'register') {
       if (!requireMember()) return;
-      if (!(fresh.canRegister || fresh.canEditRegistration) || !fresh.form) { setNotice('Registration cannot be edited at this time.'); return; }
+      if (!registrationEntryAllowed(fresh)) { setNotice('Registration cannot be edited at this time.'); return; }
       setAnswers(answersForReview(fresh)); setPlaces(String(fresh.ownRegistration?.status === 'registered' ? fresh.ownRegistration.places : 1));
       setSelectedOccurrences(fresh.occurrences?.length ? [fresh.event.id] : []);
       setErrors({}); setStage('entry');
@@ -80,6 +82,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     run(async valid => {
       const fresh = isNew ? null : await api.load(detail.event.id);
       if (!valid()) return;
+      if (fresh && registrationEventEnded(fresh)) { setDetail(fresh); setStage('card'); return; }
       if (isNew) { createKey.current = reference(); currentId.current = null; setDetail(null); setPendingPoster(null); }
       else setDetail(fresh);
       setDraft(isNew ? { ...createDraft(), startTime: '', endTime: '', title: '', address: '', suburb: '', eventType: eventTypes[0], customEventType: '' } : eventDraftFromDetail(fresh, eventTypes));
@@ -142,7 +145,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       const fresh = await api.load(detail.event.id,true);
       if (!valid()) return;
       setDetail(fresh);
-      if (!(fresh.canRegister || fresh.canEditRegistration) || !fresh.form) { setNotice('Registration cannot be edited at this time.'); setStage('card'); return; }
+      if (!registrationEntryAllowed(fresh)) { setNotice('Registration cannot be edited at this time.'); setStage('card'); return; }
       setAnswers(answersForReview(fresh)); setPlaces(String(fresh.ownRegistration?.status === 'registered' ? fresh.ownRegistration.places : 1));
       setSelectedOccurrences(fresh.occurrences?.length ? [fresh.event.id] : []);
       submission.current = null; setRetrySubmission(false); setErrors({}); setStage('entry');
@@ -150,6 +153,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
   };
   const submit = e => {
     e?.preventDefault();
+    if (!registrationEntryAllowed(detail)) { submission.current=null; setRetrySubmission(false); setStage('card'); return; }
     if (!submission.current) {
       const nextErrors = validateAnswers(detail.form.fields, answers, places, detail.occurrences?.length ? 5 : detail.event.capacity);
       if ((!detail.occurrences?.length || selectedOccurrences.includes(detail.event.id)) && !detail.canRegister && Number(places) > Number(detail.ownRegistration?.places || 0)) nextErrors.places = 'After closing, you can reduce places but cannot add places.';
@@ -162,12 +166,18 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     setRetrySubmission(true);
     run(async valid => {
       const request=submission.current;
-      const result=request.occurrences ? await api.submitOccurrences(request) : await api.submit(request);
+      let result;
+      try { result=request.occurrences ? await api.submitOccurrences(request) : await api.submit(request); }
+      catch (error) {
+        let latest; try { latest=await api.load(detail.event.id); } catch (_) { /* Preserve the original request on an offline/ambiguous failure. */ }
+        if (valid() && registrationEventEnded(latest)) { clearPrivate(); setDetail(latest); setAnswers({}); submission.current=null; setRetrySubmission(false); setStage('card'); setNotice('This event was cancelled or deleted. Your saved registration is read-only.'); return; }
+        throw error;
+      }
       const fresh = await api.load(request.occurrences?.[0]?.eventId || detail.event.id);
       if (!valid()) return;
-      setDetail(fresh); setStage('confirmation'); setAnswers({}); submission.current = null; setRetrySubmission(false);
-      if (request.occurrences) setNotice(`Registration confirmed for ${result.registrations.length} selected occurrences. Each booking is available in My Events → My registrations.`);
-      if (operationsOnly) (onSubmitted || onBack)?.(fresh.event);
+      setDetail(fresh); setStage(registrationEventEnded(fresh) ? 'card' : 'confirmation'); setAnswers({}); submission.current = null; setRetrySubmission(false);
+      if (request.occurrences && !registrationEventEnded(fresh)) setNotice(`Registration confirmed for ${result.registrations.length} selected occurrences. Each booking is available in My Events → My registrations.`);
+      if (operationsOnly && !registrationEventEnded(fresh)) (onSubmitted || onBack)?.(fresh.event);
     });
   };
   const responsePage = (next = null) => run(async valid => {
@@ -209,7 +219,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       {!detail.canRegister && <p>{detail.canEditRegistration ? 'New registrations are closed. You can update answers or reduce places until event day.' : 'Registration is closed or unavailable.'}</p>}
       <div className="registration-actions">
         {(detail.canRegister || detail.canEditRegistration) && <button className="registration-primary" disabled={busy} onClick={startEntry}>{detail.ownRegistration?.status === 'registered' ? 'Edit registration' : 'Register for event'}</button>}
-        {detail.canCancel && <button className="btn-light registration-delete" disabled={busy} onClick={() => ask(detail.event.status === 'cancelled' ? 'Delete registration data' : 'Delete registration', detail.event.status === 'cancelled' ? 'Permanently delete your saved answers for this unavailable event and remove it from your history.' : 'Your answers will be deleted and your places released. You will lose private venue and poster access.', async valid => { await api.cancel(detail.event.id, detail.ownRegistration.revision); await reloadAfter(valid, 'Your registration and submitted answers were deleted.'); })}>{detail.event.status === 'cancelled' ? 'Delete my registration data' : 'Delete my registration'}</button>}
+        {detail.canCancel && <button className="btn-light registration-delete" disabled={busy} onClick={() => ask(detail.event.status === 'cancelled' ? 'Delete registration data' : 'Delete registration', detail.event.status === 'cancelled' ? 'Permanently delete your saved answers for this unavailable event and remove it from your history.' : 'Your answers will be deleted and your places released. You will lose private venue and poster access.', async valid => { await api.cancel(detail.event.id, detail.ownRegistration.revision); if (detail.event.status === 'cancelled') { if(valid()) { if(operationsOnly) (onSubmitted||onBack)?.(detail.event); else await list('attending'); } return; } await reloadAfter(valid, 'Your registration and submitted answers were deleted.'); })}>{detail.event.status === 'cancelled' ? 'Delete my registration data' : 'Delete my registration'}</button>}
         {detail.canManage && <>{detail.event.status !== 'cancelled' && <button disabled={busy} onClick={() => edit()}>Edit event and form</button>}<button disabled={busy} onClick={() => responsePage()}>Registration responses</button>
           {reviewDetail.privateDetails?.hasPoster && <button disabled={busy} onClick={() => ask('Remove poster', 'Remove the private poster? An approved event keeps its published poster until this change is approved.', async valid => { await api.removePoster(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Poster removal saved. Changes to an approved event require administrator approval.'); })}>Remove private poster</button>}
           {pendingPoster && <><p role="status">Poster uploads pending for: {pendingPoster.eventIds.map(id => pendingPoster.eventDates[id]).join(', ')}. Retry uploads only; the events are already saved.</p><button disabled={busy} onClick={() => run(async valid => {

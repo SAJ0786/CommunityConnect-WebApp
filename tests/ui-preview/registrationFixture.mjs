@@ -1,4 +1,4 @@
-export function registrationFixture(date, user, role, guest, registered = false, staged = false, participants = false, series = false, deleted = false) {
+export function registrationFixture(date, user, role, guest, registered = false, staged = false, participants = false, series = false, deleted = false, cancelOnSubmit = false) {
   const calls = [];
   const rows = new Map([
     ['registration-approved', { id:'registration-approved', title:'Registration Workshop', date, eventType:'Workshop', city:'sydney', suburb:'Parramatta', status:'approved', revision:1, ownerUid:'synthetic-member', capacity:30, formVersion:1, startTime:'18:00', endTime:'19:00', startAt:`${date}T07:00:00Z`, endAt:`${date}T08:00:00Z` }],
@@ -48,7 +48,8 @@ export function registrationFixture(date, user, role, guest, registered = false,
         answers:{ name:'Example attendee' } },
     ], nextCursor:null }; },
     removePoster: async () => { hasPoster = false; },
-    submit: async data => { calls.push(['submit',data.eventId]); attending = true; },
+    submit: async data => { calls.push(['submit',data.eventId]); attending = true; if(cancelOnSubmit) { rows.set(data.eventId,{...rows.get(data.eventId),status:'cancelled'}); throw Error('Event was cancelled.'); } },
+    cancel: async (id,revision) => {calls.push(['cancel',id,revision]);attending=false;},
     save: async ({ eventId, draft }) => { calls.push(['save',eventId]); const row = rows.get(eventId); rows.set(eventId, { ...row, ...draft, revision:row.revision + 1 }); return { eventId, revision:row.revision + 1 }; },
   };
   return { api, calls, publicRows:() => [...rows.values()].filter(row => row.status === 'approved').map(decorate) };
