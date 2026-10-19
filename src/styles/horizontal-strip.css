@@ -1,8 +1,11 @@
-.cc-overflow-strip { position:relative; min-width:0; max-width:100%; }
-.cc-overflow-strip > [role="group"] { min-width:0; max-width:100%; }
-.cc-strip-edge { position:absolute; top:50%; transform:translateY(-50%); z-index:1; display:flex; align-items:center; justify-content:center; background:transparent; }
-.cc-strip-edge--left { left:0; }
-.cc-strip-edge--right { right:0; }
-.cc-strip-edge > button { display:flex; align-items:center; justify-content:center; width:28px; min-width:28px; height:44px; min-height:44px; padding:0; border:0; border-radius:0; background:transparent; color:var(--cc-primary-strong); box-shadow:none; }
+/* Edge controls occupy dedicated space only when the row overflows. */
+.cc-overflow-strip { display:grid; grid-template-columns:minmax(0,1fr); min-width:0; max-width:100%; align-items:center; }
+.cc-overflow-strip--scrollable { grid-template-columns:28px minmax(0,1fr) 28px; column-gap:2px; }
+.cc-overflow-strip > [role="group"] { box-sizing:border-box; min-width:0; max-width:100%; }
+.cc-strip-edge { display:flex; align-items:center; justify-content:center; background:transparent; min-width:0; }
+.cc-strip-edge > button { box-sizing:border-box; flex:none; display:flex; align-items:center; justify-content:center; width:28px; min-width:28px; height:44px; min-height:44px; margin:0; padding:0; border:0; border-radius:0; background:transparent; color:var(--cc-primary-strong); box-shadow:none; }
 .cc-strip-edge > button:hover, .cc-strip-edge > button:active { background:transparent; box-shadow:none; }
 .cc-strip-edge > button:focus-visible { outline:2px solid var(--cc-primary); outline-offset:-3px; }
+.cc-fit-strip { display:flex; gap:4px; overflow-x:auto; scrollbar-width:none; overscroll-behavior-x:contain; }
+.cc-fit-strip::-webkit-scrollbar { display:none; }
+.cc-fit-strip > button { flex:1 0 var(--cc-quick-min-width); min-width:var(--cc-quick-min-width); margin:0; }

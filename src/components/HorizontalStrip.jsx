@@ -23,6 +23,7 @@ export default function HorizontalStrip({ children, label = 'Options', className
     document.fonts?.ready.then(() => { if (active) measure(); });
     return () => { active = false; observer?.disconnect(); window.removeEventListener('resize', measure); };
   }, [children, measure]);
+  useLayoutEffect(measure, [bounds.overflow, measure]);
   const move = direction => viewport.current?.scrollBy({ left: direction * Math.max(44, viewport.current.clientWidth * 0.8),
     behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   return <div ref={frame} className={`cc-overflow-strip${bounds.overflow ? ' cc-overflow-strip--scrollable' : ''}`}>
