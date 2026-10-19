@@ -12,7 +12,7 @@ export default function RegistrationReview({ detail, poster, busy, onPoster }) {
   return <section className="registration-review" aria-label="Submitted event details">
     {detail.pendingChanges && <p>Submitted changes await approval. The last approved version remains published.</p>}
     <h3>{event.title}</h3>
-    {event.seriesId && <p>Occurrence {event.occurrenceIndex + 1} of {event.occurrenceCount}</p>}
+    {event.seriesId && Number.isInteger(event.occurrenceIndex) && Number.isInteger(event.occurrenceCount) && <p>Occurrence {event.occurrenceIndex + 1} of {event.occurrenceCount}</p>}
     <dl className="registration-review-grid">{values.filter(([,value]) => value !== undefined && value !== '').map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{String(value)}</dd></div>)}</dl>
     {event.reciters?.map((row, index) => <div className="registration-form-field" key={index}><strong>{row.customType || row.type}</strong><p>{row.name}</p></div>)}
     {privateDetails?.hasPoster && <button className="btn-light" type="button" disabled={busy} onClick={onPoster}>View submitted poster</button>}

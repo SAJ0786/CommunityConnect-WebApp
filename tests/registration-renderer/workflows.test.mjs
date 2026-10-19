@@ -11,11 +11,35 @@ const outfile = path.join(root, '.qa-registration-renderer.cjs');
 await build({ entryPoints:[path.join(root,'src/registration/RegistrationWorkspace.jsx')],outfile,bundle:true,platform:'node',format:'cjs',loader:{'.css':'empty'},plugins:[{name:'isolated-ui-test',setup(builder){
   builder.onResolve({filter:/^react$/},()=>({path:require.resolve('react'),external:true}));
   builder.onResolve({filter:/AddressAutocomplete/},()=>({path:path.join(root,'tests/registration-workspace-preview/address.jsx')}));
+  builder.onResolve({filter:/services\/eventOptionsService$/},args=>({path:args.path,namespace:'event-options-fixture'}));
+  builder.onLoad({filter:/.*/,namespace:'event-options-fixture'},()=>({contents:'export const getDynamicEventOptions=async()=>({eventTypes:[]});'}));
   builder.onResolve({filter:/services\/(settingsService|organisationsService|imageService)$/},args=>({path:args.path,namespace:'shared-form-fixture'}));
   builder.onLoad({filter:/.*/,namespace:'shared-form-fixture'},()=>({contents:'export const getHijriSettings=async()=>({overrides:[]}); export const getOrganisations=async()=>[]; export const getFallbackImage=()=>""; export const uploadEventImage=()=>{throw Error("Registration must never use public poster upload");};'}));
 }}] });
 const Workspace = require(outfile).default;
 const listeners = new Map();
+
+test('attendee selects occurrences or all available dates and retries the exact atomic submission',async()=>{
+ const f=fixture({series:true,failFirstSubmission:true}),view=await mount(f);await card(view);await click(view,'Register for event');
+ const check=label=>view.root.findAllByType('label').find(node=>text(node).includes(label)).findByType('input');
+ assert.equal(check('2099-12-01').props.checked,true);assert.equal(check('2099-12-08').props.checked,false);assert.equal(check('2099-12-15').props.disabled,true);
+ await act(async()=>check('Select all available').props.onChange());
+ assert.equal(check('2099-12-08').props.checked,true);
+ await act(async()=>check('2099-12-01').props.onChange());assert.equal(check('2099-12-01').props.checked,false);
+ await fill(view,'Number of attendees','2');await fill(view,'Full name','Participant');await fill(view,'I agree to these terms',true);await submit(view);
+ assert.ok(button(view,'Retry same submission'));await submit(view);
+ const requests=f.calls.filter(row=>row[0]==='submitOccurrences');assert.equal(requests.length,2);assert.deepEqual(requests[0][1],requests[1][1]);
+ assert.deepEqual(requests[0][1].occurrences.map(row=>row.eventId),['occurrence-two']);assert.equal(requests[0][1].places,2);
+ assert.ok(text(view.toJSON()).includes('Registration confirmed'));view.unmount();
+});
+test('no selected occurrence prevents submission and Select all respects required places',async()=>{
+ const f=fixture({series:true}),view=await mount(f);await card(view);await click(view,'Register for event');
+ const all=()=>view.root.findAllByType('label').find(node=>text(node)==='Select all available occurrences').findByType('input');
+ await fill(view,'Number of attendees','5');
+ const second=view.root.findAllByType('label').find(node=>text(node).includes('2099-12-08')).findByType('input');assert.equal(second.props.disabled,true);assert.equal(second.props.checked,false);
+ await act(async()=>all().props.onChange());await fill(view,'Full name','Participant');await fill(view,'I agree to these terms',true);await submit(view);
+ assert.equal(f.calls.some(row=>row[0]==='submitOccurrences'),false);assert.ok(text(view.toJSON()).includes('Select at least one occurrence'));view.unmount();
+});
 globalThis.document = { hidden:false,addEventListener:(name, fn)=>listeners.set(name,fn),removeEventListener:name=>listeners.delete(name) };
 const venue = { fullAddress:'1 Fictional Street, Parramatta NSW',suburb:'Parramatta',state:'NSW',postcode:'2150',latitude:-33.8,longitude:151 };
 const fields = [{id:'name',label:'Full name',type:'text',required:true,options:[]},{id:'consent',label:'Agreement',type:'consent',required:true,terms:'Fictional review terms',options:[]}];
@@ -24,7 +48,7 @@ const button = (view, label) => view.root.findAllByType('button').find(node=>tex
 async function click(view,label) { const node=button(view,label); assert.ok(node,`Missing button: ${label}`);assert.ok(!node.props.disabled,`Disabled: ${label}`); await act(async()=>{if(node.props.type==='submit'){let form=node.parent;while(form&&form.type!=='form')form=form.parent;await form.props.onSubmit({preventDefault(){}});}else await node.props.onClick?.({preventDefault(){}});}); }
 async function fill(view,label,value) { const node=view.root.findAllByType('label').find(node=>text(node).startsWith(label));assert.ok(node,label);const input=node.props.htmlFor ? view.root.findAll(inputNode=>['input','textarea','select'].includes(inputNode.type)&&inputNode.props.id===node.props.htmlFor)[0] : node.findAll(node=>['input','textarea','select'].includes(node.type))[0];await act(async()=>{input.props.onChange({target:{value,checked:value}});}); }
 async function submit(view){await act(async()=>{await view.root.findByType('form').props.onSubmit({preventDefault(){}});});}
-function fixture({manager=false,registered=false,closed=false,failFirstSubmission=false,failFirstPoster=false,staged=false}={}) {
+function fixture({manager=false,registered=false,closed=false,failFirstSubmission=false,failFirstPoster=false,staged=false,series=false}={}) {
   const calls=[];let booking=registered?{registrationId:'booking',revision:2,status:'registered',places:3,formVersion:1,fields:structuredClone(fields),answers:{name:'Fictional member',consent:true}}:null;
   let event={id:'example',title:'Fictional workshop',date:'2099-12-01',eventType:'Workshop',suburb:'Parramatta',notes:'',capacity:10,closes:'',allowCancellation:true,status:'approved',revision:4,city:'sydney'};
   let form={version:1,purpose:'Organise a fictional workshop.',fields:structuredClone(fields)};
@@ -32,7 +56,10 @@ function fixture({manager=false,registered=false,closed=false,failFirstSubmissio
   const detail=()=>({event:{...structuredClone(event),...(manager&&pendingChanges?{hasPendingChanges:true}:{})},form:structuredClone(form),ownRegistration:booking,canManage:manager,canApprove:manager&&(event.status==='pending'||!!pendingChanges),canRegister:!closed&&event.status==='approved',canEditRegistration:!!booking&&event.status==='approved',canCancel:!!booking,registrationNeedsReview:false,...(manager&&pendingChanges?{pendingChanges:structuredClone(pendingChanges)}:{}),...(manager||booking&&event.status!=='cancelled'?{privateDetails:{address:venue.fullAddress,venue,hasPoster:false}}:{})});
   const api={
     async list(data){calls.push(['list',data]);return data.cursor||data.scope!=='public'?{events:[event],nextCursor:null}:{events:[],nextCursor:'empty-page-next'};},
-    async load(id){const result=detail();if(id?.startsWith('occurrence-'))result.event.id=id;return result;},async templates(){return {templates,nextCursor:null};},
+    async load(id,includeOccurrences){const result=detail();if(id?.startsWith('occurrence-'))result.event.id=id;
+      if(series&&includeOccurrences)result.occurrences=[{eventId:'example',date:'2099-12-01',startTime:'10:00',formVersion:1,availablePlaces:10,selectable:true},{eventId:'occurrence-two',date:'2099-12-08',startTime:'10:00',formVersion:1,availablePlaces:4,selectable:true},{eventId:'occurrence-closed',date:'2099-12-15',formVersion:1,availablePlaces:10,selectable:false,reason:'Registration closed'}];
+      return result;},async templates(){return {templates,nextCursor:null};},
+    async submitOccurrences(data){calls.push(['submitOccurrences',structuredClone(data)]);if(failFirstSubmission&&firstSubmit){firstSubmit=false;throw Error('Response lost');}booking={status:'registered',places:data.places,revision:1,formVersion:1,answers:data.answers,fields};return {registrations:data.occurrences.map(row=>({eventId:row.eventId,status:'registered'}))};},
     async saveTemplate(data){calls.push(['template',data]);templates=[{...data,id:data.templateId}];},
     async save(data){calls.push(['save',data]);if(staged&&event.status==='approved'){event={...event,revision:event.revision+1};pendingChanges={event:{...event,...data.draft},form:{...form,fields:data.draft.fields,purpose:data.draft.purpose},privateDetails:{address:data.draft.address||venue.fullAddress,venue:data.draft.venue||venue,hasPoster:false,hostPhone:data.draft.hostPhone,hostContactOptional:data.draft.hostContactOptional}};}else{event={...event,...data.draft,revision:event.revision+1};form={...form,fields:data.draft.fields,purpose:data.draft.purpose,version:form.version+1};}return {eventId:event.id,revision:event.revision};},
     async createSeries(data){calls.push(['series',data]);event={...event,...data.draft,...data.occurrences[0],id:'occurrence-0',status:'pending',revision:1,seriesId:'series',occurrenceIndex:0,occurrenceCount:data.occurrences.length,recurrenceRule:data.recurrence};return {seriesId:'series',events:data.occurrences.map((row,index)=>({eventId:`occurrence-${index}`,revision:1,status:'pending'}))};},

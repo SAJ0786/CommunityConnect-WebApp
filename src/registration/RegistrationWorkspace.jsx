@@ -11,6 +11,9 @@ import AnswerField from './AnswerField';
 import RegistrationReview from './RegistrationReview';
 import PagePanel from '../components/PagePanel';
 import RegistrationSummary from './RegistrationSummary';
+import OccurrencePicker from './OccurrencePicker';
+import SeriesApproval from './SeriesApproval';
+import { occurrenceSubmission } from './occurrenceSelection.mjs';
 import './workspace.css';
 
 const reference = () => crypto.randomUUID();
@@ -24,6 +27,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
   const [templates, setTemplates] = useState([]), [templateCursor, setTemplateCursor] = useState(null);
   const [responses, setResponses] = useState([]), [responseCursor, setResponseCursor] = useState(null);
   const [answers, setAnswers] = useState({}), [places, setPlaces] = useState('1'), [errors, setErrors] = useState({});
+  const [selectedOccurrences,setSelectedOccurrences] = useState([]);
   const [notice, setNotice] = useState(''), [busy, setBusy] = useState(false), [obscured, setObscured] = useState(false);
   const [confirm, setConfirm] = useState(null), [pendingPoster, setPendingPoster] = useState(null), [retrySubmission, setRetrySubmission] = useState(false);
   const epoch = useRef(0), lock = useRef(false), currentId = useRef(null), createKey = useRef(null), submission = useRef(null), templateRequest = useRef(null);
@@ -45,13 +49,14 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
   });
   const open = (id, action) => run(async valid => {
     clearPrivate(); setDraft(null); if (currentId.current !== id) setPendingPoster(null); currentId.current = id;
-    const fresh = await api.load(id);
+    const fresh = await api.load(id, action === 'register');
     if (!valid()) return;
     setDetail(fresh); setStage('card'); submission.current = null; setRetrySubmission(false);
     if (action === 'register') {
       if (!requireMember()) return;
       if (!(fresh.canRegister || fresh.canEditRegistration) || !fresh.form) { setNotice('Registration cannot be edited at this time.'); return; }
       setAnswers(answersForReview(fresh)); setPlaces(String(fresh.ownRegistration?.status === 'registered' ? fresh.ownRegistration.places : 1));
+      setSelectedOccurrences(fresh.occurrences?.length ? [fresh.event.id] : []);
       setErrors({}); setStage('entry');
     } else if (['edit', 'form', 'copy'].includes(action)) {
       if (!fresh.canManage) throw new Error('You cannot edit this event.');
@@ -134,28 +139,34 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
   const startEntry = () => {
     if (!requireMember()) return;
     run(async valid => {
-      const fresh = await api.load(detail.event.id);
+      const fresh = await api.load(detail.event.id,true);
       if (!valid()) return;
       setDetail(fresh);
       if (!(fresh.canRegister || fresh.canEditRegistration) || !fresh.form) { setNotice('Registration cannot be edited at this time.'); setStage('card'); return; }
       setAnswers(answersForReview(fresh)); setPlaces(String(fresh.ownRegistration?.status === 'registered' ? fresh.ownRegistration.places : 1));
+      setSelectedOccurrences(fresh.occurrences?.length ? [fresh.event.id] : []);
       submission.current = null; setRetrySubmission(false); setErrors({}); setStage('entry');
     });
   };
   const submit = e => {
     e?.preventDefault();
     if (!submission.current) {
-      const nextErrors = validateAnswers(detail.form.fields, answers, places, detail.event.capacity);
-      if (!detail.canRegister && Number(places) > Number(detail.ownRegistration?.places || 0)) nextErrors.places = 'After closing, you can reduce places but cannot add places.';
+      const nextErrors = validateAnswers(detail.form.fields, answers, places, detail.occurrences?.length ? 5 : detail.event.capacity);
+      if ((!detail.occurrences?.length || selectedOccurrences.includes(detail.event.id)) && !detail.canRegister && Number(places) > Number(detail.ownRegistration?.places || 0)) nextErrors.places = 'After closing, you can reduce places but cannot add places.';
       setErrors(nextErrors); if (Object.keys(nextErrors).length) return;
-      submission.current = createSubmission(detail.event.id, detail.form.version, detail.ownRegistration, answers, places, reference());
+      try { submission.current = detail.occurrences?.length
+        ? occurrenceSubmission(detail,selectedOccurrences,answers,places,reference())
+        : createSubmission(detail.event.id, detail.form.version, detail.ownRegistration, answers, places, reference());
+      } catch(error) { setErrors({places:error.message}); return; }
     }
     setRetrySubmission(true);
     run(async valid => {
-      await api.submit(submission.current);
-      const fresh = await api.load(detail.event.id);
+      const request=submission.current;
+      const result=request.occurrences ? await api.submitOccurrences(request) : await api.submit(request);
+      const fresh = await api.load(request.occurrences?.[0]?.eventId || detail.event.id);
       if (!valid()) return;
       setDetail(fresh); setStage('confirmation'); setAnswers({}); submission.current = null; setRetrySubmission(false);
+      if (request.occurrences) setNotice(`Registration confirmed for ${result.registrations.length} selected occurrences. Each booking is available in My Events → My registrations.`);
       if (operationsOnly) (onSubmitted || onBack)?.(fresh.event);
     });
   };
@@ -207,6 +218,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
         </>}
         {detail.canApprove && (detail.event.status === 'pending' || detail.event.hasPendingChanges) && <button disabled={busy || !reviewDetail.form || !reviewDetail.privateDetails || (reviewDetail.privateDetails.hasPoster && !reviewPoster)} onClick={() => ask('Approve event', 'Confirm you have reviewed the submitted event details, venue, poster and registration form below.', async valid => { await api.approve(detail.event.id, detail.event.revision); await reloadAfter(valid, 'Event approved.'); })}>Approve event</button>}
       </div>
+      {detail.canApprove && detail.event.seriesId && <SeriesApproval key={detail.event.id} api={api} event={detail.event} disabled={busy} onApproved={()=>open(detail.event.id)}/>}
       {detail.canManage && reviewDetail.form && <details open={initialAction === 'approve'}><summary>{detail.pendingChanges ? 'Review submitted changes' : 'Review registration form'}</summary>
         <RegistrationReview detail={reviewDetail} poster={reviewPoster} busy={busy} onPoster={() => run(async valid => {
           const result = await api.poster(detail.event.id, detail.pendingChanges ? 'pending' : undefined);
@@ -216,7 +228,20 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
         {detail.canApprove && (detail.event.status === 'pending' || detail.event.hasPendingChanges) && <><label>Feedback for organiser<textarea maxLength={2000} value={feedback} onChange={event => setFeedback(event.target.value)} disabled={busy}/></label><div className="registration-actions">{[['rejected', 'Reject event'], ['changes-requested', 'Suggest changes']].map(([decision, label]) => <button key={decision} disabled={busy || !feedback.trim()} onClick={() => ask(label, 'Send this feedback to the organiser?', async valid => { await api.review(detail.event.id, detail.event.revision, decision, feedback.trim()); await reloadAfter(valid, 'Review feedback sent.'); })}>{label}</button>)}</div></>}
         </details>}
     </article>}
-    {stage === 'entry' && detail?.form && <form noValidate onSubmit={submit} className="card registration-entry-card"><RegistrationSummary event={detail.event}/><p>{detail.form.purpose}</p><fieldset disabled={busy || retrySubmission} className="registration-fields"><label>Number of attendees<input type="number" min="1" max={Math.min(5, detail.canRegister ? detail.event.capacity : detail.ownRegistration?.places)} value={places} onChange={e => setPlaces(e.target.value)}/></label>{errors.places && <p role="alert">{errors.places}</p>}{registrationFieldGroups(detail.form.fields, places).map(group => <section className="registration-participant-group" key={group.id}><h3>{group.label}</h3>{group.fields.map(field => <AnswerField key={field.id} field={{...field,label:field.originalLabel || field.label}} value={answers[field.id]} error={errors[field.id]} onChange={value => setAnswers(current => ({ ...current, [field.id]: value }))}/>)}</section>)}</fieldset><p>Availability is confirmed by the server when you submit.</p>{retrySubmission && !busy && <p>The last request is unconfirmed. Retry the same submission, or reload current status before editing.</p>}<button className="registration-submit" disabled={busy} type="submit">{retrySubmission ? 'Retry same submission' : 'Confirm registration'}</button></form>}
+    {stage === 'entry' && detail?.form && <form noValidate onSubmit={submit} className="card registration-entry-card">
+      <RegistrationSummary event={detail.event}/><p>{detail.form.purpose}</p>
+      <OccurrencePicker detail={detail} places={places} selected={selectedOccurrences} onChange={setSelectedOccurrences} disabled={busy || retrySubmission}/>
+      <fieldset disabled={busy || retrySubmission} className="registration-fields">
+        <label>Number of attendees<input type="number" min="1" max={detail.occurrences?.length ? 5 : Math.min(5, detail.canRegister ? detail.event.capacity : detail.ownRegistration?.places)} value={places} onChange={e => setPlaces(e.target.value)}/></label>
+        {errors.places && <p role="alert">{errors.places}</p>}
+        {registrationFieldGroups(detail.form.fields, places).map(group => <section className="registration-participant-group" key={group.id}>
+          <h3>{group.label}</h3>{group.fields.map(field => <AnswerField key={field.id} field={{...field,label:field.originalLabel || field.label}} value={answers[field.id]} error={errors[field.id]} onChange={value => setAnswers(current => ({ ...current, [field.id]: value }))}/>)}
+        </section>)}
+      </fieldset>
+      <p>Availability is confirmed by the server when you submit.</p>
+      {retrySubmission && !busy && <p>The last request is unconfirmed. Retry the same submission, or reload current status before editing.</p>}
+      <button className="registration-submit" disabled={busy} type="submit">{retrySubmission ? 'Retry same submission' : 'Confirm registration'}</button>
+    </form>}
     {stage === 'responses' && detail?.canManage && <section className="card registration-response-tools"><h2>Attendee responses</h2><p>Open a name to review their answers, or export all responses to Excel.</p><button disabled={busy || !responses.length} onClick={() => run(async valid => {
       let rows = [], cursor = null; const seen = new Set();
       do { const page = await api.responses(detail.event.id, cursor); if (!valid()) return; rows = mergeRegistrationPage(rows, page.registrations || []); cursor = page.nextCursor; if (cursor && seen.has(cursor)) throw new Error('Response pagination did not advance.'); if (cursor) seen.add(cursor); } while (cursor);

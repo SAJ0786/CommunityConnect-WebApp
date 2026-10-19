@@ -80,11 +80,11 @@ function Preview() {
   const [status,setStatus] = useState('ready');
   const [editingEvent,setEditingEvent] = useState(events[0]);
   const [eventRows,setEventRows] = useState(events);
-  const [registrationRevision,setRegistrationRevision] = useState(0), [operation,setOperation] = useState(null), [focusEventId,setFocusEventId] = useState(null);
+  const [registrationRevision,setRegistrationRevision] = useState(0), [operation,setOperation] = useState(()=>{const action=new URLSearchParams(location.search).get('operation');return ['register','approve'].includes(action)?{id:action==='approve'?'registration-pending':'registration-approved',action}:null;}), [focusEventId,setFocusEventId] = useState(null);
   auth.currentUser = guest ? null : persona === 'member' ? {...user,uid:'synthetic-viewer'} : user;
   const registrationReview = new URLSearchParams(location.search).has('registration');
   const fixture = useMemo(() => registrationReview ? registrationFixture(date, auth.currentUser || user, profile.role, guest,
-    new URLSearchParams(location.search).has('registered'), new URLSearchParams(location.search).has('changes'), new URLSearchParams(location.search).has('participants')) : null, [registrationReview, guest, persona]);
+    new URLSearchParams(location.search).has('registered'), new URLSearchParams(location.search).has('changes'), new URLSearchParams(location.search).has('participants'), new URLSearchParams(location.search).has('series')) : null, [registrationReview, guest, persona]);
   if (fixture) window.__registrationCalls = fixture.calls;
   window.__uiReviewStatus = status;
   const Screen = screens[page] || Home;
