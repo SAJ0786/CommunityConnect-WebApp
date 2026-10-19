@@ -1,16 +1,7 @@
 export const APP_NAME = 'Community Events';
 export const TAGLINE  = 'Create – Share – Connect';
 
-export const EVENT_TYPES = [
-  'Majlis',
-  'Milad',
-  'Prayers',
-  'Dua',
-  'Prayers & Amal',
-  'Birthday',
-  'Informal get together',
-  'Custom'           // ← triggers custom type text box
-];
+export { EVENT_TYPES } from './eventOptions.mjs';
 
 export const AUDIENCE_TYPES = [
   'Gents only',

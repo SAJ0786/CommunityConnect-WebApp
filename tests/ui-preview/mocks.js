@@ -54,6 +54,7 @@ export function service(name) {
   const values = {
     listenBellUnread: (_uid,next) => { next(3); return () => {}; },
     getHijriSettings: async () => ({ overrides: [] }),
+    getDynamicEventOptions: async () => ({ eventTypes:['Art & Creativity','Badminton Tournament'], eventTypeCategories:{'Art & Creativity':'community','Badminton Tournament':'community'} }),
     getOrganisations: async () => [],
     getMyEvents: async uid => (window.__uiEvents || []).filter(event => event.createdByUserId === uid),
     sendHostMessage: async (eventId, text) => {

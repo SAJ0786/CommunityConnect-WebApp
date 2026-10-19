@@ -3,7 +3,9 @@ import React, { useEffect, useId, useMemo, useState } from 'react';
 import ReciterFields from './ReciterFields';
 import HijriDatePicker from './HijriDatePicker';
 import AddressAutocomplete from './AddressAutocomplete';
-import { AUDIENCE_TYPES, EVENT_TYPES, RELIGIOUS_EVENT_TYPES } from '../utils/constants';
+import { AUDIENCE_TYPES, RELIGIOUS_EVENT_TYPES } from '../utils/constants';
+import { buildEventTypeGroups } from '../utils/eventOptions.mjs';
+import { getDynamicEventOptions } from '../services/eventOptionsService';
 import { getHijriDisplay, getHijriParts, hijriDisplayFromParts } from '../services/hijriService';
 import { getHijriSettings } from '../services/settingsService';
 import { getOrganisations } from '../services/organisationsService';
@@ -55,6 +57,8 @@ export default function EventForm({
   const [form, setForm]             = useState(() => ({ ...blank(), ...initialEvent }));
   const [overrides, setOverrides]   = useState([]);
   const [dynamicOrgs, setDynamicOrgs] = useState([]);
+  const [eventOptions, setEventOptions] = useState({});
+  const [eventOptionsError, setEventOptionsError] = useState(false);
   const [duplicates, setDuplicates] = useState([]);
   const [validationErrors, setValidationErrors] = useState({});
   const [calendarMode, setCalendarMode] = useState(registrationMode && initialEvent?.enteredAsHijri ? 'hijri' : 'gregorian'); // 'gregorian' | 'hijri'
@@ -67,12 +71,20 @@ export default function EventForm({
   const [pendingFile,   setPendingFile]  = useState(null);
 
   const isCustom      = form.eventType === 'Custom';
-  const showReligious = RELIGIOUS_EVENT_TYPES.includes(form.eventType);
+  const typeGroups = buildEventTypeGroups(eventOptions, initialEvent?.eventType);
+  const showReligious = RELIGIOUS_EVENT_TYPES.includes(form.eventType) || typeGroups.find(group => group.key === 'faith')?.eventTypes.includes(form.eventType);
   const prayerTimes = useMemo(
     () => calculatePrayerTimes(form.eventDate, form.address),
     [form.eventDate, form.address]
   );
   const canUsePrayerTime = !!prayerTimes;
+
+  useEffect(() => {
+    let active = true;
+    getDynamicEventOptions().then(options => { if (active) { setEventOptions(options); setEventOptionsError(false); } })
+      .catch(() => { if (active) setEventOptionsError(true); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     getHijriSettings().then(s => setOverrides(s.overrides || [])).catch(() => {});
@@ -596,8 +608,9 @@ export default function EventForm({
       {/* Event type */}
       <label htmlFor={id + '-type'}>Event Type *</label>
       <select id={id + '-type'} value={form.eventType} onChange={e => handleEventTypeChange(e.target.value)}>
-        {EVENT_TYPES.map(t => <option key={t}>{t}</option>)}
+        {typeGroups.map(group => <optgroup key={group.key} label={group.label}>{group.eventTypes.map(type => <option key={type} value={type}>{type}</option>)}</optgroup>)}
       </select>
+      {eventOptionsError && <p role="alert">Additional event types could not be loaded. Reopen this page to retry before choosing a type.</p>}
 
       {/* Custom event type text box */}
       {isCustom && (
