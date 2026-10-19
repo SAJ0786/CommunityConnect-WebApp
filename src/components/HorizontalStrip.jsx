@@ -26,8 +26,8 @@ export default function HorizontalStrip({ children, label = 'Options', className
   const move = direction => viewport.current?.scrollBy({ left: direction * Math.max(44, viewport.current.clientWidth * 0.8),
     behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   return <div ref={frame} className={`cc-overflow-strip${bounds.overflow ? ' cc-overflow-strip--scrollable' : ''}`}>
-    {bounds.overflow && <span className="cc-strip-edge">{bounds.previous && <button type="button" aria-label={`Scroll left: ${label}`} aria-controls={id} onClick={() => move(-1)}><ChevronLeft size={22} aria-hidden="true"/></button>}</span>}
+    {bounds.overflow && <span className="cc-strip-edge cc-strip-edge--left">{bounds.previous && <button type="button" aria-label={`Scroll left: ${label}`} aria-controls={id} onClick={() => move(-1)}><ChevronLeft size={22} aria-hidden="true"/></button>}</span>}
     <div {...props} ref={viewport} id={id} className={className} role="group" aria-label={label} onScroll={measure}>{children}</div>
-    {bounds.overflow && <span className="cc-strip-edge">{bounds.next && <button type="button" aria-label={`Scroll right: ${label}`} aria-controls={id} onClick={() => move(1)}><ChevronRight size={22} aria-hidden="true"/></button>}</span>}
+    {bounds.overflow && <span className="cc-strip-edge cc-strip-edge--right">{bounds.next && <button type="button" aria-label={`Scroll right: ${label}`} aria-controls={id} onClick={() => move(1)}><ChevronRight size={22} aria-hidden="true"/></button>}</span>}
   </div>;
 }
