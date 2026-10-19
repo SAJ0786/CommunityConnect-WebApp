@@ -26,14 +26,8 @@
   <meta name="twitter:image" content="https://communityconnect.siza.info/images/community-connect-siza-share-v1.png" />
   <script>
     (function () {
-      if (window.location.hostname !== 'download.communityevents.siza.info') return;
-      var ua = navigator.userAgent || '';
-      var isIOS = /iPhone|iPad|iPod/i.test(ua);
-      var isAndroid = /Android/i.test(ua);
-      var url = 'https://apps.microsoft.com/detail/9NDGJZHL86KJ';
-      if (isIOS) url = 'https://apps.apple.com/au/app/community-events-australia/id6782770347';
-      else if (isAndroid) url = 'https://play.google.com/store/apps/details?id=info.siza.communityevents.app';
-      window.location.replace(url);
+      if (!['download.communityconnect.siza.info', 'download.communityevents.siza.info'].includes(window.location.hostname)) return;
+      window.location.replace('/download.html' + window.location.search + window.location.hash);
     }());
   </script>
   <script type="application/ld+json">

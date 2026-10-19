@@ -85,7 +85,7 @@
   <script>
     (function () {
       var ua = navigator.userAgent || "";
-      var isIOS = /iPhone|iPad|iPod/i.test(ua);
+      var isIOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh|MacIntel/i.test(ua + ' ' + (navigator.platform || '')) && navigator.maxTouchPoints > 1);
       var isAndroid = /Android/i.test(ua);
       var iosStore = "https://apps.apple.com/au/app/community-events-australia/id6782770347";
       var androidStore = "https://play.google.com/store/apps/details?id=info.siza.communityevents.app";
