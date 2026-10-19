@@ -2,6 +2,9 @@
 .registration-workspace .card { min-width:0; margin:14px 0; }
 .registration-workspace h1,.registration-workspace h2,.registration-workspace h3 { font-weight:600; }
 .registration-workspace label { display:grid; gap:6px; margin:12px 0; }
+.registration-workspace label.checkbox { display:flex; align-items:flex-start; gap:10px; }
+.registration-workspace label.checkbox > input[type=checkbox] { flex:0 0 auto; width:18px; height:18px; margin:3px 0 0; padding:0; }
+.registration-workspace label.checkbox > span { flex:1; min-width:0; line-height:1.5; }
 .registration-workspace input:not([type=checkbox]):not([type=radio]),.registration-workspace textarea,.registration-workspace select { width:100%; max-width:100%; box-sizing:border-box; }
 .registration-fields { border:0; padding:0; min-width:0; }
 .registration-actions { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
