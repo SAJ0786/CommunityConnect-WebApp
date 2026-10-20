@@ -7,7 +7,7 @@ import {createLiveDirectorySession} from '../services/directory/liveSession.mjs'
 import {findBusinessAddresses} from '../services/businessAddressSearch';
 import ConnectedDirectoryWorkspace from './ConnectedDirectoryWorkspace';
 
-export default function MemberDirectory({user,profile,onRegisterNavigation,renderProfile,onSignOut,view,onOpenNotification}) {
+export default function MemberDirectory({user,profile,onRegisterNavigation,renderProfile,onSignOut,view,onOpenNotification,initialCity}) {
   const [state,setState]=useState({gateway:null,error:''});
   useEffect(()=>{
     let gateway;
@@ -22,5 +22,5 @@ export default function MemberDirectory({user,profile,onRegisterNavigation,rende
   },[user.uid,profile]);
   if(state.error) return <p className="card" role="alert">{state.error}</p>;
   if(!state.gateway) return <p role="status">Loading your Business Directory…</p>;
-  return <ConnectedDirectoryWorkspace gateway={state.gateway} view={view} onOpenNotification={onOpenNotification} onRegisterNavigation={onRegisterNavigation} renderProfile={renderProfile} onSignOut={onSignOut} findAddresses={findBusinessAddresses}/>;
+  return <ConnectedDirectoryWorkspace gateway={state.gateway} initialCity={initialCity} view={view} onOpenNotification={onOpenNotification} onRegisterNavigation={onRegisterNavigation} renderProfile={renderProfile} onSignOut={onSignOut} findAddresses={findBusinessAddresses}/>;
 }

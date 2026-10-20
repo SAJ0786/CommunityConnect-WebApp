@@ -19,17 +19,18 @@ import PublicBusinessPage from '../pages/PublicBusinessPage';
 import PublicPromotionList from '../components/PublicPromotionList';
 import { activePublicPromotions } from '../utils/publicPromotions.mjs';
 import { usePromotionDay } from '../utils/usePublicDirectory';
-import { CITY_OPTIONS } from '../utils/cities';
+import { CITY_OPTIONS, normalizeCity } from '../utils/cities';
+import { directoryBrowseRoute } from '../utils/businessRoutes.mjs';
 import '../styles/directory.css';
 import './workspace.css';
 
 const sidebarIcons = { home:Home, promotions:Tags, saved:Heart, inbox:Inbox, notifications:Bell, owner:Store, support:CircleHelp, admin:ShieldCheck };
 const names = { profile: 'My Profile', tools: 'Categories and tools', diagnostics: 'Business diagnostics', support: 'Feedback and support', deliveries: 'Support delivery records', moderation: 'Moderation review', home: 'Discover businesses', promotions: 'Current promotions', saved: 'Saved businesses', notifications: 'Notifications', inbox: 'Business Inbox', owner: 'My businesses', listing: 'Business listing', promotion: 'Business promotion', admin: 'Admin Dashboard', reviews: 'Business and promotion reviews', manage: 'Manage businesses', members: 'Directory members', statistics: 'Business statistics', detail: 'Business details', enquiry: 'Contact business' };
-const readRoute = () => { const [page = 'home', id = ''] = window.location.hash.replace(/^#\/?/, '').split('/'); try { return { page: names[page] ? page : 'home', id: decodeURIComponent(id) }; } catch { return { page: 'home', id: '' }; } };
+const readRoute = () => { const [page = '', id = ''] = window.location.hash.replace(/^#\/?/, '').split('/'); try { return { page: names[page] ? page : directoryBrowseRoute(window.location.pathname)?.type === 'promotions' ? 'promotions' : 'home', id: decodeURIComponent(id) }; } catch { return { page: 'home', id: '' }; } };
 
 // Data and commands are injected by the isolated controller or offline fixtures.
-export default function DirectoryWorkspace({ onOpenNotification, data, profile, onAction, findAddresses, lookupAbn, status = 'ready', onRetry, listenMessages, renderHome, loadOperations, onRegisterNavigation, renderProfile, onSignOut }) {
-  const [route, setRoute] = useState(readRoute), [city, setCity] = useState('sydney'), [query, setQuery] = useState(''), [message, setMessage] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+export default function DirectoryWorkspace({ onOpenNotification, data, profile, onAction, findAddresses, lookupAbn, status = 'ready', onRetry, listenMessages, renderHome, loadOperations, onRegisterNavigation, renderProfile, onSignOut, initialCity }) {
+  const [route, setRoute] = useState(readRoute), [city, setCity] = useState(() => normalizeCity(new URLSearchParams(window.location.search).get('city') || initialCity || 'sydney')), [query, setQuery] = useState(''), [message, setMessage] = useState(''), [error, setError] = useState(''), [busy, setBusy] = useState(false);
   const dirty = useRef(false), routeRef = useRef(route), inFlight = useRef(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const today = usePromotionDay();

@@ -2,6 +2,44 @@
 
 Started 1 October 2026. Local work only; not deployed.
 
+## Niaz Directory navigation correction, 20 October 2026
+
+Event-card Niaz Arrangement now opens the unified Directory workspace in the
+mounted PWA instead of reloading its public-only shell. The event city,
+Food & Catering category and Niaz Preparation and supply service stay in the
+URL and survive reload. Explicit Directory browse URLs take precedence over
+the member's default module/city. Events switching and browser history restore
+the matching experience; workspace hash destinations remain intact.
+
+On direct `/businesses` and `/businesses/promotions` visits, Firebase restores
+the session before selecting a shell. Signed-in members use the same App
+profile-verification gates, release flags and Directory workspace as the Home
+tab. Signed-out and anonymous visitors retain public browsing without member
+tools. `/businesses/view/:id` shared links and unavailable-detail URLs remain
+public. This changes navigation only, not authentication permissions or data
+rules; native source and behavior are unchanged.
+
+Focused checks:
+
+```powershell
+node --test tests/directory-navigation.test.mjs tests/business-routes-and-promotions.test.mjs tests/browse-ui.test.mjs
+node tools/check-directory-navigation.mjs
+# In another terminal, with the existing Playwright runner available:
+node tests/check-directory-navigation.cjs
+```
+
+The offline fixture on port 5186 runs the real AppRouter, App, EventCard and
+Directory UI with synthetic services. It blocks remote requests and checks tab
+and Niaz identity, no document reload, retained filters, reload/history,
+promotions, public shared links and guest isolation. It does not prove real OTP,
+deployed Firestore permissions or production account behavior.
+
+A release requires the approved private web build environment and an explicit
+Hosting-only deployment to `community-event-8b639`; never use the broad `deploy`
+script. Do not deploy root `firestore.rules` (the outdated Events-only rules),
+Storage or Functions with this navigation correction. Preserve the restored
+shared Firestore ruleset and the existing Host Inbox notification fix.
+
 ## Agreed direction
 
 Events and Business Directory in one responsive web app, sharing the existing Firebase authentication session and selected city. The existing React/Vite Events app is the implementation base. The separate Sites directory prototype is not the production data/authentication foundation.

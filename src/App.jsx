@@ -23,6 +23,7 @@ import { memberEntryState } from './utils/memberProfile.mjs';
 import './styles/directory.css';
 import ExperienceEntry from './pages/ExperienceEntry';
 import { getExperience, readExperience, saveExperience } from './config/experiences.mjs';
+import { DIRECTORY_NAVIGATION_EVENT, directoryBrowseRoute } from './utils/businessRoutes.mjs';
 import Home from './pages/Home';
 import BottomNav from './components/BottomNav';
 import AppWalkthrough from './components/AppWalkthrough';
@@ -81,25 +82,55 @@ function MissingConfig() {
 
 export default function App() {
   const directoryNavigation = useRef(null);
-  const explicitExperienceChoice = useRef(false);
+  const directoryLocation = useRef(window.location.pathname + window.location.search);
+  const explicitExperienceChoice = useRef(!!directoryBrowseRoute(window.location.pathname));
+  const [directoryRevision, setDirectoryRevision] = useState(0);
   const registerDirectoryNavigation = useCallback(handler => { directoryNavigation.current = handler; }, []);
   const openAccountMenu = () => window.dispatchEvent(new CustomEvent('community-events-walkthrough-menu', { detail: { open: true } }));
   const logoutFromDirectory = async () => {
     try { localStorage.removeItem('socialLoginStarted'); await signOut(auth); }
     catch { window.alert('Unable to sign out. Please try again.'); }
   };
-  const [selectedExperience, setSelectedExperience] = useState(() => (new URLSearchParams(window.location.search).has('event') || new URLSearchParams(window.location.search).has('registration')) ? 'events' : readExperience(window.sessionStorage));
+  const [selectedExperience, setSelectedExperience] = useState(() => directoryBrowseRoute(window.location.pathname) ? 'businesses' : (new URLSearchParams(window.location.search).has('event') || new URLSearchParams(window.location.search).has('registration')) ? 'events' : readExperience(window.sessionStorage));
   const experienceRef = useRef(selectedExperience);
   const [page, setPage] = useState(() => getExperience(selectedExperience).page);
   const [hostInboxThreadId, setHostInboxThreadId] = useState('');
-  const selectExperience = id => {
+  const selectExperience = useCallback(id => {
+    if (id === 'events' && directoryBrowseRoute(window.location.pathname)) window.history.pushState(null, '', '/');
+    directoryLocation.current = window.location.pathname + window.location.search;
     explicitExperienceChoice.current = true;
     const experience = saveExperience(window.sessionStorage, id);
     experienceRef.current = experience.id;
     setSelectedExperience(experience.id);
     setPage(experience.page);
     setAuthError('');
-  };
+  }, []);
+  useEffect(() => {
+    const open = event => {
+      event.preventDefault();
+      window.history.pushState(null, '', event.detail.href);
+      setSelectedCity(normalizeCity(new URLSearchParams(window.location.search).get('city') || DEFAULT_CITY));
+      setDirectoryRevision(value => value + 1);
+      selectExperience('businesses');
+    };
+    const restore = () => {
+      const next = window.location.pathname + window.location.search;
+      if (directoryLocation.current === next) return;
+      const directory = directoryBrowseRoute(window.location.pathname);
+      if (directory) {
+        const city = new URLSearchParams(window.location.search).get('city');
+        if (city) setSelectedCity(normalizeCity(city));
+        setDirectoryRevision(value => value + 1);
+      }
+      selectExperience(directory ? 'businesses' : 'events');
+    };
+    window.addEventListener(DIRECTORY_NAVIGATION_EVENT, open);
+    window.addEventListener('popstate', restore);
+    return () => {
+      window.removeEventListener(DIRECTORY_NAVIGATION_EVENT, open);
+      window.removeEventListener('popstate', restore);
+    };
+  }, [selectExperience]);
 
   // Scroll to top whenever the active page changes
   useEffect(() => {
@@ -140,6 +171,8 @@ export default function App() {
   const [loading, setLoading]           = useState(true);
   const [authMode, setAuthMode]         = useState(null);
   const [selectedCity, setSelectedCity] = useState(() => {
+    const city = directoryBrowseRoute(window.location.pathname) && new URLSearchParams(window.location.search).get('city');
+    if (city) return normalizeCity(city);
     try {
       return normalizeCity(localStorage.getItem('communitySelectedCity') || DEFAULT_CITY);
     } catch {
@@ -569,7 +602,7 @@ export default function App() {
   }, [authMode, user?.uid, profile, profileVerified]);
 
   useEffect(() => {
-    if (profile?.defaultCity) {
+    if (profile?.defaultCity && !(directoryBrowseRoute(window.location.pathname) && new URLSearchParams(window.location.search).has('city'))) {
       setSelectedCity(normalizeCity(profile.defaultCity));
     }
   }, [profile?.defaultCity]);
@@ -768,8 +801,8 @@ export default function App() {
           {registrationFeed.error && activePage === 'home' && <div className="card" role="alert">{registrationFeed.error} <button onClick={() => setRegistrationRevision(value => value + 1)}>Retry registration events</button></div>}
           <Suspense fallback={<PageLoadingFallback />}>
           {activePage === 'businesses' && (!isGuest && import.meta.env.VITE_DIRECTORY_WORKSPACE_ENABLED === 'true' && import.meta.env.VITE_READ_ONLY_PREVIEW !== 'true'
-            ? <MemberDirectory key={user.uid} user={user} profile={profile} onRegisterNavigation={registerDirectoryNavigation} onOpenNotification={openRegistrationUpdate} renderProfile={() => <Profile user={user} profile={profile} setProfile={setProfile}/>} onSignOut={logoutFromDirectory}/>
-            : <BusinessDirectory selectedCity={selectedCity} setSelectedCity={setSelectedCity} />)}
+            ? <MemberDirectory key={`${user.uid}:${directoryRevision}`} user={user} profile={profile} initialCity={selectedCity} onRegisterNavigation={registerDirectoryNavigation} onOpenNotification={openRegistrationUpdate} renderProfile={() => <Profile user={user} profile={profile} setProfile={setProfile}/>} onSignOut={logoutFromDirectory}/>
+            : <BusinessDirectory key={directoryRevision} selectedCity={selectedCity} setSelectedCity={setSelectedCity} />)}
           {activePage === 'home'      && <Home      {...shared} />}
           {activePage === 'search'    && <AISearch   {...shared} />}
           {activePage === 'streams'   && <StreamedVideos isGuest={isGuest} />}
