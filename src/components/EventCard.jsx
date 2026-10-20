@@ -307,6 +307,7 @@ export default function EventCard({
         </div>
         <div className="event-native-content">
           <h3 className="event-native-title">{[displayType, event.registrationOnly ? event.title : event.hostName || event.organiserName || event.organizationName].filter(Boolean).join(' - ')}</h3>
+          <div className="event-native-meta"><span><CalendarDays size={13} aria-hidden="true"/>{fmtDate(event.eventDate)}</span></div>
           <div className="event-native-meta">
             <span><Clock size={13} aria-hidden="true" /> {displayTime || (event.registrationOnly ? 'Time not provided' : 'TBC')}</span>
             <span><MapPin size={13} aria-hidden="true" /><span className="event-native-suburb">{suburb || 'TBC'}</span></span>
@@ -335,6 +336,7 @@ export default function EventCard({
       }}>
         {isExpanded && (
         <div className="event-card-details" style={{ borderTop:'1px solid var(--border)', paddingTop:10 }}>
+          {event.registrationOnly && <h3>Registration Only - Event details</h3>}
           <EventActionPanel actions={actions} handlers={handlers} />
           <p className="event-action-note">{readOnly ? 'Read-only preview: actions that change data are disabled. ' : ''}Unavailable actions are dimmed; their labels explain the restriction.</p>
           {event.registrationOnly && ['live', 'reminder'].map(id => {

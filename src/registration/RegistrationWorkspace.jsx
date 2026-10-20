@@ -188,7 +188,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
   const reloadAfter = async (valid, message) => { clearPrivate(); const fresh = await api.load(currentId.current); if (valid()) { setDetail(fresh); setStage('card'); setNotice(message); } };
   const links = detail?.privateDetails ? privateVenueLinks(detail.privateDetails) : null;
   const reviewDetail = registrationReviewDetail(detail);
-  const pageTitle = stage === 'responses' ? 'Registration responses'
+  const pageTitle = detail && ['card','confirmation','host-confirmation'].includes(stage) ? 'Registration Only - Event details' : stage === 'responses' ? 'Registration responses'
     : stage === 'entry' && detail ? `${detail.ownRegistration?.status === 'registered' ? 'Edit registration' : 'Register'} · ${detail.event.title}`
     : operationsOnly ? initialCreate ? 'Create registration event' : ['edit', 'form', 'copy'].includes(initialAction) ? 'Edit event and registration form' : initialAction === 'responses' ? 'Registration responses' : 'Event registration' : 'Registration only events';
   if (!enabled) return <section className="card"><p>Registration is not enabled for this release.</p><BackControl onClick={onBack} label="Back"/></section>;
