@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { navigationTabs, accountItems, eventExploreItems, eventsSidebarItems, userInitials } from '../src/utils/navigation.mjs';
 
 test('Events and Businesses expose the native five-tab order with a working guest Menu', () => {
@@ -45,4 +46,13 @@ test('Menu initials handle blank names and guests without exposing contact infor
   assert.equal(userInitials({ fullName:'  Example   Member  ' }), 'EM');
   assert.equal(userInitials({ fullName:'   ' }), 'U');
   assert.equal(userInitials({ fullName:'Private Member' }, null, true), 'G');
+});
+test('Host message notifications retain the conversation when opening Host Inbox', () => {
+  const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  const inbox = fs.readFileSync(new URL('../src/pages/HostInbox.jsx', import.meta.url), 'utf8');
+  const notifications = fs.readFileSync(new URL('../src/services/notificationService.js', import.meta.url), 'utf8');
+  assert.match(app, /setHostInboxThreadId\(row\.threadId\)/);
+  assert.match(app, /initialThreadId=\{hostInboxThreadId\}/);
+  assert.match(inbox, /setSelected\(initialThreadId\)/);
+  assert.match(notifications, /thread:\s*payload\.data\.threadId/);
 });

@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { listenHostThreads, listenHostMessages, markHostThreadRead, sendHostReply } from '../services/hostMessagingService';
-export default function HostInbox({ user }) {
-  const [threads, setThreads] = useState([]), [messages, setMessages] = useState([]), [selected, setSelected] = useState('');
+export default function HostInbox({ user, initialThreadId = '' }) {
+  const [threads, setThreads] = useState([]), [messages, setMessages] = useState([]), [selected, setSelected] = useState(initialThreadId);
   const [error, setError] = useState(''), [text, setText] = useState(''), [busy, setBusy] = useState(false), [loading, setLoading] = useState(true);
   const readOnly = import.meta.env.VITE_READ_ONLY_PREVIEW === 'true';
   const pending = useRef(false), generation = useRef(0);
   useEffect(() => () => { generation.current += 1; }, [user?.uid]);
   useEffect(() => {
-    setThreads([]); setMessages([]); setSelected(''); setText(''); setError(''); setLoading(true);
+    setThreads([]); setMessages([]); setSelected(initialThreadId); setText(''); setError(''); setLoading(true);
     return listenHostThreads(rows => { setThreads(rows); setLoading(false); }, e => { setError(e.message); setLoading(false); });
-  }, [user?.uid]);
+  }, [user?.uid, initialThreadId]);
   const thread = threads.find(row => row.id === selected);
   useEffect(() => {
     let active = true;

@@ -91,6 +91,7 @@ export default function App() {
   const [selectedExperience, setSelectedExperience] = useState(() => (new URLSearchParams(window.location.search).has('event') || new URLSearchParams(window.location.search).has('registration')) ? 'events' : readExperience(window.sessionStorage));
   const experienceRef = useRef(selectedExperience);
   const [page, setPage] = useState(() => getExperience(selectedExperience).page);
+  const [hostInboxThreadId, setHostInboxThreadId] = useState('');
   const selectExperience = id => {
     explicitExperienceChoice.current = true;
     const experience = saveExperience(window.sessionStorage, id);
@@ -123,7 +124,12 @@ export default function App() {
   useEffect(() => {
     if (!REGISTRATION_ENABLED || !user?.uid || !profileVerified) return;
     const notice = new URLSearchParams(window.location.search);
-    if (notice.get('recipient') === user.uid && ['host-inbox','notifications','favourites'].includes(notice.get('notice'))) { setSelectedExperience('events'); setPage(notice.get('notice')); return; }
+    if (notice.get('recipient') === user.uid && ['host-inbox','notifications','favourites'].includes(notice.get('notice'))) {
+      setSelectedExperience('events');
+      if (notice.get('notice') === 'host-inbox') setHostInboxThreadId(notice.get('thread') || '');
+      setPage(notice.get('notice'));
+      return;
+    }
     const target = registrationEntry(window.location.search, user.uid);
     if (target) { setRegistrationTarget(target); setRegistrationAction('history'); setPage('registration'); }
   }, [user?.uid, profileVerified]);
@@ -745,7 +751,7 @@ export default function App() {
 
       <div className={`app-content-frame ${activePage === 'home' ? 'is-home' : 'is-subpage'} ${activePage !== 'businesses' ? 'cc-events-workspace' : ''}`} style={{ display:'flex', alignItems:'flex-start',
         maxWidth: activePage === 'home' ? 1720 : 1200, margin:'0 auto' }}>
-        {activePage !== 'businesses' && <EventsSidebar page={activePage} onNavigate={setPage} isGuest={isGuest} profile={profile}/>}
+        {activePage !== 'businesses' && <EventsSidebar page={activePage} onNavigate={nextPage => { if (nextPage === 'host-inbox') setHostInboxThreadId(''); setPage(nextPage); }} isGuest={isGuest} profile={profile}/>}
         <div className={`app-page-main ${activePage === 'home' ? 'is-home' : 'is-subpage'} page-${activePage}`} style={{ flex:1, minWidth:0 }}>
           {/* Prominent back button on all sub-pages (not Home) */}
           {!['home', 'businesses', 'registration', 'registration-create'].includes(activePage) && (
@@ -784,11 +790,15 @@ export default function App() {
           {!isGuest && activePage === 'add'        && <AddEvent      user={user} profile={profile} onSaved={afterSave} setPage={setPage} events={events} initialEvent={editingEvent?.id === undefined ? editingEvent : null} />}
           {!isGuest && activePage === 'edit'       && <EditEvent     editingEvent={editingEvent} onSaved={afterSave} user={user} profile={profile} events={events} />}
           {!isGuest && activePage === 'my'         && <MyEvents      {...shared} />}
-          {!isGuest && activePage === 'host-inbox' && <HostInbox key={user?.uid} user={user} />}
+          {!isGuest && activePage === 'host-inbox' && <HostInbox key={`${user?.uid}-${hostInboxThreadId}`} user={user} initialThreadId={hostInboxThreadId} />}
           {!isGuest && activePage === 'favourites'  && <Favourites    {...shared} />}
           {!isGuest && activePage === 'notifications' && <MemberDirectory key={user.uid} user={user} profile={profile} view="notifications" onOpenNotification={row => {
             if (openRegistrationUpdate(row)) return;
-            if (row.module === 'events') { setPage(row.threadId ? 'host-inbox' : row.type === 'event.favourite_reminder' ? 'favourites' : 'home'); return; }
+            if (row.module === 'events') {
+              if (row.threadId) setHostInboxThreadId(row.threadId);
+              setPage(row.threadId ? 'host-inbox' : row.type === 'event.favourite_reminder' ? 'favourites' : 'home');
+              return;
+            }
             const destination = ['owner','detail','inbox','reviews','moderation'].includes(row.destination) ? row.destination : 'owner';
             window.location.hash = `/${destination}/${encodeURIComponent(row.targetId || '')}`;
             selectExperience('businesses');

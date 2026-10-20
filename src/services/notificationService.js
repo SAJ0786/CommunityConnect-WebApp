@@ -234,7 +234,14 @@ export async function startForegroundPushNotifications() {
       try {
         const notification = new Notification(title, options);
         if (registrationNotificationLink(payload.data)) notification.onclick = () => { window.location.assign(registrationNotificationLink(payload.data)); };
-        else if (payload.data?.module === 'events') notification.onclick = () => { window.location.assign('/?notice=' + (payload.data.threadId ? 'host-inbox' : 'notifications') + '&recipient=' + encodeURIComponent(payload.data.recipientUid || '')); };
+        else if (payload.data?.module === 'events') notification.onclick = () => {
+          const params = new URLSearchParams({
+            notice: payload.data.threadId ? 'host-inbox' : 'notifications',
+            recipient: payload.data.recipientUid || '',
+            ...(payload.data.threadId ? { thread: payload.data.threadId } : {}),
+          });
+          window.location.assign('/?' + params.toString());
+        };
         else if (payload.data?.type === 'event-reminder') notification.onclick = () => {
           window.location.assign('/?event=' + encodeURIComponent(payload.data.eventId || ''));
         };
