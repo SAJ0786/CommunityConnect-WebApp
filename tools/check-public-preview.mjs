@@ -6,6 +6,7 @@ const testConfig = { ...config, configFile: false, root, publicDir: path.resolve
   plugins: [{ name: 'offline-public-directory', enforce: 'pre', resolveId(id, importer) {
     if (!importer) return;
     if (/\/services\/public(Business|Promotion)Service$/.test(id)) return path.join(root, 'services.js');
+    if (id === 'firebase/auth' || /\/firebase\/firebase$/.test(id) || /\/services\/cityCatalogue$/.test(id)) return path.join(root, 'services.js');
     if (id === './App.jsx') return path.join(root, 'legacy.jsx');
     if (id.startsWith('firebase/')) throw new Error('Firebase is forbidden in the offline public fixture');
   } }, ...config.plugins.slice(0, 1)],

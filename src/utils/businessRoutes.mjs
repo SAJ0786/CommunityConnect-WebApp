@@ -1,4 +1,16 @@
 export const PUBLIC_DIRECTORY_PATH = '/businesses';
+export const DIRECTORY_NAVIGATION_EVENT = 'community-connect-open-directory';
+
+export function directoryBrowseRoute(pathname) {
+  const route = publicBusinessRoute(pathname);
+  return ['directory', 'promotions'].includes(route?.type) ? route : null;
+}
+
+export function openDirectory(filters, target = window) {
+  const href = PUBLIC_DIRECTORY_PATH + directoryQuery(filters);
+  const event = new target.CustomEvent(DIRECTORY_NAVIGATION_EVENT, { cancelable: true, detail: { href } });
+  if (target.dispatchEvent(event)) target.location.assign(href);
+}
 
 export function businessPath(id) {
   return `${PUBLIC_DIRECTORY_PATH}/view/${encodeURIComponent(id)}`;

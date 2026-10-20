@@ -2,7 +2,7 @@ import { registrationUnavailable, registrationStatusLabel } from '../registratio
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { canEditEvent, canAdminAccessEvent, canArrangeEventNiaz, getSharePrivacy, getDisplayPrivacy } from '../utils/permissions';
 import { getEventMetroArea } from '../utils/cities';
-import { directoryQuery, PUBLIC_DIRECTORY_PATH } from '../utils/businessRoutes.mjs';
+import { openDirectory } from '../utils/businessRoutes.mjs';
 import { CalendarDays, Clock, MapPin, Heart, ChevronDown } from 'lucide-react';
 import EventActionPanel from './EventActionPanel';
 import { eventActions } from '../utils/eventActions.mjs';
@@ -248,8 +248,8 @@ export default function EventCard({
     niaz: () => {
       if (!canArrangeEventNiaz(event, user, profile, isGuest)) return;
       if (onNiazArrangement) return onNiazArrangement(event);
-      window.location.assign(PUBLIC_DIRECTORY_PATH + directoryQuery({ city: getEventMetroArea(event),
-        category: 'Food & Catering', service: 'Niaz Preparation and supply' }));
+      openDirectory({ city: getEventMetroArea(event),
+        category: 'Food & Catering', service: 'Niaz Preparation and supply' });
     },
     editSeries: (onEditSeries || onEdit) && (async () => {
       if (readOnly || !manage || seriesEditBusy) return;

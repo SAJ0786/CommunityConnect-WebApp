@@ -1,5 +1,13 @@
 import { toPublicBusiness } from '../../src/utils/publicBusinesses.mjs';
 import { toPublicPromotion } from '../../src/utils/publicPromotions.mjs';
+export const auth = { currentUser: null };
+export const firebaseConfigured = true;
+export const onAuthStateChanged = (_, next) => {
+  let active = true;
+  queueMicrotask(() => { if (active) next(null); });
+  return () => { active = false; };
+};
+export const useCityCatalogueRefresh = () => 0;
 const day = offset => new Date(Date.now() + offset * 86400000).toISOString().slice(0, 10);
 const raw = { status: 'approved', name: 'Example Community Catering', description: 'Fresh meals and catering for community gatherings. This is a synthetic business for local review.', categories: ['Food & Catering'], subcategories: ['Event catering', 'Family meals'], location: { city: 'sydney', suburb: 'Parramatta', state: 'NSW', postcode: '2150', publicDisplay: 'suburb', fullAddress: 'PRIVATE STREET NEVER PUBLIC' }, hours: { mon: { open: '09:00', close: '17:00' }, tue: { periods: [{ open: '09:00', close: '12:00' }, { open: '14:00', close: '18:00' }] }, fri: { open: '22:00', close: '02:00' }, sat: { open24Hours: true }, sun: { closed: true } }, contact: { phone: '+61400000000', email: 'hello@example.test', website: 'https://example.test', whatsapp: '+61400000000' }, abnVerified: true };
 const rawOffers = [
