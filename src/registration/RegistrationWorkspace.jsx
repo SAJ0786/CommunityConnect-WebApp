@@ -50,7 +50,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
   });
   const open = (id, action) => run(async valid => {
     clearPrivate(); setDraft(null); if (currentId.current !== id) setPendingPoster(null); currentId.current = id;
-    const fresh = await api.load(id, action === 'register');
+    const fresh = !action || action === 'history' ? await (api.card || api.load)(id) : await api.load(id, action === 'register');
     if (!valid()) return;
     setDetail(fresh); setStage('card'); submission.current = null; setRetrySubmission(false);
     if (registrationEventEnded(fresh) && action !== 'responses') return;
@@ -214,7 +214,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       <RegistrationSummary event={detail.event} places={detail.event.status !== 'cancelled' && detail.ownRegistration?.status === 'registered' ? detail.ownRegistration.places : 0}/>
       {detail.event.status === 'cancelled' && <p role="status">{detail.event.deleted ? 'Event deleted' : 'Event cancelled'} — no places reserved</p>}{detail.event.notes && <p className="registration-event-notes">{detail.event.notes}</p>}
       {detail.privateDetails ? <section className="registration-venue-panel"><h3>Private venue</h3><p>{detail.privateDetails.address}</p>{links && <div className="registration-actions"><a href={links.map} target="_blank" rel="noreferrer">View map</a><a href={links.directions} target="_blank" rel="noreferrer">Directions</a></div>}{detail.privateDetails.hasPoster && <button disabled={busy} onClick={() => run(async valid => { const result = await api.poster(detail.event.id); if (valid() && ['image/jpeg','image/png','image/webp'].includes(result.mime)) setPoster(`data:${result.mime};base64,${result.base64}`); })}>View private poster</button>}{poster && <img className="registration-poster" src={poster} alt="Private event poster"/>}</section> : <p>{detail.event.status === 'cancelled' ? 'Private venue and poster access is no longer available.' : 'The full address and poster are available after confirmed registration.'}</p>}
-      {detail.event.status === 'cancelled' && detail.ownRegistration && <section className="registration-venue-panel"><h3>Registration history</h3><p>Previous booking: {detail.ownRegistration.places} places. No places are currently reserved.</p>{(detail.ownRegistration.fields || []).map(field => <div key={field.id}><h4>{field.label}</h4><p>{answerText(detail.ownRegistration.answers?.[field.id])}</p></div>)}</section>}
+      {detail.event.status === 'cancelled' && detail.ownRegistration && <section className="registration-venue-panel"><h3>Registration history</h3><p>Previous booking: {detail.ownRegistration.places} places. No places are currently reserved.</p>{!detail.ownRegistration.fields && <button disabled={busy} onClick={() => run(async valid=>{const fresh=await api.load(detail.event.id);if(valid())setDetail(fresh);})}>View saved registration</button>}{(detail.ownRegistration.fields || []).map(field => <div key={field.id}><h4>{field.label}</h4><p>{answerText(detail.ownRegistration.answers?.[field.id])}</p></div>)}</section>}
       {detail.registrationNeedsReview && <p role="alert">The organiser changed the form. Please review your answers and agree to the current terms again.</p>}
       {!detail.canRegister && <p>{detail.canEditRegistration ? 'New registrations are closed. You can update answers or reduce places until event day.' : 'Registration is closed or unavailable.'}</p>}
       <div className="registration-actions">

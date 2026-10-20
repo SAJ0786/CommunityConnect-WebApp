@@ -1,4 +1,4 @@
-export function registrationFixture(date, user, role, guest, registered = false, staged = false, participants = false, series = false, deleted = false, cancelOnSubmit = false, detailedForm = false) {
+export function registrationFixture(date, user, role, guest, registered = false, staged = false, participants = false, series = false, deleted = false, cancelOnSubmit = false, detailedForm = false, slowPoster = false) {
   const calls = [];
   const rows = new Map([
     ['registration-approved', { id:'registration-approved', title:'Registration Workshop', date, eventType:'Workshop', city:'sydney', suburb:'Parramatta', status:'approved', revision:1, ownerUid:'synthetic-member', capacity:30, formVersion:1, startTime:'18:00', endTime:'19:00', startAt:`${date}T07:00:00Z`, endAt:`${date}T08:00:00Z` }],
@@ -23,20 +23,21 @@ export function registrationFixture(date, user, role, guest, registered = false,
           : scope === 'attending' ? attending && row.id === 'registration-approved'
             : scope === 'review' ? role === 'superAdmin' && (row.status === 'pending' || hasChanges(row)) : ['admin','superAdmin'].includes(role)).map(decorate), nextCursor:null };
     },
-    load: async (id,includeOccurrences,includeSeriesReview) => {
-      calls.push(['load',id]); const row = rows.get(id); if (!row) throw Error('Event not found.');
+    card: id => api.load(id,false,false,true),
+    load: async (id,includeOccurrences,includeSeriesReview,cardOnly=false) => {
+      calls.push([cardOnly?'card':'load',id]); const row = rows.get(id); if (!row) throw Error('Event not found.');
       const allowed = row.status === 'approved' && (manage(row) || attending), event = decorate(row);
       return { event, canManage:manage(row), canApprove:event.canApprove, canRegister:row.status === 'approved', canEditRegistration:attending && row.status === 'approved', canCancel:attending,
-        form:{ version:1, purpose:'Arrange the workshop.', fields },
+        ...(!cardOnly ? {form:{ version:1, purpose:'Arrange the workshop.', fields }} : {}),
         ...(series&&includeOccurrences?{occurrences:[...rows.values()].filter(item=>item.status==='approved').map(item=>({eventId:item.id,date:item.date,startTime:item.startTime,formVersion:1,availablePlaces:30,selectable:!seriesBookings.has(item.id),registered:seriesBookings.has(item.id),reason:seriesBookings.has(item.id)?'Already registered':''}))}:{}),
         ...(series&&includeSeriesReview&&role==='superAdmin'?{reviewOccurrences:[...rows.values()].filter(item=>item.status==='pending').map(item=>({eventId:item.id,date:item.date,revision:item.revision}))}:{}),
-        ownRegistration:attending ? { status:'registered', revision:1, places:1, fields, answers:{ name:'Example attendee' } } : null,
-        ...(manage(row) && hasChanges(row) ? {pendingChanges:{event:{...event,title:'Submitted Registration Workshop',startTime:'20:00'},form:{version:1,purpose:'Submitted purpose',fields:[{id:'submitted',type:'text',label:'Submitted question',required:true}]},
+        ownRegistration:attending ? { status:'registered', revision:1, places:1,...(!cardOnly ? {fields,answers:{name:'Example attendee'}} : {}) } : null,
+        ...(!cardOnly && manage(row) && hasChanges(row) ? {pendingChanges:{event:{...event,title:'Submitted Registration Workshop',startTime:'20:00'},form:{version:1,purpose:'Submitted purpose',fields:[{id:'submitted',type:'text',label:'Submitted question',required:true}]},
           privateDetails:{address:'2 Fictional Street, Parramatta NSW',hasPoster:false,venue:{fullAddress:'2 Fictional Street, Parramatta NSW',suburb:'Parramatta',state:'NSW',postcode:'2150',latitude:-33.8,longitude:151}}}} : {}),
         ...(allowed ? { privateDetails:{ address:'1 Fictional Street, Parramatta NSW', hasPoster, venue:{ fullAddress:'1 Fictional Street, Parramatta NSW', suburb:'Parramatta', state:'NSW', postcode:'2150', latitude:-33.8, longitude:151 } } } : {}) };
     },
     poster: async id => {
-      calls.push(['poster',id]); if (rows.get(id).status !== 'approved' || (!manage(rows.get(id)) && !attending)) throw Error('Poster not authorised.');
+      calls.push(['poster',id]); if(slowPoster) await new Promise(resolve=>setTimeout(resolve,400)); if (rows.get(id).status !== 'approved' || (!manage(rows.get(id)) && !attending)) throw Error('Poster not authorised.');
       return { mime:'image/png', base64:'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jG6kAAAAASUVORK5CYII=' };
     },
     approve: async (id, revision) => { calls.push(['approve',id,revision]); if (role !== 'superAdmin') throw Error('Superadmin required.'); rows.set(id, { ...rows.get(id), ...(staged && id === 'registration-approved' ? {title:'Submitted Registration Workshop',startTime:'20:00'} : {}), status:'approved', revision:revision + 1 }); if(id==='registration-approved')staged=false; },

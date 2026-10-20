@@ -8,6 +8,7 @@ export function createRegistrationClient(call, { enabled = false } = {}) {
   }
   return Object.freeze({
     list: ({ scope = 'public', city, cursor = null } = {}) => invoke('listRegistrationEvents', { scope, ...(city ? { city } : {}), cursor }),
+    card: eventId => invoke('getRegistrationEvent', {eventId, cardOnly:true}),
     load: (eventId, includeOccurrences = false, includeSeriesReview = false) => invoke('getRegistrationEvent', { eventId, ...(includeOccurrences ? { includeOccurrences:true } : {}), ...(includeSeriesReview ? {includeSeriesReview:true} : {}) }),
     save: ({ eventId, city, expectedRevision, createKey, draft }) => {
       const { poster, frequency, repeatFrequency, occurrenceCount, occurrenceSettings, seriesId, occurrenceIndex, recurrenceRule, ...details } = draft;

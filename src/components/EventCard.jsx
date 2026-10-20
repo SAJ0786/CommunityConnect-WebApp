@@ -1,5 +1,5 @@
 import { registrationUnavailable, registrationStatusLabel } from '../registration/registrationStatus.mjs';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { canEditEvent, canAdminAccessEvent, canArrangeEventNiaz, getSharePrivacy, getDisplayPrivacy } from '../utils/permissions';
 import { getEventMetroArea } from '../utils/cities';
 import { openDirectory } from '../utils/businessRoutes.mjs';
@@ -53,11 +53,19 @@ export default function EventCard({
 }) {
   const registration = useRegistration();
   const [thumbnail, setThumbnail] = useState(null);
+  const posterRequest = useRef(null);
   const [privateState, setPrivateState] = useState(null);
   const [pageVisible, setPageVisible] = useState(() => !document.hidden);
   const [registrationError, setRegistrationError] = useState('');
   const [registrationBusy, setRegistrationBusy] = useState(false);
   const registrationKey = [user?.uid, sourceEvent.id, sourceEvent.revision, registration?.revision].join(':');
+  const fetchPoster = () => {
+    if (posterRequest.current?.key === registrationKey) return posterRequest.current.promise;
+    const request={key:registrationKey};
+    request.promise=registration.api.poster(sourceEvent.id).catch(error=>{if(posterRequest.current===request)posterRequest.current=null;throw error;});
+    posterRequest.current=request;
+    return request.promise;
+  };
   const registrationDetail = pageVisible && privateState?.key === registrationKey ? privateState.detail : null;
   const event = sourceEvent.registrationOnly ? { ...sourceEvent,
     ...(registrationDetail ? { ...registrationDetail.event, eventDate: registrationDetail.event.date } : {}),
@@ -66,7 +74,7 @@ export default function EventCard({
     imageUrl: '',
   } : sourceEvent;
   useEffect(() => {
-    const visibility = () => { setPageVisible(!document.hidden); setPrivateState(null); setThumbnail(null); };
+    const visibility = () => { posterRequest.current=null; setPageVisible(!document.hidden); setPrivateState(null); setThumbnail(null); };
     document.addEventListener('visibilitychange', visibility);
     return () => document.removeEventListener('visibilitychange', visibility);
   }, []);
@@ -74,11 +82,11 @@ export default function EventCard({
     if (!sourceEvent.registrationOnly || !registration?.api || !pageVisible || !isExpanded) return;
     let current = true;
     setRegistrationError('');
-    registration.api.load(sourceEvent.id).then(async detail => {
+    (registration.api.card || registration.api.load)(sourceEvent.id).then(async detail => {
       if (!current) return;
       setPrivateState({ key: registrationKey, detail, poster: null });
       if (detail.privateDetails?.hasPoster && thumbnail?.key !== registrationKey) {
-        const poster = await registration.api.poster(sourceEvent.id);
+        const poster = await fetchPoster();
         if (!['image/jpeg', 'image/png', 'image/webp'].includes(poster.mime)) throw new Error('Unsupported event poster format.');
         if (current) setPrivateState({ key: registrationKey, detail, poster: `data:${poster.mime};base64,${poster.base64}` });
       }
@@ -88,7 +96,7 @@ export default function EventCard({
   useEffect(() => {
     let current = true; setThumbnail(null);
     if (!sourceEvent.registrationOnly || !registration?.api || !pageVisible || !user?.uid || !sourceEvent.hasPoster || registrationUnavailable(sourceEvent) || !(sourceEvent.isRegistered || sourceEvent.canManage)) return;
-    registration.api.poster(sourceEvent.id).then(poster => {
+    fetchPoster().then(poster => {
       if (current && ['image/jpeg','image/png','image/webp'].includes(poster.mime)) setThumbnail({key:registrationKey,src:`data:${poster.mime};base64,${poster.base64}`});
     }).catch(() => {});
     return () => { current = false; };
@@ -123,7 +131,7 @@ export default function EventCard({
   // Poster image — Firestore organisation logos resolve asynchronously, while
   // uploaded posters and bundled fallbacks can render immediately.
   const [eventImage, setEventImage] = useState(() => getEventImage(event, isGuest));
-  const privatePoster = (registrationDetail && privateState?.poster) || (pageVisible && sourceEvent.hasPoster && !registrationUnavailable(sourceEvent) && (sourceEvent.isRegistered || sourceEvent.canManage) && thumbnail?.key === registrationKey && thumbnail.src);
+  const privatePoster = (registrationDetail && privateState?.poster) || (pageVisible && (!registrationDetail || registrationDetail.privateDetails?.hasPoster) && sourceEvent.hasPoster && !registrationUnavailable(sourceEvent) && (sourceEvent.isRegistered || sourceEvent.canManage) && thumbnail?.key === registrationKey && thumbnail.src);
   const { src: posterSrc, isLogo: posterIsLogo } = privatePoster ? { src: privatePoster, isLogo: false } : eventImage;
   const hasPoster = !posterIsLogo;
 
