@@ -32,3 +32,29 @@ test('late results from the previous account cannot replace current My Events',a
  await act(async()=>view.update(React.createElement(MyEvents,props('b'))));assert.deepEqual(ids(view),['b-own']);
  await act(async()=>finish([{id:'a-old',title:'A old event'}]));assert.deepEqual(ids(view),['b-own']);view.unmount();
 });
+
+test('event-type filter updates organised cards and counts without losing bookings or history',async()=>{
+ globalThis.__myEventsFetch=async()=>[{id:'normal',title:'Own ordinary event'}];globalThis.__myEventsRegistration={api:{},refresh(){}};
+ const hosted={id:'hosted',registrationOnly:true,ownerUid:'a',isRegistered:true};
+ globalThis.__myEventsFeeds={mine:[hosted],attending:[hosted,{id:'booking',registrationOnly:true,ownerUid:'other',isRegistered:true},{id:'cancelled',registrationOnly:true,status:'cancelled',deletedAt:'2026-10-01'}]};
+ let view;await act(async()=>{view=Renderer.create(React.createElement(MyEvents,props('a')));});
+ await act(async()=>view.root.findByProps({id:'my-type-registration'}).props.onClick());assert.deepEqual(ids(view),['hosted']);
+ assert.equal(view.root.findByProps({id:'my-organising'}).props.children[1],'Events I organise (1)');
+ await act(async()=>view.root.findByProps({id:'my-attending'}).props.onClick());assert.deepEqual(ids(view),['booking','hosted']);
+ const history=()=>view.root.findAllByType('button').find(node=>node.props.className==='cc-registration-history-toggle');
+ await act(async()=>history().props.onClick());assert.deepEqual(ids(view),['cancelled']);
+ await act(async()=>view.root.findByProps({id:'my-type-all'}).props.onClick());assert.deepEqual(ids(view),['cancelled']);
+ await act(async()=>view.root.findByProps({id:'my-organising'}).props.onClick());assert.deepEqual(ids(view),['hosted','normal']);
+ await act(async()=>view.unmount());
+});
+
+test('empty type filter stays in organiser view and does not leak its selection to another account',async()=>{
+ globalThis.__myEventsFetch=async uid=>[{id:uid+'-normal',title:'Own ordinary event'}];globalThis.__myEventsRegistration={api:{}};globalThis.__myEventsFeeds={mine:[],attending:[]};
+ let view;await act(async()=>{view=Renderer.create(React.createElement(MyEvents,props('a')));});
+ await act(async()=>view.root.findByProps({id:'my-type-registration'}).props.onClick());assert.deepEqual(ids(view),[]);
+ assert.equal(view.root.findByProps({id:'my-organising'}).props['aria-selected'],true);
+ assert.ok(view.root.findAllByType('p').some(node=>String(node.props.children).includes('Choose All events')));
+ await act(async()=>view.update(React.createElement(MyEvents,props('b'))));assert.deepEqual(ids(view),['b-normal']);
+ assert.equal(view.root.findByProps({id:'my-type-all'}).props['aria-selected'],true);
+ await act(async()=>view.unmount());
+});
