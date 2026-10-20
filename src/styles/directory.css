@@ -112,7 +112,7 @@
 .business-card-logo { width:68px; height:68px; flex-shrink:0; display:grid; place-items:center; background:var(--cc-background); border:1px solid var(--cc-border); border-radius:12px; overflow:hidden; font-size:1.7rem; }
 .business-card-logo img { width:100%; height:100%; object-fit:contain; padding:4px; box-sizing:border-box; }
 .business-card-caption { display:flex; flex-direction:column; gap:4px; flex:1; min-width:0; }
-.business-card-caption strong { font-size:.95rem; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.business-card-caption strong { font-size:.95rem; line-height:1.3; display:block; white-space:normal; overflow-wrap:anywhere; }
 .business-card-caption > span, .business-card-caption small { font-weight:500; color:var(--cc-muted); font-size:.78rem; }
 .business-card-caption > span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .business-card-caption .business-open { color:var(--cc-success); font-weight:700; }
