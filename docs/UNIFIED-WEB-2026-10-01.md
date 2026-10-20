@@ -1,6 +1,6 @@
 # Unified Community Connect web app
 
-Started 1 October 2026. Local work only; not deployed.
+Started 1 October 2026. Current release evidence is recorded in the dated sections below.
 
 ## Niaz Directory navigation correction, 20 October 2026
 
@@ -39,6 +39,27 @@ Hosting-only deployment to `community-event-8b639`; never use the broad `deploy`
 script. Do not deploy root `firestore.rules` (the outdated Events-only rules),
 Storage or Functions with this navigation correction. Preserve the restored
 shared Firestore ruleset and the existing Host Inbox notification fix.
+
+Released with explicit user approval on 20 October 2026 at 17:04:19 AEDT
+(`2026-10-20T06:04:19.087Z`), from integrated source
+`9b0bb102742ad8bfbca564438e8c112ba9f3cc9c` (implementation `56cfdac`).
+Hosting version: `e39f09120bb7d9fa`; previous version:
+`7f63e7e3b8a02913`. All 135 application upload hashes match the local build;
+the two additional `/__/firebase/init.*` files are Hosting-managed. Live
+`/`, `/app` and `/businesses` match their expected artifacts, including
+`index-DMrBcUMz.js`, `App-DiuJphdA.js`, `MemberDirectory-CuykOS9_.js`
+and the preserved Host Inbox implementation in `HostInbox-DhsR5naZ.js`.
+
+Validation: 19 focused Node tests, eight offline Edge scenarios, phone/desktop
+screenshots and the validated production build passed. Live signed-out Home
+and filtered Directory checks passed at 390px and 1440px without overflow or
+page errors; non-read requests were blocked. Real signed-in/device acceptance
+remains separate from the synthetic member checks. The full Node run had
+295 passes, two skips and four failures caused solely by missing external
+`sdk51-package-backup` parity fixtures. Shared Firestore rules remained
+`d8318a21-773a-43b3-a166-f81a25e9b274`, SHA256
+`3acf3c85b2c7844e7ad729d98769c78c26d4ed2f2c9335a00c81d1cb7f0e9ebb`.
+Only Hosting was deployed; no native, backend, rules, Storage or real data changed.
 
 ## Agreed direction
 
