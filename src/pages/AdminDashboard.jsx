@@ -1728,6 +1728,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                 <div className="card">No events match the selected filters.</div>
               )}
               {displayedAdminEvents.map(e => {
+                if (e.hidden && e.createdByUserId !== user?.uid) return <section className="card" key={e.id}><h3>{e.eventSubject || e.eventType || 'Event'}</h3><p>Hidden by organiser · {e.eventDate}</p><p>Only the organiser can open or restore this event.</p><button type="button" onClick={() => handleDelete(e)}>Delete event</button></section>;
                 const seriesKey = e.seriesId || legacySeriesKey(e);
                 const seriesCount = seriesCounts.get(seriesKey) || 0;
                 const isRecurringSeries = !!(e.isRecurring || e.recurringSeriesId);

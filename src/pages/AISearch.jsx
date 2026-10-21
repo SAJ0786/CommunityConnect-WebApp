@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { eventShareLink } from '../utils/eventLinks.mjs';
 import { STORE_SHARE_LINES } from '../utils/storeLinks';
 
 
@@ -24,6 +25,7 @@ function buildShareMessage(event, isGuest, user, profile) {
   if (isReligious && event.speakerName) lines.push(`🎤 Speaker: ${event.speakerName}`);
   if (isReligious) { const r=(event.reciters||[]).filter(x=>x.name); if(r.length) lines.push(`📿 ${r.map(x=>(x.customType||x.type||'Reciter')+': '+x.name).join(' · ')}`); }
   if (event.notes?.trim()) lines.push(`📝 Notes: ${event.notes.trim()}`);
+  if (eventShareLink(event)) lines.push(`🔗 View event: ${eventShareLink(event)}`);
   lines.push('', ...STORE_SHARE_LINES, '', '_Shared via Community Events app_');
   return lines.join('\n');
 }

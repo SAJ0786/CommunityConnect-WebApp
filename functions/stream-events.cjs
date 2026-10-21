@@ -51,6 +51,7 @@ function createStreamEventResolver({ db, HttpsError, adminCanAccessEvent }) {
     const event = snapshot.data();
     const data = streamEventData(event, collection);
     if (collection === 'registrationEvents') {
+      if (event.hidden && event.ownerUid !== request.auth.uid) throw new HttpsError('permission-denied', 'The organiser has chosen to hide this event. It is currently unavailable.');
       const profile = (await db.collection('users').doc(request.auth.uid).get()).data();
       if (!profile || profile.isActive === false || profile.bannedAt || profile.archivedAt || profile.accountDeletedAt
         || ['inactive', 'banned', 'deleted', 'archived', 'suspended'].includes(profile.accountStatus)) {

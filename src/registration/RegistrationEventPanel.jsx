@@ -23,6 +23,13 @@ export default function RegistrationEventPanel({ scope, city, user, profile, onC
   }, []);
   useEffect(() => { epoch.current++; setReview(null); setPoster(null); setExpanded(null); setSelectedCity(city || profile?.defaultCity || DEFAULT_CITY); }, [user?.uid, city, profile?.defaultCity, profile?.role]);
   if (!registration?.api) return null;
+  const deleteHidden = async event => {
+    if (busy || !window.confirm('Delete this hidden event? Existing places will be released and registration history retained.')) return;
+    const token=++epoch.current; setBusy(true); setProblem('');
+    try { await registration.api.deleteEvent(event.id,event.revision); if(token===epoch.current) registration.refresh(); }
+    catch(error) {if(token===epoch.current)setProblem(error.message);}
+    finally {if(token===epoch.current)setBusy(false);}
+  };
   const prepareApproval = async event => {
     const token = ++epoch.current;
     setBusy(true); setProblem(''); setReview(null); setPoster(null);
@@ -66,7 +73,7 @@ export default function RegistrationEventPanel({ scope, city, user, profile, onC
     {loading && <p role="status">Loading registration events...</p>}
     {(error || problem) && <p role="alert">{error || problem}</p>}
     {!loading && !error && !events.length && <p>No registration events in this city.</p>}
-    {events.map(event => <div key={event.id} id={`event-${event.id}`}><EventCard event={event} user={user} profile={profile}
+    {events.map(event => event.moderationOnly ? <section className="card" key={event.id} aria-label="Hidden event moderation"><h3>{event.title}</h3><p>Hidden by organiser · {event.date}</p><p>Only the organiser can open or restore this event.</p><button type="button" disabled={busy} onClick={() => deleteHidden(event)}>Delete event</button></section> : <div key={event.id} id={`event-${event.id}`}><EventCard event={event} user={user} profile={profile}
       isExpanded={expanded === event.id} onExpand={setExpanded} onCalendar={onCalendar} onApprove={prepareApproval}/>
       {event.canApprove && expanded !== event.id && <button disabled={busy} onClick={() => setExpanded(event.id)}>View event awaiting approval</button>}
     </div>)}

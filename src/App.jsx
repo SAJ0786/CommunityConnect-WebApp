@@ -153,7 +153,7 @@ export default function App() {
   const [profileLoading, setProfileLoading] = useState(false);
   const profileRequestRef = useRef(0);
   useEffect(() => {
-    if (!REGISTRATION_ENABLED || !user?.uid || !profileVerified) return;
+    if (!REGISTRATION_ENABLED || !user?.uid || (!profileVerified && !user.isAnonymous)) return;
     const notice = new URLSearchParams(window.location.search);
     if (notice.get('recipient') === user.uid && ['host-inbox','notifications','favourites'].includes(notice.get('notice'))) {
       setSelectedExperience('events');

@@ -208,3 +208,9 @@ test('registration card exposes normal live management and only public viewing s
   assert.equal(actions({ isLive:true, liveAppVisibility:'private' }).disabled, true);
   assert.equal(actions({ isLive:true, liveAppVisibility:'private' }, true).disabled, false);
 });
+
+test('hidden registration streams deny administrative actions even in recovery mode',async()=>{
+ const state=setup();state.records.set('registrationEvents/shared',{...registration,hidden:true});
+ for(const uid of ['admin','defaultAdmin','super'])await assert.rejects(state.resolveStreamEvent(state.request({},uid),{allowInactive:true}),error=>error.code==='permission-denied');
+ await state.resolveStreamEvent(state.request(),{allowInactive:true});
+});

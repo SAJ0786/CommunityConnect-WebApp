@@ -4,7 +4,8 @@
     "details": [
       {
         "appIDs": [
-          "2RR593743F.info.siza.communityevents"
+          "2RR593743F.info.siza.communityevents",
+          "D36Y75H5BU.info.siza.communityevents"
         ],
         "components": [
           {
@@ -14,6 +15,20 @@
           {
             "/": "/app/*",
             "comment": "Open Community Events Australia app link paths"
+          },
+          {
+            "/": "/",
+            "?": {
+              "event": "*"
+            },
+            "comment": "Open shared event card"
+          },
+          {
+            "/": "/",
+            "?": {
+              "registration": "*"
+            },
+            "comment": "Open shared event card"
           }
         ]
       }

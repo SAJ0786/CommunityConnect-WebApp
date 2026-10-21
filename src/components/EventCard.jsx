@@ -10,6 +10,7 @@ import { RELIGIOUS_EVENT_TYPES } from '../utils/constants';
 import { getEventImage, getFallbackImageAsync } from '../services/imageService';
 import { getHijriDisplay, hijriDisplayFromParts } from '../services/hijriService';
 import { getHijriSettings } from '../services/settingsService';
+import { eventShareLink } from '../utils/eventLinks.mjs';
 import { STORE_SHARE_LINES } from '../utils/storeLinks';
 import { useRegistration } from '../registration/RegistrationContext';
 import { REGISTRATION_REMINDERS_ENABLED } from '../config/releaseGates.mjs';
@@ -201,7 +202,7 @@ export default function EventCard({
       : suburbOnly;
     const locLabel = sharePrivacy.showFullAddress ? '*Location:*' : '*Suburb:*';
     const fmtD = d => {
-      try { return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short' }); }
+      try { return new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { weekday:'short', day:'numeric', month:'short', year:'numeric' }); }
       catch { return d; }
     };
     const reciterLines = (event.reciters || [])
@@ -219,6 +220,7 @@ export default function EventCard({
       ...reciterLines,
       event.audienceType ? `👥 ${normAudience(event.audienceType)}` : '',
       event.notes?.trim() ? `📝 *Notes:* ${event.notes.trim()}` : '',
+      eventShareLink(event) ? `🔗 View event${event.registrationOnly ? ' & register' : ''}: ${eventShareLink(event)}` : '',
       '', ...STORE_SHARE_LINES, '', '_Shared via Community Events Australia_',
     ].filter(Boolean).join('\n');
 

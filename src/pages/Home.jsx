@@ -97,6 +97,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
     if (focusEventId) {
       const focusedEvent = events.find(event => event.id === focusEventId);
       if (!focusedEvent && eventsLoading) return;
+      if (!focusedEvent) { window.showToast?.('This event is currently unavailable. The organiser may have hidden or removed it.', 'error'); setFocusEventId?.(null); return; }
       if (focusedEvent) setSelectedCity(getEventMetroArea(focusedEvent));
       setExpandedId(focusEventId);
       setQuery('');
