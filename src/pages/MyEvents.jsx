@@ -11,6 +11,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
   const [myEvents,  setMyEvents]  = useState([]);
   const [loading,   setLoading]   = useState(true);
   const [expandedId, setExpandedId] = useState(null);
+  const [visibilityBusyId, setVisibilityBusyId] = useState(null);
   const [sourceUid,setSourceUid] = useState(null), [selection,setSelection] = useState(null);
   const [typeSelection, setTypeSelection] = useState(null);
   const registrationOnly = Boolean(typeSelection && typeSelection.uid === user?.uid && typeSelection.registrationOnly);
@@ -39,8 +40,18 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
   }, [user?.uid]);
 
   const handleToggle = async (event) => {
+    if (visibilityBusyId) return;
     const newHidden = !event.hidden;
+    setVisibilityBusyId(event.id);
     try {
+      if (event.registrationOnly) {
+        await registration.api.setVisibility(event.id,event.revision,newHidden);
+        setExpandedId(null);
+        setSelection({uid:user.uid,view:'organising'});
+        registration.refresh();
+        window.showToast?.(newHidden ? 'Event hidden. Only the organiser and authorised admins can access it.' : 'Event visibility restored.','success');
+        return;
+      }
       await toggleEventVisibility(event.id, newHidden);
       setMyEvents(prev => prev.map(e =>
         e.id === event.id ? { ...e, hidden: newHidden } : e
@@ -51,6 +62,8 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
       );
     } catch(e) {
       if (window.showToast) window.showToast('Error: ' + e.message, 'error');
+    } finally {
+      setVisibilityBusyId(null);
     }
   };
 
@@ -91,7 +104,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
       {allEvents.map(e => (
         <div key={e.id}>
           {/* Visibility toggle row */}
-          {!e.registrationOnly && <div style={{
+          {(!e.registrationOnly || (selected === 'organising' && e.ownerUid === user?.uid && !registrationUnavailable(e))) && <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
             padding: '4px 4px 2px', flexWrap: 'wrap'
           }}>
@@ -99,9 +112,10 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
               fontSize: '0.6875rem', fontWeight: 600,
               color: e.hidden ? 'var(--cc-accent-strong)' : 'var(--cc-success)',
             }}>
-              {e.hidden ? '🙈 Hidden from home screen' : '👁 Visible on home screen'}
+              {e.registrationOnly ? e.hidden ? 'Hidden · organiser and admins only' : 'Visible to participants' : e.hidden ? '🙈 Hidden from home screen' : '👁 Visible on home screen'}
             </span>
             <button
+              disabled={Boolean(visibilityBusyId)}
               onClick={() => handleToggle(e)}
               style={{
                 fontSize: '0.6875rem', padding: '3px 10px', borderRadius: 6,
@@ -109,7 +123,7 @@ export default function MyEvents({ user, profile, setPage, setEditingEvent, hand
                 background: e.hidden ? 'var(--cc-accent-strong)' : 'var(--cc-background)',
                 color: e.hidden ? 'var(--cc-on-primary)' : 'var(--cc-muted)',
               }}>
-              {e.hidden ? '👁 Make Visible' : '🙈 Hide Event'}
+              {visibilityBusyId === e.id ? 'Saving…' : e.hidden ? '👁 Make Visible' : '🙈 Hide Event'}
             </button>
           </div>}
 

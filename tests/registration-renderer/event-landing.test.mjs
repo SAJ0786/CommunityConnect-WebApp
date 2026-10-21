@@ -62,3 +62,12 @@ test('late event details cannot cross accounts and failed loads provide retry in
  next.api.card=async()=>detail();const retry=view.root.findAllByType('button').find(n=>text(n.props.children)==='Retry event');await act(async()=>retry.props.onClick());
  assert.ok(text(view.toJSON()).includes('Example registration event'));await act(async()=>view.unmount());
 });
+
+test('hidden-event old links explain organiser visibility without opening a card or form',async()=>{
+ const f=fixture();f.api.card=async()=>{throw Error('The organiser has chosen to hide this event. It is currently unavailable.');};
+ let view;await act(async()=>{view=Renderer.create(f.render());});
+ assert.ok(text(view.toJSON()).includes('The organiser has chosen to hide this event. It is currently unavailable.'));
+ assert.equal(view.root.findAllByProps({className:'event-card-details'}).length,0);
+ assert.equal(view.root.findAllByType('form').length,0);
+ await act(async()=>view.unmount());
+});

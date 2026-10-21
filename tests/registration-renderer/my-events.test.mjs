@@ -58,3 +58,23 @@ test('empty type filter stays in organiser view and does not leak its selection 
  assert.equal(view.root.findByProps({id:'my-type-all'}).props['aria-selected'],true);
  await act(async()=>view.unmount());
 });
+
+
+test('organiser visibility uses registration API and is absent from participant cards',async()=>{
+ globalThis.window={showToast(){}};
+ globalThis.__myEventsFetch=async()=>[];
+ const calls=[];let finish,refreshes=0;
+ globalThis.__myEventsRegistration={api:{setVisibility:(...args)=>{calls.push(args);return new Promise(resolve=>finish=resolve);}},refresh(){refreshes++;}};
+ const hosted={id:'hosted',title:'Own event',registrationOnly:true,canManage:true,ownerUid:'a',revision:7,isRegistered:true};
+ globalThis.__myEventsFeeds={mine:[hosted],attending:[hosted,{id:'booking',registrationOnly:true,ownerUid:'other',isRegistered:true}]};
+ let view;await act(async()=>{view=Renderer.create(React.createElement(MyEvents,props('a')));});
+ const hide=()=>view.root.findAllByType('button').find(node=>node.props.children==='🙈 Hide Event');
+ assert.ok(hide());let operation;
+ await act(async()=>{operation=hide().props.onClick();});
+ assert.deepEqual(calls,[['hosted',7,true]]);
+ assert.ok(view.root.findAllByType('button').some(node=>node.props.children==='Saving…' && node.props.disabled));
+ await act(async()=>{finish({revision:8,hidden:true});await operation;});assert.equal(refreshes,1);
+ await act(async()=>view.root.findByProps({id:'my-attending'}).props.onClick());
+ assert.equal(hide(),undefined);
+ await act(async()=>view.unmount());
+});
