@@ -99,7 +99,7 @@ function buildMessage(selectedEvents, profile, uid, messageTitle, messageMode = 
   }
 
   lines.push(...STORE_SHARE_LINES);
-  lines.push('_Shared via Community Events_');
+  lines.push('_Shared via Community Connect Australia_');
   return lines.join('\n');
 }
 

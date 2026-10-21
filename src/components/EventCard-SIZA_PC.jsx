@@ -155,7 +155,7 @@ export default function EventCard({
       ...reciterLines,
       event.audienceType ? `👥 ${event.audienceType}`             : '',
       event.notes?.trim() ? `📝 *Notes:* ${event.notes.trim()}` : '',
-      '', ...STORE_SHARE_LINES, '', '_Shared via Community Events Australia_',
+      '', ...STORE_SHARE_LINES, '', '_Shared via Community Connect Australia_',
     ].filter(Boolean).join('\n'));
   };
 

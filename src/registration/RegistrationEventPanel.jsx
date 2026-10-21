@@ -7,7 +7,7 @@ import { useRegistration, useRegistrationFeed } from './RegistrationContext';
 import { registrationReviewDetail } from './registrationViewModel.mjs';
 import RegistrationReview from './RegistrationReview';
 
-export default function RegistrationEventPanel({ scope, city, user, profile, onCalendar }) {
+export default function RegistrationEventPanel({ scope, city, user, profile, users = [], onCalendar }) {
   const registration = useRegistration();
   const [selectedCity, setSelectedCity] = useState(city || profile?.defaultCity || DEFAULT_CITY);
   const { events, loading, error } = useRegistrationFeed(registration?.api, 'management', selectedCity, registration?.revision);
@@ -15,14 +15,25 @@ export default function RegistrationEventPanel({ scope, city, user, profile, onC
   const [busy, setBusy] = useState(false), [problem, setProblem] = useState('');
   const [poster, setPoster] = useState(null);
   const [feedback, setFeedback] = useState('');
+  const [transfer, setTransfer] = useState(null), [targetUid, setTargetUid] = useState('');
   const epoch = useRef(0);
+  useEffect(() => { epoch.current++; setTransfer(null); setTargetUid(''); setReview(null); setPoster(null); setExpanded(null); setBusy(false); }, [selectedCity]);
   useEffect(() => {
-    const hide = () => { if (document.hidden) { epoch.current++; setReview(null); setPoster(null); setExpanded(null); setBusy(false); } };
+    const hide = () => { if (document.hidden) { epoch.current++; setReview(null); setPoster(null); setExpanded(null); setTransfer(null); setTargetUid(''); setBusy(false); } };
     document.addEventListener('visibilitychange', hide);
     return () => { epoch.current++; document.removeEventListener('visibilitychange', hide); };
   }, []);
-  useEffect(() => { epoch.current++; setReview(null); setPoster(null); setExpanded(null); setSelectedCity(city || profile?.defaultCity || DEFAULT_CITY); }, [user?.uid, city, profile?.defaultCity, profile?.role]);
+  useEffect(() => { epoch.current++; setReview(null); setPoster(null); setExpanded(null); setTransfer(null); setTargetUid(''); setSelectedCity(city || profile?.defaultCity || DEFAULT_CITY); }, [user?.uid, city, profile?.defaultCity, profile?.role]);
   if (!registration?.api) return null;
+  const candidates = users.filter(row => row.id !== transfer?.ownerUid && row.isActive !== false && !row.migratedToUid && !row.bannedAt && !row.archivedAt && !row.accountDeletedAt && !['inactive','banned','deleted','archived','suspended'].includes(row.accountStatus));
+  const confirmTransfer = async () => {
+    const target=candidates.find(row=>row.id===targetUid);
+    if (busy || !transfer || !target || !window.confirm(`Transfer this event to ${target.fullName || target.email || 'this member'}? The new organiser will be able to manage this event and its registration responses. Other series occurrences are unchanged.`)) return;
+    const token=++epoch.current; setBusy(true); setProblem('');
+    try { await registration.api.transfer(transfer.id,transfer.revision,targetUid); if(token===epoch.current){setTransfer(null);setTargetUid('');setExpanded(null);setReview(null);registration.refresh();} }
+    catch(error){if(token===epoch.current)setProblem(error.message || 'Transfer failed.');}
+    finally{if(token===epoch.current)setBusy(false);}
+  };
   const deleteHidden = async event => {
     if (busy || !window.confirm('Delete this hidden event? Existing places will be released and registration history retained.')) return;
     const token=++epoch.current; setBusy(true); setProblem('');
@@ -76,7 +87,9 @@ export default function RegistrationEventPanel({ scope, city, user, profile, onC
     {events.map(event => event.moderationOnly ? <section className="card" key={event.id} aria-label="Hidden event moderation"><h3>{event.title}</h3><p>Hidden by organiser · {event.date}</p><p>Only the organiser can open or restore this event.</p><button type="button" disabled={busy} onClick={() => deleteHidden(event)}>Delete event</button></section> : <div key={event.id} id={`event-${event.id}`}><EventCard event={event} user={user} profile={profile}
       isExpanded={expanded === event.id} onExpand={setExpanded} onCalendar={onCalendar} onApprove={prepareApproval}/>
       {event.canApprove && expanded !== event.id && <button disabled={busy} onClick={() => setExpanded(event.id)}>View event awaiting approval</button>}
+      {event.canTransfer && <button type="button" className="btn-light" disabled={busy} onClick={()=>{setTransfer(event);setTargetUid('');setProblem('');}}>Transfer ownership</button>}
     </div>)}
+    {transfer && <section className="card" aria-label="Transfer registration event ownership"><h3>Transfer {transfer.title}</h3><p>The new organiser receives access to this event and its registration responses. This transfers only this occurrence.</p><label>New organiser<select value={targetUid} disabled={busy} onChange={event=>setTargetUid(event.target.value)}><option value="">Select an active member</option>{candidates.map(row=><option key={row.id} value={row.id}>{row.fullName || row.displayName || row.email || row.id}{row.email && row.fullName ? ` · ${row.email}` : ''}</option>)}</select></label><div className="registration-actions"><button type="button" disabled={busy || !targetUid} onClick={confirmTransfer}>{busy?'Transferring…':'Confirm transfer'}</button><button type="button" className="btn-light" disabled={busy} onClick={()=>{setTransfer(null);setTargetUid('');}}>Cancel</button></div></section>}
     {review && <section aria-label="Review event approval">
       <BackControl disabled={busy} onClick={() => setReview(null)} label="Back to registration events"/>
       <h3>Review event</h3>

@@ -1383,7 +1383,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
         { id:'event-management-tab-registration', label:'Registration only events', icon:'📋', selected:eventManagementTab === 'registration', controls:'event-management-panel-registration', onClick:() => setEventManagementTab('registration') },
       ]} />}
       {tab === 'events' && eventManagementTab === 'registration' && <section role="tabpanel" id="event-management-panel-registration" aria-labelledby="event-management-tab-registration" tabIndex={0}>
-        <RegistrationEventPanel scope="management" city={adminCity} user={user} profile={profile} onCalendar={() => setPage('calendar')}/>
+        <RegistrationEventPanel scope="management" city={adminCity} user={user} profile={profile} users={scopedUsers} onCalendar={() => setPage('calendar')}/>
       </section>}
 
       {/* Global message */}

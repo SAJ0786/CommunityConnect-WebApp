@@ -5,6 +5,10 @@ test('client defaults off and cannot call production accidentally', async () => 
   let called = false; const client = createRegistrationClient(() => { called = true; });
   await assert.rejects(client.load('event'), /not enabled/); assert.equal(called, false);
 });
+test('ownership transfer includes the event revision, member and explicit confirmation',async()=>{
+ let call;await createRegistrationClient(async(name,data)=>{call={name,data};return {data:{}};},{enabled:true}).transfer('event',7,'new-owner');
+ assert.deepEqual(call,{name:'transferRegistrationEventOwnership',data:{eventId:'event',expectedRevision:7,toUid:'new-owner',confirmation:'TRANSFER EVENT'}});
+});
 test('client sends explicit revision and stable request ID; excludes inline posters from event save', async () => {
   const calls = []; const client = createRegistrationClient(async (name, data) => { calls.push({ name, data }); return { data: { ok: true } }; }, { enabled: true });
   const answers = { name: 'Demo' }; const submission = createSubmission('event', 2, { revision: 4 }, answers, 1, 'stable-1'); answers.name = 'Changed';

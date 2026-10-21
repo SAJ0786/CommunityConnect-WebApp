@@ -221,7 +221,7 @@ export default function EventCard({
       event.audienceType ? `👥 ${normAudience(event.audienceType)}` : '',
       event.notes?.trim() ? `📝 *Notes:* ${event.notes.trim()}` : '',
       eventShareLink(event) ? `🔗 View event${event.registrationOnly ? ' & register' : ''}: ${eventShareLink(event)}` : '',
-      '', ...STORE_SHARE_LINES, '', '_Shared via Community Events Australia_',
+      '', ...STORE_SHARE_LINES, '', '_Shared via Community Connect Australia_',
     ].filter(Boolean).join('\n');
 
     // Pass poster URL so ShareSheet can offer image sharing when available
