@@ -4,6 +4,11 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "redirects": [
       {
+        "source": "/business-directory-intro",
+        "destination": "https://www.youtube.com/shorts/Sue-L7M0gdo",
+        "type": 302
+      },
+      {
         "source": "/ios",
         "destination": "https://apps.apple.com/au/app/community-events-australia/id6782770347",
         "type": 302
