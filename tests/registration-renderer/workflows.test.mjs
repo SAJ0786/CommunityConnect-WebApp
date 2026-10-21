@@ -207,6 +207,19 @@ test('responses paginate and answer deletion does not cancel reserved places',as
   assert.equal(f.calls.filter(row=>row[0]==='responses')[1][2],'response-next');await click(view,'Permanently delete answers only');await click(view,'Confirm delete answers');
   assert.equal(f.calls.find(row=>row[0]==='deleteAnswers')[1][3],'DELETE ANSWERS');assert.equal(f.detail().ownRegistration.places,3);view.unmount();
 });
+
+test('viewed responses reuse form controls read only and preserve submitted consent',async()=>{
+ const f=fixture({manager:true,registered:true}),view=await mount(f);await card(view);await click(view,'Registration responses');
+ const response=view.root.findByProps({className:'card registration-response'});
+ const inputs=response.findAllByType('input');
+ const name=inputs.find(node=>node.props.type==='text'),consent=inputs.find(node=>node.props.type==='checkbox');
+ assert.equal(name.props.value,'Fictional member');assert.equal(name.props.readOnly,true);
+ assert.equal(consent.props.checked,true);assert.equal(consent.props.disabled,true);
+ await act(async()=>{name.props.onChange({target:{value:'Changed'}});consent.props.onChange({target:{checked:false}});});
+ assert.equal(f.detail().ownRegistration.answers.name,'Fictional member');assert.equal(f.detail().ownRegistration.answers.consent,true);
+ assert.equal(response.findAllByType('button').some(node=>node.props.type==='submit'),false);
+ assert.ok(text(response.toJSON?.() || view.toJSON()).includes('Read only'));view.unmount();
+});
 test('production submission returns to the event card with current registration, not a confirmation route',async()=>{
   const f=fixture(),returned=[];
   const view=await mount(f,{operationsOnly:true,initialEventId:'example',initialAction:'register',onSubmitted:event=>returned.push(event)});

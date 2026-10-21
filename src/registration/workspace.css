@@ -137,6 +137,8 @@
 
 /* Agreements use the entire group width, including desktop two-column forms. */
 .registration-participant-group > .registration-answer:is([data-field-type="consent"],[data-field-type="textarea"],[data-field-type="radio"],[data-field-type="checkboxes"]) { grid-column:1 / -1; }
+.registration-participant-group[data-readonly] :is(input,textarea,select) { color:var(--cc-text); opacity:1; -webkit-text-fill-color:currentColor; }
+.registration-participant-group[data-readonly] :is(input,textarea,select):disabled { cursor:default; }
 
 .registration-event-landing { box-sizing:border-box; width:100%; min-width:0; max-width:980px; margin:0 auto; padding:12px; }
 .registration-event-landing > .cc-back-control { margin-bottom:12px; }

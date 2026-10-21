@@ -2,13 +2,13 @@ import BackControl from '../components/BackControl';
 import React, { useEffect, useRef, useState } from 'react';
 import { EVENT_TYPES } from '../utils/constants';
 import { cityLabel } from '../utils/cities';
-import { createDraft, validateAnswers, registrationFieldGroups } from './prototypeModel.mjs';
+import { createDraft, validateAnswers } from './prototypeModel.mjs';
 import { createSubmission } from './registrationClient.mjs';
 import { eventDraftFromDetail, answersForReview, mergeRegistrationPage, registrantName, registrationReviewDetail } from './registrationViewModel.mjs';
 import { privateVenueLinks } from './privateVenue.mjs';
 import { registrationEntryAllowed, registrationEventEnded } from './registrationStatus.mjs';
 import RegistrationEditor from './RegistrationEditor';
-import AnswerField from './AnswerField';
+import RegistrationFields from './RegistrationFields';
 import RegistrationReview from './RegistrationReview';
 import PagePanel from '../components/PagePanel';
 import RegistrationSummary from './RegistrationSummary';
@@ -220,7 +220,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       <RegistrationSummary event={detail.event} places={detail.event.status !== 'cancelled' && detail.ownRegistration?.status === 'registered' ? detail.ownRegistration.places : 0}/>
       {detail.event.status === 'cancelled' && <p role="status">{detail.event.deleted ? 'Event deleted' : 'Event cancelled'} — no places reserved</p>}{detail.event.notes && <p className="registration-event-notes">{detail.event.notes}</p>}
       {detail.privateDetails ? <section className="registration-venue-panel"><h3>Private venue</h3><p>{detail.privateDetails.address}</p>{links && <div className="registration-actions"><a href={links.map} target="_blank" rel="noreferrer">View map</a><a href={links.directions} target="_blank" rel="noreferrer">Directions</a></div>}{detail.privateDetails.hasPoster && <button disabled={busy} onClick={() => run(async valid => { const result = await api.poster(detail.event.id); if (valid() && ['image/jpeg','image/png','image/webp'].includes(result.mime)) setPoster(`data:${result.mime};base64,${result.base64}`); })}>View private poster</button>}{poster && <img className="registration-poster" src={poster} alt="Private event poster"/>}</section> : <p>{detail.event.status === 'cancelled' ? 'Private venue and poster access is no longer available.' : 'The full address and poster are available after confirmed registration.'}</p>}
-      {detail.event.status === 'cancelled' && detail.ownRegistration && <section className="registration-venue-panel"><h3>Registration history</h3><p>Previous booking: {detail.ownRegistration.places} places. No places are currently reserved.</p>{!detail.ownRegistration.fields && <button disabled={busy} onClick={() => run(async valid=>{const fresh=await api.load(detail.event.id);if(valid())setDetail(fresh);})}>View saved registration</button>}{(detail.ownRegistration.fields || []).map(field => <div key={field.id}><h4>{field.label}</h4><p>{answerText(detail.ownRegistration.answers?.[field.id])}</p></div>)}</section>}
+      {detail.ownRegistration && <section className="registration-venue-panel"><h3>{detail.event.status === 'cancelled' ? 'Registration history' : 'My registration · Read only'}</h3><p>{detail.ownRegistration.places} places · {detail.ownRegistration.status}</p>{!detail.ownRegistration.fields && <button disabled={busy} onClick={() => run(async valid=>{const fresh=await api.load(detail.event.id);if(valid())setDetail(fresh);})}>View saved registration</button>}{detail.ownRegistration.answersDeletedAt ? <p>Answers deleted.</p> : <RegistrationFields fields={detail.ownRegistration.fields} answers={detail.ownRegistration.answers} places={detail.ownRegistration.places} readOnly/>}</section>}
       {detail.registrationNeedsReview && <p role="alert">The organiser changed the form. Please review your answers and agree to the current terms again.</p>}
       {!detail.canRegister && <p>{detail.canEditRegistration ? 'New registrations are closed. You can update answers or reduce places until event day.' : 'Registration is closed or unavailable.'}</p>}
       <div className="registration-actions">
@@ -251,9 +251,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       <fieldset disabled={busy || retrySubmission} className="registration-fields">
         <label>Number of attendees<input type="number" min="1" max={detail.occurrences?.length ? 5 : Math.min(5, detail.canRegister ? detail.event.capacity : detail.ownRegistration?.places)} value={places} onChange={e => setPlaces(e.target.value)}/></label>
         {errors.places && <p role="alert">{errors.places}</p>}
-        {registrationFieldGroups(detail.form.fields, places).map(group => <section className="registration-participant-group" key={group.id}>
-          <h3>{group.label}</h3>{group.fields.map(field => <AnswerField key={field.id} field={{...field,label:field.originalLabel || field.label}} value={answers[field.id]} error={errors[field.id]} onChange={value => setAnswers(current => ({ ...current, [field.id]: value }))}/>)}
-        </section>)}
+        <RegistrationFields fields={detail.form.fields} answers={answers} places={places} errors={errors} onChange={(id,value) => setAnswers(current => ({...current,[id]:value}))}/>
       </fieldset>
       <p>Availability is confirmed by the server when you submit.</p>
       {retrySubmission && !busy && <p>The last request is unconfirmed. Retry the same submission, or reload current status before editing.</p>}
@@ -269,7 +267,7 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, sheet, 'Responses'); XLSX.writeFile(book, 'registration-responses.xlsx'); if (valid()) setNotice(`${rows.length} responses exported.`);
     })}>Download all responses Excel</button>{responses.map(row => <details className="card registration-response" key={row.registrationId}>
       <summary>{registrantName(row)}</summary>
-      <section aria-label="Submitted registration form"><h3>Registration form</h3><p>{row.status} · {row.places} {row.places === 1 ? 'place' : 'places'}</p><dl>{(row.fields || []).map(field => <div key={field.id}><dt>{field.label}</dt><dd>{answerText(row.answers?.[field.id])}</dd></div>)}</dl>{row.answersDeletedAt ? <p>Answers deleted.</p> : <button disabled={busy} onClick={() => ask('Delete answers', 'This permanently deletes the form answers without changing the reserved places.', async valid => { await api.deleteAnswers(detail.event.id, row.registrationId, row.revision, 'DELETE ANSWERS'); if (valid()) { setResponses(current => current.filter(item => item.registrationId !== row.registrationId)); setNotice('Answers deleted. Reserved places are unchanged.'); } })}>Permanently delete answers only</button>}</section>
+      <section aria-label="Submitted registration form"><h3>Registration form</h3><p>{row.status} · {row.places} {row.places === 1 ? 'place' : 'places'}</p>{!row.answersDeletedAt && <><p className="small">Submitted registration · Read only</p><RegistrationFields fields={row.fields} answers={row.answers} places={row.places} readOnly/></>}{row.answersDeletedAt ? <p>Answers deleted.</p> : <button disabled={busy} onClick={() => ask('Delete answers', 'This permanently deletes the form answers without changing the reserved places.', async valid => { await api.deleteAnswers(detail.event.id, row.registrationId, row.revision, 'DELETE ANSWERS'); if (valid()) { setResponses(current => current.filter(item => item.registrationId !== row.registrationId)); setNotice('Answers deleted. Reserved places are unchanged.'); } })}>Permanently delete answers only</button>}</section>
     </details>)}{responseCursor && <button disabled={busy} onClick={() => responsePage(responseCursor)}>Load more responses</button>}</section>}
   </main>;
 }
