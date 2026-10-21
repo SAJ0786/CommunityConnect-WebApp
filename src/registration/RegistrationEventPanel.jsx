@@ -3,6 +3,7 @@ import { CITY_OPTIONS, DEFAULT_CITY } from '../utils/cities';
 import React, { useEffect, useRef, useState } from 'react';
 import BackControl from '../components/BackControl';
 import EventCard from '../components/EventCard';
+import UserTransferPicker from '../components/UserTransferPicker';
 import { useRegistration, useRegistrationFeed } from './RegistrationContext';
 import { registrationReviewDetail } from './registrationViewModel.mjs';
 import RegistrationReview from './RegistrationReview';
@@ -89,7 +90,7 @@ export default function RegistrationEventPanel({ scope, city, user, profile, use
       {event.canApprove && expanded !== event.id && <button disabled={busy} onClick={() => setExpanded(event.id)}>View event awaiting approval</button>}
       {event.canTransfer && <button type="button" className="btn-light" disabled={busy} onClick={()=>{setTransfer(event);setTargetUid('');setProblem('');}}>Transfer ownership</button>}
     </div>)}
-    {transfer && <section className="card" aria-label="Transfer registration event ownership"><h3>Transfer {transfer.title}</h3><p>The new organiser receives access to this event and its registration responses. This transfers only this occurrence.</p><label>New organiser<select value={targetUid} disabled={busy} onChange={event=>setTargetUid(event.target.value)}><option value="">Select an active member</option>{candidates.map(row=><option key={row.id} value={row.id}>{row.fullName || row.displayName || row.email || row.id}{row.email && row.fullName ? ` · ${row.email}` : ''}</option>)}</select></label><div className="registration-actions"><button type="button" disabled={busy || !targetUid} onClick={confirmTransfer}>{busy?'Transferring…':'Confirm transfer'}</button><button type="button" className="btn-light" disabled={busy} onClick={()=>{setTransfer(null);setTargetUid('');}}>Cancel</button></div></section>}
+    {transfer && <section className="card" aria-label="Transfer registration event ownership"><h3>Transfer {transfer.title}</h3><p>The new organiser receives access to this event and its registration responses. This transfers only this occurrence.</p><UserTransferPicker key={transfer.id} users={candidates} value={targetUid} disabled={busy} onChange={setTargetUid}/><div className="registration-actions"><button type="button" disabled={busy || !targetUid} onClick={confirmTransfer}>{busy?'Transferring…':'Confirm transfer'}</button><button type="button" className="btn-light" disabled={busy} onClick={()=>{setTransfer(null);setTargetUid('');}}>Cancel</button></div></section>}
     {review && <section aria-label="Review event approval">
       <BackControl disabled={busy} onClick={() => setReview(null)} label="Back to registration events"/>
       <h3>Review event</h3>

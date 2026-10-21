@@ -1,4 +1,5 @@
 import BackControl from '../components/BackControl';
+import UserTransferPicker from '../components/UserTransferPicker';
 import ExperienceSwitch from '../components/ExperienceSwitch';
 import { normalisePhone, userMatchesSearch } from '../utils/adminUserSearch.mjs';
 import { EVENT_ADMIN_GROUPS } from '../utils/adminNavigation.mjs';
@@ -1700,15 +1701,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   <p className="small" style={{ margin:'0 0 10px', color:'var(--muted)' }}>
                     Choose the user who will become the owner of every selected event.
                   </p>
-                  <select value={transferToUid} onChange={e => { setTransferToUid(e.target.value); setTransferError(''); }}
-                    style={{ width:'100%', marginBottom:10 }}>
-                    <option value="">Select a user</option>
-                    {scopedUsers.filter(isActiveUserProfile).slice().sort((a,b) => (a.fullName || a.email || '').localeCompare(b.fullName || b.email || '')).map(u => (
-                      <option key={u.id} value={u.id}>
-                        {u.fullName || u.email}{u.fullName && u.email ? ` (${u.email})` : ''}
-                      </option>
-                    ))}
-                  </select>
+                  <UserTransferPicker users={scopedUsers.filter(isActiveUserProfile)} value={transferToUid} disabled={transferring} onChange={uid=>{setTransferToUid(uid);setTransferError('');}}/>
                   {transferError && (
                     <div className="error" style={{ marginBottom:10 }}>{transferError}</div>
                   )}
