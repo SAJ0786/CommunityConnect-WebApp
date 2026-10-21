@@ -321,3 +321,16 @@ test('participant form renders selected-place sections, validates every name and
  await act(async()=>view.root.findByProps({id:names[1].props.htmlFor}).props.onChange({target:{value:'Second child'}}));await submit(view);
  const data=f.calls.find(row=>row[0]==='submit')[1];assert.equal(data.places,2);assert.equal(data.answers['participant:1:name'],'First child');assert.equal(data.answers['participant:2:name'],'Second child');assert.equal(data.answers.email,'parent@example.test');assert.equal(data.answers.consent,true);view.unmount();
 });
+
+test('responses destination never renders the legacy event page while a slow response request is pending',async()=>{
+ const f=fixture({manager:true});let finish;
+ f.api.responses=()=>new Promise(resolve=>{finish=resolve;});
+ const view=await mount(f,{operationsOnly:true,initialEventId:'example',initialAction:'responses'});
+ assert.ok(text(view.toJSON()).includes('Loading registration details'));
+ assert.equal(view.root.findAllByProps({className:'registration-summary'}).length,0);
+ assert.equal(view.root.findAllByType('button').some(n=>text(n.props.children)==='Edit event and form'),false);
+ await act(async()=>finish({registrations:[],nextCursor:null}));
+ assert.ok(text(view.toJSON()).includes('Attendee responses'));
+ assert.equal(view.root.findAllByType('button').some(n=>text(n.props.children)==='Edit event and form'),false);
+ await act(async()=>view.unmount());
+});

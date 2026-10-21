@@ -48,7 +48,7 @@ const dateChip = (d) => {
 
 export default function EventCard({
   event: sourceEvent, user, profile, onEdit, onDelete, onCopy,
-  isExpanded, onExpand, isGuest, onApprove,
+  isExpanded, onExpand, isGuest, onApprove, registrationCardDetail,
   savedIds = [], onSaveToggle, onStreamStart, onCalendar, onContactHost, onReminder, onNiazArrangement, onEditSeries, onDeleteSeries, imagePriority = false
 }) {
   const registration = useRegistration();
@@ -59,6 +59,7 @@ export default function EventCard({
   const [registrationError, setRegistrationError] = useState('');
   const [registrationBusy, setRegistrationBusy] = useState(false);
   const registrationKey = [user?.uid, sourceEvent.id, sourceEvent.revision, registration?.revision].join(':');
+  const initialRegistrationDetail = useRef(registrationCardDetail);
   const fetchPoster = () => {
     if (posterRequest.current?.key === registrationKey) return posterRequest.current.promise;
     const request={key:registrationKey};
@@ -82,7 +83,14 @@ export default function EventCard({
     if (!sourceEvent.registrationOnly || !registration?.api || !pageVisible || !isExpanded) return;
     let current = true;
     setRegistrationError('');
-    (registration.api.card || registration.api.load)(sourceEvent.id).then(async detail => {
+    // A notification landing already fetched current, account-bound card data.
+    // Consume it once; visibility/account/revision changes still reauthorise.
+    const handoff = initialRegistrationDetail.current;
+    initialRegistrationDetail.current = null;
+    const validHandoff = handoff?.uid === user?.uid && handoff?.revision === registration?.revision
+      && handoff?.detail?.event?.id === sourceEvent.id && handoff.detail.event.revision === sourceEvent.revision;
+    const request = validHandoff ? Promise.resolve(handoff.detail) : (registration.api.card || registration.api.load)(sourceEvent.id);
+    request.then(async detail => {
       if (!current) return;
       setPrivateState({ key: registrationKey, detail, poster: null });
       if (detail.privateDetails?.hasPoster && thumbnail?.key !== registrationKey) {

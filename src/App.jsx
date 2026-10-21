@@ -144,7 +144,7 @@ export default function App() {
     return onSnapshot(doc(db, 'users', user.uid), snapshot => { if (snapshot.exists() && auth.currentUser?.uid === user.uid) setProfile(snapshot.data()); }, () => {});
   }, [user?.uid, user?.isAnonymous]);
   const [registrationTarget, setRegistrationTarget] = useState(null);
-  const [registrationAction, setRegistrationAction] = useState('history');
+  const [registrationAction, setRegistrationAction] = useState('card');
   const [registrationRevision, setRegistrationRevision] = useState(0);
   const [profileVerified, setProfileVerified] = useState(false);
   const registrationApi = useMemo(() => !REGISTRATION_ENABLED || !user?.uid ? null : createRegistrationClient(
@@ -162,7 +162,7 @@ export default function App() {
       return;
     }
     const target = registrationEntry(window.location.search, user.uid);
-    if (target) { setRegistrationTarget(target); setRegistrationAction('history'); setPage('registration'); }
+    if (target) { setRegistrationTarget(target); setRegistrationAction('card'); setPage('registration'); }
   }, [user?.uid, profileVerified]);
   const [events, setEvents]             = useState([]);
   const [eventsLoading, setEventsLoading] = useState(true);
@@ -653,10 +653,10 @@ export default function App() {
     if (!REGISTRATION_ENABLED || row.module !== 'registration') return false;
     const target = registrationEntry('?registration=' + encodeURIComponent(row.eventId || row.targetId || '') + '&recipient=' + encodeURIComponent(row.recipientUid || user.uid), user.uid);
     if (!target) return false;
-    selectExperience('events'); setRegistrationTarget(target); setRegistrationAction('history'); setPage('registration'); return true;
+    selectExperience('events'); setRegistrationTarget(target); setRegistrationAction('card'); setPage('registration'); return true;
   };
   const isGuest    = authMode === 'guest';
-  const openRegistration = (event, action = 'history') => {
+  const openRegistration = (event, action = 'card') => {
     if (isGuest) { signOut(auth).catch(error => window.showToast?.(error.message, 'error')); return; }
     setRegistrationTarget(event.id); setRegistrationAction(action); setPage('registration');
   };
@@ -819,7 +819,7 @@ export default function App() {
               : <CalendarView {...shared} />
           )}
 
-          {REGISTRATION_ENABLED && ['registration', 'registration-create'].includes(activePage) && <RegistrationRoute key={[user?.uid, profile?.role, profile?.adminCity, selectedCity, activePage, registrationTarget, registrationAction].join(':')} user={user} profile={profile} city={selectedCity} operationsOnly initialAction={registrationAction} initialCreate={activePage === 'registration-create'} initialEventId={activePage === 'registration' ? registrationTarget : null} onSubmitted={event => { setRegistrationTarget(null); setRegistrationRevision(value => value + 1); setFocusEventId(event.id); setPage('home'); }} onBack={() => { setRegistrationTarget(null); setRegistrationRevision(value => value + 1); setPage('home'); }} onRequireSignIn={() => signOut(auth).catch(error => window.showToast?.(error.message, 'error'))}/>}
+          {REGISTRATION_ENABLED && ['registration', 'registration-create'].includes(activePage) && <RegistrationRoute key={[user?.uid, profile?.role, profile?.adminCity, selectedCity, activePage, registrationTarget, registrationAction].join(':')} user={user} profile={profile} city={selectedCity} savedIds={savedIds} onSaveToggle={handleSaveToggle} onStreamStart={onStreamStart} onCalendar={() => setPage('calendar')} isGuest={isGuest} operationsOnly initialAction={registrationAction} initialCreate={activePage === 'registration-create'} initialEventId={activePage === 'registration' ? registrationTarget : null} onSubmitted={event => { setRegistrationTarget(null); setRegistrationRevision(value => value + 1); setFocusEventId(event.id); setPage('home'); }} onBack={() => { setRegistrationTarget(null); setRegistrationRevision(value => value + 1); setPage('home'); }} onRequireSignIn={() => signOut(auth).catch(error => window.showToast?.(error.message, 'error'))}/>}
           {!isGuest && activePage === 'add'        && <AddEvent      user={user} profile={profile} onSaved={afterSave} setPage={setPage} events={events} initialEvent={editingEvent?.id === undefined ? editingEvent : null} />}
           {!isGuest && activePage === 'edit'       && <EditEvent     editingEvent={editingEvent} onSaved={afterSave} user={user} profile={profile} events={events} />}
           {!isGuest && activePage === 'my'         && <MyEvents      {...shared} />}

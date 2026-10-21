@@ -49,10 +49,19 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
     setItems(current => mergeRegistrationPage(next ? current : [], result.events || [])); setCursor(result.nextCursor); setScope(nextScope);
   });
   const open = (id, action) => run(async valid => {
-    clearPrivate(); setDraft(null); if (currentId.current !== id) setPendingPoster(null); currentId.current = id;
+    clearPrivate(); setDraft(null); if (action === 'responses') setStage('loading'); if (currentId.current !== id) setPendingPoster(null); currentId.current = id;
     const fresh = !action || action === 'history' ? await (api.card || api.load)(id) : await api.load(id, action === 'register');
     if (!valid()) return;
-    setDetail(fresh); setStage('card'); submission.current = null; setRetrySubmission(false);
+    setDetail(fresh); submission.current = null; setRetrySubmission(false);
+    // Keep the destination in its loading state until responses are ready.
+    // Rendering the legacy card here caused a visible intermediate-page flash.
+    if (action === 'responses') {
+      if (!fresh.canManage) throw new Error('You cannot view responses for this event.');
+      const result = await api.responses(id);
+      if (valid()) { setResponses(result.registrations || []); setResponseCursor(result.nextCursor); setStage('responses'); }
+      return;
+    }
+    setStage('card');
     if (registrationEventEnded(fresh) && action !== 'responses') return;
     if (action === 'register') {
       if (!requireMember()) return;
@@ -65,9 +74,6 @@ export default function RegistrationWorkspace({ api, enabled = false, user, prof
       setDraft(eventDraftFromDetail(fresh, eventTypes)); setStage('editor');
       if (action === 'copy') { createKey.current = reference(); currentId.current = null; setDetail(null); setDraft(current => ({ ...current, seriesId:undefined, occurrenceIndex:undefined, occurrenceCount:undefined, recurrenceRule:undefined })); }
       loadTemplates(valid).catch(error => { if (valid()) setNotice(error.message || 'Saved templates unavailable; built-in templates are ready.'); });
-    } else if (action === 'responses') {
-      const result = await api.responses(id);
-      if (valid()) { setResponses(result.registrations || []); setResponseCursor(result.nextCursor); setStage('responses'); }
     } else if (action === 'approve') {
       if (!fresh.canApprove || !(fresh.event.status === 'pending' || fresh.event.hasPendingChanges)) throw new Error('This event is no longer awaiting your approval. Reload current status.');
       setNotice('Review the event, private poster and registration form before choosing an approval action.');

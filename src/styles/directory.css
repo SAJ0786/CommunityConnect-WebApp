@@ -105,6 +105,8 @@
 .business-browse-city { width:240px; max-width:100%; }
 .business-browse-search { margin:12px 0; }
 .business-service-filter { max-width:400px; margin:8px 0 18px; }
+/* Native select text needs its own vertical metrics; inherited line-height and padding can clip the selected value. */
+.business-directory .business-service-filter select { height:auto; min-height:48px; padding:10px 36px 10px 12px; line-height:normal; appearance:auto; }
 .directory-card.directory-browse-card { padding:0; border-radius:16px; overflow:hidden; }
 .directory-browse-card summary { display:flex; align-items:center; gap:12px; padding:14px; border:0; list-style:none; color:var(--cc-text); }
 .directory-browse-card summary::-webkit-details-marker { display:none; }

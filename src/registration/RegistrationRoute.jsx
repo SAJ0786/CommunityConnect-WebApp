@@ -4,11 +4,13 @@ import { auth, functions } from '../firebase/firebase';
 import { REGISTRATION_ENABLED } from '../config/releaseGates.mjs';
 import { createRegistrationClient } from './registrationClient.mjs';
 import RegistrationWorkspace from './RegistrationWorkspace';
+import RegistrationEventLanding from './RegistrationEventLanding';
 import { accountBoundTransport } from './sessionTransport.mjs';
 export default function RegistrationRoute(props) {
   const uid = props.user?.uid;
   const api = useMemo(() => createRegistrationClient(accountBoundTransport(
     (name, data) => httpsCallable(functions, name)(data), uid, () => auth.currentUser?.uid
   ), { enabled: REGISTRATION_ENABLED }), [uid]);
+  if (props.initialAction === 'card' && props.initialEventId) return <RegistrationEventLanding {...props} api={api} enabled={REGISTRATION_ENABLED} eventId={props.initialEventId}/>;
   return <RegistrationWorkspace {...props} api={api} enabled={REGISTRATION_ENABLED}/>;
 }
