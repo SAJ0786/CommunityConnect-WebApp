@@ -3,7 +3,7 @@ import { memberCallableRequest } from '../memberCallable.mjs';
 
 export const DIRECTORY_FUNCTIONS_PORT = 5002;
 export const DIRECTORY_FUNCTIONS_REGION = 'australia-southeast1';
-const supported = new Set(['callWebMemberOperation', 'completeMemberRegistration', 'sendBusinessEnquiry', 'submitSupportRequest', 'submitDirectoryConversationReport', 'lookupBusinessAbnForSubmission', 'verifyBusinessAbn', 'adminDeleteUser', 'adminRestoreUser', 'listDirectoryOperations', 'decideDirectoryReport', 'archiveEventRecords', 'archiveFutureSeriesEvents', 'getEventReminder', 'setEventReminder', 'removeEventReminder']);
+const supported = new Set(['callWebMemberOperation', 'completeMemberRegistration', 'sendBusinessEnquiry', 'transferBusinessOwnership', 'submitSupportRequest', 'submitDirectoryConversationReport', 'lookupBusinessAbnForSubmission', 'verifyBusinessAbn', 'adminDeleteUser', 'adminRestoreUser', 'listDirectoryOperations', 'decideDirectoryReport', 'archiveEventRecords', 'archiveFutureSeriesEvents', 'getEventReminder', 'setEventReminder', 'removeEventReminder']);
 
 // Unsigned emulator token. It is generated from synthetic identities only and is
 // sent exclusively to the fixed loopback Functions endpoint, never to Firebase production.

@@ -13,6 +13,17 @@ function setup(identity = 'member', options = {}) {
     storage: { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value) } });
   return { ...transport, gateway, saved };
 }
+
+test('business ownership transfer uses the callable and does not write ownership from the web client',async()=>{
+ const calls=[];
+ const f=setup('admin',{callFunction:async(name,payload)=>{calls.push({name,payload});return {businessId:'example',ownerId:'review-customer'};}});
+ const ownerId=f.records.get('businesses/example').ownerId;
+ await f.gateway.action('business.transfer',{id:'example',toUid:'review-customer',expectedOwnerId:ownerId,confirmation:'TRANSFER BUSINESS',ownerEmail:'forged'});
+ assert.deepEqual(calls,[{name:'transferBusinessOwnership',payload:{businessId:'example',toUid:'review-customer',expectedOwnerId:ownerId,confirmation:'TRANSFER BUSINESS'}}]);
+ assert.equal(f.writes.length,0);
+ await assert.rejects(setup('member').gateway.action('business.transfer',{id:'example'}),/Administrator/);
+ await assert.rejects(f.gateway.action('business.transfer',{id:'melbourne'}),/city/);
+});
 test('isolated boundary rejects production projects, remote hosts and unexpected endpoints', () => {
   const settings = { projectId: 'demo-community-connect-web', hostname: 'localhost', host: '127.0.0.1', port: 8089 };
   assert.doesNotThrow(() => assertDirectoryTestEnvironment(settings));

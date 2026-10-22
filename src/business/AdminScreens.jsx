@@ -4,9 +4,12 @@ import { historical, published, scopedBusinesses, aggregateStatistics } from './
 import { Badge, Panel, Field, Check, Metrics, Empty, ConfirmDialog } from './WorkspaceParts';
 import { PROMOTION_AUDIENCE_ENABLED } from '../config/releaseGates.mjs';
 import { CITY_OPTIONS } from '../utils/cities';
+import UserTransferPicker from '../components/UserTransferPicker';
 
-function BusinessReview({ business, history, onAction }) {
+function BusinessReview({ business, history, onAction, members = [], management = false }) {
   const [checked, setChecked] = useState(false), [waiver, setWaiver] = useState(false), [reviewed, setReviewed] = useState(false), [tier, setTier] = useState(business.tier || 'free'), [founding, setFounding] = useState(!!business.foundingMember), [dialog, setDialog] = useState(''), [error, setError] = useState(''), [checking, setChecking] = useState(false);
+  const [transferOpen,setTransferOpen]=useState(false),[targetId,setTargetId]=useState('');
+  const transferMembers=members.filter(row=>row.id!==business.ownerId && row.isActive!==false && row.active!==false && !row.migratedToUid && !row.bannedAt && !row.archivedAt && !row.accountDeletedAt && !['inactive','banned','deleted','archived','suspended'].includes(row.accountStatus));
   const completeReferrer = business.referrer?.name && business.referrer?.phone && business.referrer?.location && business.referrer?.consentConfirmed;
   const verified = business.abrVerification?.status === 'verified';
   const ready = checked && completeReferrer && (business.abn ? verified : waiver) && (!history.length || reviewed);
@@ -21,8 +24,12 @@ function BusinessReview({ business, history, onAction }) {
         <Field label={`Listing tier for ${business.name}`}><select value={business.abn ? tier : 'free'} disabled={!business.abn} onChange={event => setTier(event.target.value)}><option value="free">Free</option><option value="standard">Standard</option><option value="featured">Featured</option></select></Field><Check checked={founding} onChange={event => setFounding(event.target.checked)}>Founding member</Check>
         <div className="bw-actions"><button disabled={!ready} onClick={() => setDialog('approve')}>Approve and publish</button><button className="btn-light" onClick={() => setDialog('reject')}>Request changes</button></div></>}
       <div className="bw-actions">{(business.status === 'approved' || business.hasPublishedVersion) && <button className="btn-light" onClick={() => setDialog('visibility')}>{business.hidden ? 'Restore public visibility' : 'Hide listing'}</button>}<button className="bw-danger" onClick={() => setDialog('archive')}>Archive listing</button></div>
-    </>}{error && <p role="alert" className="bw-error">{error}</p>}
-    {dialog && <ConfirmDialog title={label[dialog]} description={dialog === 'approve' ? `Publish ${business.name} after review.` : dialog === 'archive' ? 'The listing and linked promotions will leave public display. History is retained.' : 'This decision is retained with the listing history.'} requireReason={dialog !== 'approve'} confirmLabel={label[dialog]} onClose={() => setDialog('')} onConfirm={reason => onAction(`business.${dialog}`, { id: business.id, reason, tier: business.abn ? tier : 'free', foundingMember: founding, referrerConfirmed: checked, publishWithoutAbn: !business.abn && waiver, historyReviewed: reviewed, hidden: !business.hidden })}/>}
+    </>}
+    {management && !historical(business) && <button className="btn-light" onClick={()=>{setTransferOpen(!transferOpen);setTargetId('');}}>Transfer ownership</button>}
+    {transferOpen && !historical(business) && <section aria-label="Transfer business ownership"><h3>Transfer ownership</h3><p>The new owner will manage this listing and linked promotions and receive new enquiries. Existing conversations stay with their original participants.</p><UserTransferPicker users={transferMembers} label="New business owner" value={targetId} onChange={setTargetId}/><button disabled={!targetId} onClick={()=>setDialog('transfer')}>Transfer to selected member</button><button className="btn-light" onClick={()=>setTransferOpen(false)}>Cancel transfer</button></section>}
+    {dialog==='transfer' && <ConfirmDialog title="Transfer business ownership" description={`Transfer ${business.name} to ${transferMembers.find(row=>row.id===targetId)?.fullName || 'the selected member'}?`} confirmLabel="Confirm transfer" onClose={()=>setDialog('')} onConfirm={async()=>{await onAction('business.transfer',{id:business.id,toUid:targetId,expectedOwnerId:business.ownerId,confirmation:'TRANSFER BUSINESS'});setTransferOpen(false);setTargetId('');}}/>}
+    {error && <p role="alert" className="bw-error">{error}</p>}
+    {dialog && dialog!=='transfer' && <ConfirmDialog title={label[dialog]} description={dialog === 'approve' ? `Publish ${business.name} after review.` : dialog === 'archive' ? 'The listing and linked promotions will leave public display. History is retained.' : 'This decision is retained with the listing history.'} requireReason={dialog !== 'approve'} confirmLabel={label[dialog]} onClose={() => setDialog('')} onConfirm={reason => onAction(`business.${dialog}`, { id: business.id, reason, tier: business.abn ? tier : 'free', foundingMember: founding, referrerConfirmed: checked, publishWithoutAbn: !business.abn && waiver, historyReviewed: reviewed, hidden: !business.hidden })}/>}
   </Panel>;
 }
 
@@ -34,13 +41,13 @@ export function PromotionReview({ promotion, business, onAction, audienceEnabled
   </Panel>;
 }
 
-export function Reviews({ businesses, promotions, profile, onAction, management = false, audienceEnabled = PROMOTION_AUDIENCE_ENABLED }) {
+export function Reviews({ businesses, promotions, profile, onAction, management = false, members = [], audienceEnabled = PROMOTION_AUDIENCE_ENABLED }) {
   const [tab, setTab] = useState('businesses'), [query, setQuery] = useState(''), [status, setStatus] = useState(management ? 'all' : 'pending');
   const scoped = scopedBusinesses(businesses, profile);
   const promotionBusinesses = audienceEnabled ? businesses : scoped;
   const rows = (tab === 'businesses' ? scoped : promotions.filter(row => promotionBusinesses.some(b => b.id === row.businessId))).filter(row => (status === 'all' || row.status === status) && `${row.name || row.title}`.toLowerCase().includes(query.toLowerCase()));
   return <><div className="bw-tabs" aria-label="Review type">{['businesses','promotions'].map(key => <button key={key} aria-pressed={tab === key} onClick={() => setTab(key)}>{key === 'businesses' ? 'Businesses' : 'Promotions'}</button>)}</div><div className="bw-grid"><Field label="Search reviews"><input value={query} onChange={event => setQuery(event.target.value)}/></Field><Field label="Review status"><select value={status} onChange={event => setStatus(event.target.value)}>{['all','pending','approved','active','rejected','archived','deleted'].map(value => <option key={value} value={value}>{value === 'all' ? 'All statuses' : value}</option>)}</select></Field></div><p>{rows.length} matching records</p>
-    {!rows.length ? <Empty title="No matching reviews"><p>Choose another status or search term.</p></Empty> : <div className="bw-stack">{rows.map(row => tab === 'businesses' ? <BusinessReview key={row.id + row.status} business={row} history={scoped.filter(other => other.id !== row.id && (row.abn && other.abn === row.abn || other.name.toLowerCase() === row.name.toLowerCase()))} onAction={onAction}/> : <PromotionReview key={[row.id, row.status, row.requestedAudience].join(':')} promotion={row} business={promotionBusinesses.find(b => b.id === row.businessId)} audienceEnabled={audienceEnabled} onAction={onAction}/>)}</div>}
+    {!rows.length ? <Empty title="No matching reviews"><p>Choose another status or search term.</p></Empty> : <div className="bw-stack">{rows.map(row => tab === 'businesses' ? <BusinessReview key={row.id + row.status} business={row} management={management} members={members.filter(member=>profile.role==='superAdmin' || (member.adminCity || member.defaultCity || 'sydney')===(profile.adminCity || profile.defaultCity || 'sydney'))} history={scoped.filter(other => other.id !== row.id && (row.abn && other.abn === row.abn || other.name.toLowerCase() === row.name.toLowerCase()))} onAction={onAction}/> : <PromotionReview key={[row.id, row.status, row.requestedAudience].join(':')} promotion={row} business={promotionBusinesses.find(b => b.id === row.businessId)} audienceEnabled={audienceEnabled} onAction={onAction}/>)}</div>}
   </>;
 }
 

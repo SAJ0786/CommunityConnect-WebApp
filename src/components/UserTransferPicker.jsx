@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { userMatchesSearch } from '../utils/adminUserSearch.mjs';
 
 const memberName = member => member.fullName || member.displayName || member.name || member.email || member.phone || member.phoneNumber || 'Member';
-export default function UserTransferPicker({ users = [], value = '', onChange, disabled = false }) {
+export default function UserTransferPicker({ users = [], value = '', onChange, disabled = false, label = 'New organiser' }) {
   const [query, setQuery] = useState('');
   const selected = users.find(member => member.id === value);
   const selectedName = selected ? memberName(selected) : '';
@@ -10,7 +10,7 @@ export default function UserTransferPicker({ users = [], value = '', onChange, d
   useEffect(() => { if (value && !selected) onChange(''); }, [value, selected]);
   const matches = query.trim().length >= 2 && !selected ? users.filter(member => userMatchesSearch(member, query)) : [];
   return <div style={{marginBottom:12}}>
-    <label>New organiser
+    <label>{label}
       <input type="search" autoComplete="off" placeholder="Search by name, phone number or email" value={query} disabled={disabled}
         onChange={event => {setQuery(event.target.value);if(value)onChange('');}} style={{width:'100%'}}/>
     </label>

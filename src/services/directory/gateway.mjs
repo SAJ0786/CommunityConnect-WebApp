@@ -188,6 +188,10 @@ export function createDirectoryGateway({ db, user, assertOpen = () => {}, storag
       requireDirectoryAdmin(profile);
       return addDirectoryCategory({ db, sdk, user, payload, service: type === 'category.addService', assertOpen: open });
     }
+    if (type === 'business.transfer') {
+      requireDirectoryAdmin(profile, await read('businesses', id));
+      return invoke('transferBusinessOwnership', {businessId:id,toUid:payload.toUid,expectedOwnerId:payload.expectedOwnerId,confirmation:payload.confirmation});
+    }
     if (type === 'member.update') {
       requireDirectoryAdmin(profile, null, { superOnly: true });
       if (typeof payload.isActive !== 'boolean') throw new Error('Choose the intended account access state.');
