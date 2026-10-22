@@ -1,7 +1,7 @@
 import BackControl from '../components/BackControl';
 import UserTransferPicker from '../components/UserTransferPicker';
 import ExperienceSwitch from '../components/ExperienceSwitch';
-import { normalisePhone, userMatchesSearch } from '../utils/adminUserSearch.mjs';
+import { normalisePhone, userMatchesSearch, isTransferMemberEligible } from '../utils/adminUserSearch.mjs';
 import { EVENT_ADMIN_GROUPS } from '../utils/adminNavigation.mjs';
 import { upcomingEventsCsv } from '../utils/adminEventExport.mjs';
 import DiagnosticsRegister from '../components/DiagnosticsRegister';
@@ -1701,7 +1701,7 @@ export default function AdminDashboard({ events, user, profile, setPage, setEdit
                   <p className="small" style={{ margin:'0 0 10px', color:'var(--muted)' }}>
                     Choose the user who will become the owner of every selected event.
                   </p>
-                  <UserTransferPicker users={scopedUsers.filter(isActiveUserProfile)} value={transferToUid} disabled={transferring} onChange={uid=>{setTransferToUid(uid);setTransferError('');}}/>
+                  <UserTransferPicker users={scopedUsers.filter(isTransferMemberEligible)} value={transferToUid} disabled={transferring} onChange={uid=>{setTransferToUid(uid);setTransferError('');}}/>
                   {transferError && (
                     <div className="error" style={{ marginBottom:10 }}>{transferError}</div>
                   )}

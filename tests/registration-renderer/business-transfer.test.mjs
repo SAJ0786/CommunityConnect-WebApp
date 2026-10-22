@@ -9,7 +9,7 @@ const require=createRequire(import.meta.url),outfile=path.join(process.cwd(),'.q
 await build({entryPoints:['src/business/AdminScreens.jsx'],outfile,bundle:true,platform:'node',format:'cjs',plugins:[{name:'react-fixture',setup(builder){builder.onResolve({filter:/^react$/},()=>({path:require.resolve('react'),external:true}));}}]});
 const {Reviews}=require(outfile),text=node=>typeof node==='string'?node:Array.isArray(node)?node.map(text).join(''):(node?.children||[]).map(text).join('');
 const business={id:'shop',name:'Test Shop',ownerId:'old',status:'approved',location:{city:'sydney'},contact:{}};
-const members=[{id:'old',fullName:'Previous Owner',phone:'0400000000',defaultCity:'sydney'},{id:'new',fullName:'Asim Raza',phone:'0496504950',defaultCity:'sydney'},
+const members=[{id:'old',fullName:'Previous Owner',phone:'0400000000',defaultCity:'sydney'},{id:'new',fullName:'Asim Raza',phone:'0496504950',defaultCity:'sydney',role:'superAdmin',migratedToUid:'new'},
  {id:'inactive',fullName:'Asim Inactive',isActive:false,defaultCity:'sydney'},{id:'other',fullName:'Asim Melbourne',defaultCity:'melbourne'}];
 const props={businesses:[business],promotions:[],profile:{role:'admin',defaultCity:'sydney'},members,management:true};
 async function click(view,label){const button=view.root.findAllByType('button').find(node=>text(node)===label);assert.ok(button,label);assert.ok(!button.props.disabled,label);await act(async()=>button.props.onClick());}

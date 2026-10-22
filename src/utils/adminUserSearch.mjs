@@ -5,6 +5,14 @@ export function normalisePhone(value) {
   return digits;
 }
 
+export function isTransferMemberEligible(user) {
+  // Older active profiles can contain a migration marker pointing to themselves.
+  // Only a different destination means this account was migrated away.
+  return user.isActive !== false && user.active !== false && (!user.migratedToUid || user.migratedToUid === user.id)
+    && !user.bannedAt && !user.archivedAt && !user.accountDeletedAt
+    && !['inactive','banned','deleted','archived','suspended'].includes(user.accountStatus);
+}
+
 export function userMatchesSearch(userRecord, queryText) {
   const textQuery = String(queryText || '').trim().toLowerCase();
   if (!textQuery) return true;

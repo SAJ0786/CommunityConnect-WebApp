@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import BackControl from '../components/BackControl';
 import EventCard from '../components/EventCard';
 import UserTransferPicker from '../components/UserTransferPicker';
+import { isTransferMemberEligible } from '../utils/adminUserSearch.mjs';
 import { useRegistration, useRegistrationFeed } from './RegistrationContext';
 import { registrationReviewDetail } from './registrationViewModel.mjs';
 import RegistrationReview from './RegistrationReview';
@@ -26,7 +27,7 @@ export default function RegistrationEventPanel({ scope, city, user, profile, use
   }, []);
   useEffect(() => { epoch.current++; setReview(null); setPoster(null); setExpanded(null); setTransfer(null); setTargetUid(''); setSelectedCity(city || profile?.defaultCity || DEFAULT_CITY); }, [user?.uid, city, profile?.defaultCity, profile?.role]);
   if (!registration?.api) return null;
-  const candidates = users.filter(row => row.id !== transfer?.ownerUid && row.isActive !== false && !row.migratedToUid && !row.bannedAt && !row.archivedAt && !row.accountDeletedAt && !['inactive','banned','deleted','archived','suspended'].includes(row.accountStatus));
+  const candidates = users.filter(row => row.id !== transfer?.ownerUid && isTransferMemberEligible(row));
   const confirmTransfer = async () => {
     const target=candidates.find(row=>row.id===targetUid);
     if (busy || !transfer || !target || !window.confirm(`Transfer this event to ${target.fullName || target.email || 'this member'}? The new organiser will be able to manage this event and its registration responses. Other series occurrences are unchanged.`)) return;

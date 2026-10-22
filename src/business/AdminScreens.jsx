@@ -5,11 +5,12 @@ import { Badge, Panel, Field, Check, Metrics, Empty, ConfirmDialog } from './Wor
 import { PROMOTION_AUDIENCE_ENABLED } from '../config/releaseGates.mjs';
 import { CITY_OPTIONS } from '../utils/cities';
 import UserTransferPicker from '../components/UserTransferPicker';
+import { isTransferMemberEligible } from '../utils/adminUserSearch.mjs';
 
 function BusinessReview({ business, history, onAction, members = [], management = false }) {
   const [checked, setChecked] = useState(false), [waiver, setWaiver] = useState(false), [reviewed, setReviewed] = useState(false), [tier, setTier] = useState(business.tier || 'free'), [founding, setFounding] = useState(!!business.foundingMember), [dialog, setDialog] = useState(''), [error, setError] = useState(''), [checking, setChecking] = useState(false);
   const [transferOpen,setTransferOpen]=useState(false),[targetId,setTargetId]=useState('');
-  const transferMembers=members.filter(row=>row.id!==business.ownerId && row.isActive!==false && row.active!==false && !row.migratedToUid && !row.bannedAt && !row.archivedAt && !row.accountDeletedAt && !['inactive','banned','deleted','archived','suspended'].includes(row.accountStatus));
+  const transferMembers=members.filter(row=>row.id!==business.ownerId && isTransferMemberEligible(row));
   const completeReferrer = business.referrer?.name && business.referrer?.phone && business.referrer?.location && business.referrer?.consentConfirmed;
   const verified = business.abrVerification?.status === 'verified';
   const ready = checked && completeReferrer && (business.abn ? verified : waiver) && (!history.length || reviewed);
