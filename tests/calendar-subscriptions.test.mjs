@@ -66,3 +66,12 @@ test('disabled Auth users get no feed and transient provider failures are retrya
  const h=harness();h.auth.getUser=async()=>({disabled:true});assert.doesNotMatch((await h.feed()).body,/BEGIN:VEVENT/);
  h.auth.getUser=async()=>{throw Error('temporary Auth outage');};assert.equal((await h.feed()).statusCode,503);
 });
+test('resubscribing after revocation cannot revive old secrets or legacy UID links',async()=>{
+ const h=harness();const old=await h.create(request),oldSecret=new URL(old.url).searchParams.get('s');
+ h.data.get('calendarSubscriptions/member').active=false;
+ const fresh=await h.create(request),freshSecret=new URL(fresh.url).searchParams.get('s');
+ assert.equal(h.data.get('calendarSubscriptions/member').legacyEnabled,false);
+ assert.doesNotMatch((await h.feed({s:oldSecret})).body,/BEGIN:VEVENT/);
+ assert.doesNotMatch((await h.feed({t:'member'})).body,/BEGIN:VEVENT/);
+ assert.match((await h.feed({s:freshSecret})).body,/Test Host/);
+});

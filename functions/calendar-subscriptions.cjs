@@ -34,11 +34,12 @@ function createCalendarHandlers({db,auth,HttpsError,serverTimestamp,now=()=>new 
       if(inactive(member.data()) || !member.data().defaultCity || !cities.enabled(member.data().defaultCity))fail('failed-precondition','Choose an available default city before syncing.');
       const hour=now().toISOString().slice(0,13),saved=quota.data()||{},count=saved.hour===hour?Number(saved.count)||0:0;
       if(count>=10)fail('resource-exhausted','Too many new calendar links. Please try again later.');
-      tx.set(tokenRef,{uid,active:true,createdAt:serverTimestamp()});
-      tx.set(limit,{hour,count:count+1,updatedAt:serverTimestamp()});
       const prior=current.data()||{};
+      const generation=(Number(prior.generation)||0)+(prior.active===false?1:0);
+      tx.set(tokenRef,{uid,active:true,generation,createdAt:serverTimestamp()});
+      tx.set(limit,{hour,count:count+1,updatedAt:serverTimestamp()});
       // Only already-used legacy feeds keep UID access. New subscribers never get it.
-      tx.set(subscription,{active:true,legacyEnabled:prior.legacyEnabled===true || (prior.legacyEnabled!==false && Boolean(prior.lastPolled)),updatedAt:serverTimestamp()},{merge:true});
+      tx.set(subscription,{active:true,generation,legacyEnabled:prior.active!==false && (prior.legacyEnabled===true || (prior.legacyEnabled!==false && Boolean(prior.lastPolled))),updatedAt:serverTimestamp()},{merge:true});
     });
     return {url:'https://communityevents.siza.info/cal?s='+secret};
   }
@@ -46,10 +47,10 @@ function createCalendarHandlers({db,auth,HttpsError,serverTimestamp,now=()=>new 
     res.set('Content-Type','text/calendar; charset=utf-8');res.set('Cache-Control','private, no-store');res.set('X-Content-Type-Options','nosniff');
     const unavailable=()=>res.status(200).send(empty());
     try {
-      let uid;
+      let uid,tokenGeneration;
       if(typeof req.query.s==='string' && /^[A-Za-z0-9_-]{43}$/.test(req.query.s)) {
         const token=(await db.collection('calendarFeedTokens').doc(hash(req.query.s)).get()).data();
-        if(!token || token.active!==true)return unavailable();uid=token.uid;
+        if(!token || token.active!==true)return unavailable();uid=token.uid;tokenGeneration=Number(token.generation)||0;
       } else {
         const old=req.query.t || req.query.token;
         if(typeof old!=='string' || !/^[A-Za-z0-9_-]{1,128}$/.test(old))return unavailable();
@@ -58,7 +59,7 @@ function createCalendarHandlers({db,auth,HttpsError,serverTimestamp,now=()=>new 
         uid=old;
       }
       const [profile,cities,subscription]=await Promise.all([account(uid),resolver(),db.collection('calendarSubscriptions').doc(uid).get()]);
-      if(!profile || subscription.data()?.active===false || !profile.defaultCity || !cities.enabled(profile.defaultCity))return unavailable();
+      if(!profile || subscription.data()?.active===false || (tokenGeneration!==undefined && tokenGeneration!==(Number(subscription.data()?.generation)||0)) || !profile.defaultCity || !cities.enabled(profile.defaultCity))return unavailable();
       const city=profile.defaultCity;
       const [ordinary,registrations]=await Promise.all([db.collection('events').where('status','==','active').get(),db.collection('registrationEvents').where('status','==','approved').get()]);
       const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Community Connect Australia//Calendar//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:Community Connect Australia','REFRESH-INTERVAL;VALUE=DURATION:PT1H','X-PUBLISHED-TTL:PT1H'];
@@ -85,7 +86,7 @@ function createCalendarHandlers({db,auth,HttpsError,serverTimestamp,now=()=>new 
       }
       // Recheck changes that occurred while the feed was being assembled.
       const latest=await account(uid),latestSubscription=(await db.collection('calendarSubscriptions').doc(uid).get()).data();
-      if(!latest || latest.defaultCity!==city || latestSubscription?.active===false)return unavailable();
+      if(!latest || latest.defaultCity!==city || latestSubscription?.active===false || (tokenGeneration!==undefined && tokenGeneration!==(Number(latestSubscription?.generation)||0)))return unavailable();
       if(req.query.s){const latestToken=(await db.collection('calendarFeedTokens').doc(hash(req.query.s)).get()).data();if(latestToken?.active!==true)return unavailable();}
       // A read cannot reactivate a revoked subscription or recreate its eligibility.
       await db.collection('calendarSubscriptions').doc(uid).set({lastPolled:serverTimestamp()},{merge:true});
