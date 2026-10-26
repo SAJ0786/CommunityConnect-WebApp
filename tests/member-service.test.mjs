@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import { memberRegistrationPayload } from '../src/utils/profileRegistration.mjs';
 const member = { uid: 'test', phoneNumber: '+61400000000' };
-const details = { fullName: 'Test Member', email: 'test@example.com', privacyAccepted: true, termsAccepted: true };
+const details = { fullName: 'Test Member', email: 'test@example.com', privacyAccepted: true, termsAccepted: true, defaultCity: 'sydney' };
 
 function service({ profile = {}, fail, duringCall } = {}) {
   const calls = [];

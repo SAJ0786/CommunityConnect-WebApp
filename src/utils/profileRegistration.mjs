@@ -10,7 +10,8 @@ export function memberRegistrationPayload(user, data = {}) {
     throw new Error('Enter your full name (2–120 characters) and a valid email address.');
   }
   if (data.privacyAccepted !== true || data.termsAccepted !== true) throw new Error('Please accept the current policies.');
+  if (typeof data.defaultCity !== 'string' || !data.defaultCity.trim()) throw new Error('Choose your default city.');
   // The callable owns UID, roles, verified phone and registration timestamps.
   return { fullName: cleanMemberName(data.fullName), email: cleanMemberEmail(data.email),
-    privacyAccepted: true, termsAccepted: true, legalVersion: LEGAL_DOCUMENT_VERSION };
+    privacyAccepted: true, termsAccepted: true, legalVersion: LEGAL_DOCUMENT_VERSION, defaultCity: data.defaultCity };
 }

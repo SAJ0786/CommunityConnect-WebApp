@@ -30,12 +30,12 @@ test('shared web palette retains native blue and maps legacy accents to blue', (
 });
 test('registration payload sends only contact and consent, never client authority', () => {
   const data = memberRegistrationPayload({ uid: 'test', phoneNumber: '+61400000000' }, {
-    fullName: ' Test   Member ', email: 'ADMIN@EXAMPLE.COM', privacyAccepted: true, termsAccepted: true,
+    fullName: ' Test   Member ', email: 'ADMIN@EXAMPLE.COM', privacyAccepted: true, termsAccepted: true, defaultCity: 'sydney',
     uid: 'another', role: 'superAdmin', phone: '+61499999999', registeredAt: 'injected', _linkedFrom: 'another-account',
   });
   assert.equal(data.email, 'admin@example.com');
   assert.equal(data.fullName, 'Test Member');
-  assert.deepEqual(Object.keys(data).sort(), ['email', 'fullName', 'legalVersion', 'privacyAccepted', 'termsAccepted']);
+  assert.deepEqual(Object.keys(data).sort(), ['defaultCity', 'email', 'fullName', 'legalVersion', 'privacyAccepted', 'termsAccepted']);
   assert.equal(data.legalVersion, '2026-09-08-community-connect');
 });
 

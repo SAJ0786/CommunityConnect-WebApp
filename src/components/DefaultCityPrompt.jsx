@@ -4,7 +4,7 @@ import CitySelector from './CitySelector';
 import { DEFAULT_CITY } from '../utils/cities';
 
 export default function DefaultCityPrompt({ onSave }) {
-  const [city, setCity] = useState(DEFAULT_CITY);
+  const [city, setCity] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const dialogRef = useRef(null);

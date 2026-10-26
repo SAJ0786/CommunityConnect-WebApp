@@ -9,6 +9,7 @@ const sources={
   'web-event-reminders.cjs':'functions/web-event-reminders.cjs',
   'web-event-reminder-schedule.cjs':'functions/web-event-reminder-schedule.cjs',
   'memberRegistration.cjs':'functions/member-registration.cjs',
+  'cityCatalogue.mjs':'src/utils/cities.js',
   'web-member-operation.cjs':'functions/web-member-operation.cjs',
 };
 await fs.mkdir(destination,{recursive:true});
@@ -36,7 +37,9 @@ exports.callWebMemberOperation=onCall({region:REGION,timeoutSeconds:60},webOpera
 }));
 const registration=require('./memberRegistration.cjs').createMemberRegistrationHandlers({
   db,auth:getAuth(),serverTimestamp:()=>FieldValue.serverTimestamp(),HttpsError,
+  validateCity:async value=>{const model=await import('./cityCatalogue.mjs');const snapshot=await db.collection('settings').doc('cityCatalogue').get();return typeof value==='string' && value.length>0 && model.createCityResolver(snapshot.exists?snapshot.data():model.BUNDLED_CITY_CATALOGUE).enabled(value);},
 });
+exports.completeMemberCity=onCall({region:REGION},registration.chooseCity);
 exports.completeMemberRegistration=onCall({region:REGION},registration.complete);
 exports.recordMemberRegistrationDate=onDocumentCreated({region:REGION,document:'users/{uid}',retry:true},registration.recordCreated);
 Object.assign(exports,require('./web-event-reminder-schedule.cjs').register({
@@ -54,7 +57,7 @@ await fs.writeFile(path.join(root,'.qa-web-release/firebase.backend.json'),JSON.
 await fs.writeFile(path.join(root,'.qa-web-release/backend-manifest.json'),JSON.stringify({
   preparedAt:new Date().toISOString(),project:'community-event-8b639',codebase:'community-connect-web',
   deployed:false,functions:['listDirectoryOperations','decideDirectoryReport','submitDirectoryConversationReport',
-    'completeMemberRegistration','recordMemberRegistrationDate','getEventReminder','setEventReminder','removeEventReminder','deliverWebEventReminders','callWebMemberOperation'],
+    'completeMemberCity','completeMemberRegistration','recordMemberRegistrationDate','getEventReminder','setEventReminder','removeEventReminder','deliverWebEventReminders','callWebMemberOperation'],
   files:[...files,{name:'index.cjs',sha256:createHash('sha256').update(index).digest('hex')}],
 },null,2)+'\n');
 console.log('Prepared 10 new functions in an isolated release package. Nothing deployed.');

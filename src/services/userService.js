@@ -17,9 +17,9 @@ export async function ensureUserProfile(user) {
 
 export async function completeMemberProfile(user, details) {
   if (auth.currentUser?.uid !== user.uid) throw new Error('Your sign-in changed. Please try again.');
-  const payload = memberRegistrationPayload(user, details);
+  const payload = details.cityOnly ? { defaultCity: details.defaultCity } : memberRegistrationPayload(user, details);
   try {
-    await httpsCallable(getFunctions(getApp(), 'australia-southeast1'), 'completeMemberRegistration')(payload);
+    await httpsCallable(getFunctions(getApp(), 'australia-southeast1'), details.cityOnly ? 'completeMemberCity' : 'completeMemberRegistration')(payload);
   } catch (error) {
     if (['functions/not-found', 'functions/unavailable'].includes(error.code)) {
       throw new Error('Profile completion is currently unavailable. Please try again later or contact support.');

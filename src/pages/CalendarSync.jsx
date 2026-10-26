@@ -1,15 +1,18 @@
-import React, { useState } from 'react';
-import { buildFeedUrl, icsInstructions } from '../services/calendarService';
+import React, { useEffect, useState } from 'react';
+import { getCalendarFeed, icsInstructions } from '../services/calendarService';
 
 // Feed URL: communityevents.siza.info/cal?t=uid
 
 export default function CalendarSync({ user }) {
   const [copied, setCopied] = useState(false);
   const [tab, setTab]       = useState('iphone');
-  const feedUrl = buildFeedUrl(null, null, user?.uid);
+  const [feedUrl,setFeedUrl] = useState('');
+  const [feedError,setFeedError] = useState('');
+  useEffect(() => { let active=true;getCalendarFeed(user?.uid).then(url=>{if(active)setFeedUrl(url);}).catch(error=>{if(active)setFeedError(error.message);});return()=>{active=false;};},[user?.uid]);
   const inst    = icsInstructions();
 
   const copy = () => {
+    if (!feedUrl) return;
     navigator.clipboard.writeText(feedUrl).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
@@ -36,6 +39,8 @@ export default function CalendarSync({ user }) {
   return (
     <div style={{ margin: '0 16px 16px' }}>
 
+      {feedError && <p role="alert">{feedError}</p>}
+      {!feedUrl && !feedError && <p role="status">Creating your secure calendar link…</p>}
       {/* Hero */}
       <div className="card" style={{
         background: 'linear-gradient(135deg,var(--teal),var(--teal-dark))',
@@ -56,7 +61,7 @@ export default function CalendarSync({ user }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           {/* iPhone / Apple Calendar */}
           <a
-            href={iosCalendarUrl}
+            href={feedUrl ? iosCalendarUrl : undefined} aria-disabled={!feedUrl}
             target="_blank"
             rel="noopener noreferrer"
             style={{
@@ -82,7 +87,7 @@ export default function CalendarSync({ user }) {
           {/* Android / Google Calendar */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <a
-              href={googleCalendarUrl}
+              href={feedUrl ? googleCalendarUrl : undefined} aria-disabled={!feedUrl}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -105,7 +110,7 @@ export default function CalendarSync({ user }) {
               </div>
             </a>
             <a
-              href={googleCalendarUrlRaw}
+              href={feedUrl ? googleCalendarUrlRaw : undefined} aria-disabled={!feedUrl}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -125,7 +130,7 @@ export default function CalendarSync({ user }) {
           <p className="small" style={{ margin: 0 }}>
             <strong>iPhone:</strong> Tapping opens Apple Calendar and asks you to subscribe.<br />
             <strong>Android:</strong> Opens Google Calendar on browser — click "Add calendar".<br />
-            Calendar updates automatically within ~1 hour when events change.
+            Your calendar follows your saved default city. Changes appear on your calendar provider's next refresh; timing varies.
           </p>
         </div>
       </div>
@@ -187,7 +192,7 @@ export default function CalendarSync({ user }) {
         </ol>
 
         <div className="notice" style={{ marginTop: 14 }}>
-          Calendar entries include host name, event type, date & time, address and audience type.
+          Your calendar follows your saved default city and updates on your calendar provider's next refresh. Entries show title, date, time and suburb. Keep your personal feed link private.
         </div>
       </div>
     </div>

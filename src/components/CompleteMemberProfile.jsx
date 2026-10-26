@@ -1,16 +1,21 @@
+import CitySelector from './CitySelector';
+import { CITY_OPTIONS } from '../utils/cities';
 import React, { useRef, useState } from 'react';
 import { LEGAL_URLS } from '../config/legal.mjs';
 import { validMemberName, validMemberEmail } from '../utils/memberProfile.mjs';
 
 // No Firebase dependency: both authenticated modules pass through this gate.
 export default function CompleteMemberProfile({ user, profile, state, onComplete, onRetry, onSignOut }) {
+  const [city, setCity] = useState('');
+  const cityOnly = state === 'choose-city';
   const [name, setName] = useState(profile?.fullName || '');
   const [email, setEmail] = useState(profile?.email || '');
   const [accepted, setAccepted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const pending = useRef(false);
-  const valid = validMemberName(name) && validMemberEmail(email) && accepted;
+  const validCity = CITY_OPTIONS.some(option => option.value === city);
+  const valid = validCity && (cityOnly || (validMemberName(name) && validMemberEmail(email) && accepted));
   const act = async action => {
     if (pending.current) return;
     pending.current = true;
@@ -21,16 +26,19 @@ export default function CompleteMemberProfile({ user, profile, state, onComplete
   };
   return <main className="auth-page auth-theme">
     <section className="auth-card" aria-labelledby="member-profile-title">
-      <h1 id="member-profile-title">{state === 'complete-profile' ? 'Complete your profile' : 'Check your account'}</h1>
+      <h1 id="member-profile-title">{cityOnly ? 'Choose your default city' : state === 'complete-profile' ? 'Complete your profile' : 'Check your account'}</h1>
       {state === 'loading' && <p role="status">Checking your member profile…</p>}
       {state === 'retry' && <><p>We couldn’t verify your profile. Please reconnect and try again.</p><button disabled={busy} onClick={() => act(onRetry)}>Try again</button></>}
       {state === 'blocked' && <p role="alert">This account is inactive. Please contact support.</p>}
       {state === 'verify-phone' && <p>Sign out and sign in with your Australian mobile number to verify it.</p>}
-      {state === 'complete-profile' && <form onSubmit={event => {
+      {(state === 'complete-profile' || cityOnly) && <form onSubmit={event => {
         event.preventDefault();
-        if (valid) act(() => onComplete({ fullName: name, email, privacyAccepted: accepted, termsAccepted: accepted }));
+        if (valid) act(() => onComplete(cityOnly ? { defaultCity: city, cityOnly: true } : { fullName: name, email, privacyAccepted: accepted, termsAccepted: accepted, defaultCity: city }));
       }}>
-        <p>Your mobile is verified. Name and email are required for both Events and Business Directory.</p>
+        <p>{cityOnly ? 'Choose and save your city before continuing. Your calendar subscription follows this city. You can change it later in Profile.' : 'Name, email and city are required for both Events and Business Directory.'}</p>
+        <label>Default city</label><CitySelector value={city} onChange={value => { if (!busy) setCity(value); }} label="Default city" />
+        {!city && <p>Please select a city. No city is selected automatically.</p>}
+        {!cityOnly && <>
         <label htmlFor="member-phone">Verified mobile</label>
         <input id="member-phone" value={user.phoneNumber || ''} readOnly type="tel" />
         <label htmlFor="member-name">Full name</label>
@@ -41,6 +49,7 @@ export default function CompleteMemberProfile({ user, profile, state, onComplete
         <label className="auth-consent"><input type="checkbox" checked={accepted} disabled={busy} onChange={event => setAccepted(event.target.checked)} />
           <span>I agree to the <a href={LEGAL_URLS.privacy} target="_blank" rel="noreferrer">Privacy Policy</a> and <a href={LEGAL_URLS.terms} target="_blank" rel="noreferrer">Terms of Use</a>.</span>
         </label>
+        </>}
         <button className="auth-primary" type="submit" disabled={busy || !valid}>{busy ? 'Saving…' : 'Save and continue'}</button>
       </form>}
       {error && <p role="alert" className="error">{error}</p>}

@@ -5,12 +5,13 @@ import * as web from '../src/utils/memberProfile.mjs';
 const nativeSource = fs.readFileSync('../sdk51-package-backup/src/utils/memberProfile.js', 'utf8');
 const native = await import(`data:text/javascript;base64,${Buffer.from(nativeSource).toString('base64')}`);
 const member = { uid: 'test-member', phoneNumber: '+61400000000' };
-const complete = { fullName: 'Test Member', email: 'test@example.com' };
+const complete = { fullName: 'Test Member', email: 'test@example.com', defaultCity: 'sydney' };
 
 test('web/native profile gates agree for guests, refresh, incomplete and inactive accounts', () => {
   const cases = [
     [null, null, false, 'guest'], [{ isAnonymous: true }, null, false, 'guest'],
     [member, complete, true, 'loading'], [member, null, false, 'retry'],
+    [member, {...complete, defaultCity:''}, false, 'choose-city'], [member, {...complete, defaultCity:undefined}, false, 'choose-city'],
     [member, {}, false, 'complete-profile'], [member, { fullName: 'Test Member' }, false, 'complete-profile'],
     [member, { ...complete, email: 'invalid' }, false, 'complete-profile'],
     [member, { ...complete, isActive: false }, false, 'blocked'],

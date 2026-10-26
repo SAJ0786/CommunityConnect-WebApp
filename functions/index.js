@@ -770,105 +770,10 @@ function escICS(s = "") {
 }
 
 // â”€â”€â”€ LIVE CALENDAR FEED â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-exports.calendarFeed = onRequest(
-  { region: REGION, cors: true },
-  async (req, res) => {
-    const uid = req.query.t || req.query.token;  // short: ?t=  legacy: ?token=
-    if (!uid) { res.status(400).send("Missing token"); return; }
-    try { await admin.auth().getUser(uid); }
-    catch { res.status(401).send("Invalid token"); return; }
+const calendarHandlers = require('./calendar-subscriptions.cjs').createCalendarHandlers({ db, auth: admin.auth(), HttpsError, serverTimestamp: () => admin.firestore.FieldValue.serverTimestamp() });
+exports.calendarFeed = onRequest({ region: REGION, cors: true }, calendarHandlers.feed);
+exports.createCalendarSubscription = onCall({ region: REGION }, calendarHandlers.create);
 
-    // Track in calendarSubscriptions collection
-    await db.collection("calendarSubscriptions").doc(uid)
-      .set({ uid, lastPolled: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
-
-    // Also update the user's own doc so Admin Dashboard can show sync status
-    await db.collection("users").doc(uid).update({
-      calendarSynced:     true,
-      calendarLastPolled: admin.firestore.FieldValue.serverTimestamp(),
-    }).catch(() => {}); // silently ignore if user doc doesn't exist
-
-    const snap = await db.collection("events")
-      .where("status", "==", "active")
-      .orderBy("eventDate", "asc")
-      .get();
-
-    const lines = [
-      "BEGIN:VCALENDAR", "VERSION:2.0",
-      "PRODID:-//Community Events//EN", "CALSCALE:GREGORIAN",
-      "METHOD:PUBLISH", "X-WR-CALNAME:Community Connect Australia",
-      "X-WR-TIMEZONE:Australia/Sydney",
-      "REFRESH-INTERVAL;VALUE=DURATION:PT1H", "X-PUBLISHED-TTL:PT1H",
-      // VTIMEZONE block for Australia/Sydney (AEDT/AEST)
-      "BEGIN:VTIMEZONE",
-      "TZID:Australia/Sydney",
-      "BEGIN:STANDARD",
-      "TZOFFSETFROM:+1100", "TZOFFSETTO:+1000",
-      "TZNAME:AEST",
-      "DTSTART:19700405T030000",
-      "RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=4",
-      "END:STANDARD",
-      "BEGIN:DAYLIGHT",
-      "TZOFFSETFROM:+1000", "TZOFFSETTO:+1100",
-      "TZNAME:AEDT",
-      "DTSTART:19701004T020000",
-      "RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=10",
-      "END:DAYLIGHT",
-      "END:VTIMEZONE"
-    ];
-
-    [...snap.docs]
-      .sort((a, b) => compareEventsByDateTimeData(a.data(), b.data()))
-      .forEach(doc => {
-      const e    = doc.data();
-      if (!isISODateString(e.eventDate)) {
-        console.warn("Skipping event with invalid calendar date", { eventId: doc.id, eventDate: e.eventDate });
-        return;
-      }
-      const dtStart = toICSDate(e.eventDate, e.startTime || "00:00");
-      const dtEnd   = toICSDate(e.eventDate, e.endTime || e.startTime || "23:59");
-      if (!dtStart || !dtEnd) {
-        console.warn("Skipping event with invalid calendar time", {
-          eventId: doc.id,
-          eventDate: e.eventDate,
-          startTime: e.startTime,
-          endTime: e.endTime,
-        });
-        return;
-      }
-      const addr    = e.address?.fullAddress || "";
-      lines.push(
-        "BEGIN:VEVENT"
-      );
-      pushICS(lines, `UID:${doc.id}@community-events`);
-      pushICS(lines, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g,"").split(".")[0]}Z`);
-      pushICS(lines, `DTSTART;TZID=Australia/Sydney:${dtStart}`);
-      pushICS(lines, `DTEND;TZID=Australia/Sydney:${dtEnd}`);
-      pushICS(lines, `SUMMARY:${escICS(`${e.eventType || "Event"} - ${e.hostName || "Community Events"}`)}`);
-      if (addr) pushICS(lines, `LOCATION:${escICS(addr)}`);
-      pushICS(lines, `DESCRIPTION:${escICS(`Community Connect - Events\nAudience: ${e.audienceType || "All audiences"}`)}`);
-      lines.push("END:VEVENT");
-    });
-    // A UID feed token is not registration authorisation: export public fields only.
-    const registrations = await db.collection("registrationEvents").where("status", "==", "approved").get();
-    const { registrationCalendarLines } = require("./registration-calendar.cjs");
-    for (const document of registrations.docs) {
-      try {
-        for (const line of registrationCalendarLines(document.id, document.data(), {
-          escape: escICS, stamp: new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z",
-        })) pushICS(lines, line);
-      } catch (error) {
-        console.warn("Skipping invalid registration calendar event", { eventId: document.id, reason: error.message });
-      }
-    }
-    lines.push("END:VCALENDAR");
-    res.set("Content-Type", "text/calendar; charset=utf-8");
-    res.set("Cache-Control", "no-cache, no-store");
-    res.send(lines.join("\r\n"));
-  }
-);
-
-// â”€â”€â”€ Calendar subscriber count â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 exports.getCalendarStats = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new Error("Unauthenticated");
   const userDoc = await db.collection("users").doc(request.auth.uid).get();
