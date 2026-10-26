@@ -586,6 +586,24 @@ export default function App() {
     window.showToast?.(message, 'success');
   };
 
+  useEffect(() => {
+    if (!user?.uid || user.isAnonymous) return undefined;
+    const uid = user.uid;
+    let cancelled = false;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      const request = profileRequestRef.current;
+      ensureUserProfile(user).then(saved => {
+        if (!cancelled && auth.currentUser?.uid === uid && profileRequestRef.current === request) {
+          setProfile(saved);
+          setProfileVerified(true);
+        }
+      }).catch(() => { /* Retain the last confirmed profile during an offline resume. */ });
+    };
+    document.addEventListener('visibilitychange', refresh);
+    return () => { cancelled = true; document.removeEventListener('visibilitychange', refresh); };
+  }, [user?.uid, user?.isAnonymous]);
+
   const saveDefaultCity = async city => {
     const defaultCity = normalizeCity(city);
     await updateProfile(user.uid, { defaultCity });
