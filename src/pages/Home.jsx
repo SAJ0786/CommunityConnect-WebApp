@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useState, useEffect, useRef } from 'react';
+import { startHomeRefresh } from '../utils/homeRefresh.mjs';
 import EventQuickAccess from '../components/EventQuickAccess';
 import EventCard from '../components/EventCard';
 import EventFilters from '../components/EventFilters';
@@ -13,14 +14,16 @@ const DesktopHome = lazy(() => import('../components/DesktopHome'));
 const EventMapView = lazy(() => import('../components/EventMapView'));
 
 export default function Home({ events, user, profile, setPage, setEditingEvent,
-  handleDelete, handleCopy, isGuest = false, loadEvents,
+  handleDelete, handleCopy, isGuest = false, loadEvents, refreshHomeEvents,
   savedIds = [], onSaveToggle, onStreamStart, focusEventId, setFocusEventId,
   eventsLoading = false, offlineMode = false, selectedCity: selectedCityProp,
   setSelectedCity: setSelectedCityProp }) {
 
+  useEffect(() => startHomeRefresh(refreshHomeEvents || (() => loadEvents?.(isGuest, { silent: true }))), [refreshHomeEvents, loadEvents, isGuest]);
   const today    = todayLocal();
   const yesterday = localDateStr(-1);
   const [filtered,   setFiltered]   = useState(null);
+  const advancedFilter = useRef(null);
   const [expandedId, setExpandedId] = useState(null);
   const [visibleCount, setVisibleCount] = useState(12);
   const [query,      setQuery]      = useState('');
@@ -59,7 +62,8 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
     }, { timeout: 10000, maximumAge: 300000 });
   };
   const chooseCategory = value => { setBrowseCategory(value); resetAdvanced(); };
-  const applyAdvanced = rows => {
+  const applyAdvanced = (rows, select) => {
+    advancedFilter.current = select || null;
     locationRequest.current += 1;
     setFiltered(rows); setBrowsePeriod(''); setBrowseCategory(''); setLocationNote('');
   };
@@ -118,7 +122,7 @@ export default function Home({ events, user, profile, setPage, setEditingEvent,
     setVisibleCount(12);
   }, [query, filtered, browsePeriod, browseCategory, registrationOnly]);
 
-  let displayed = (filtered ?? upcoming).filter(event =>
+  let displayed = (filtered === null ? upcoming : advancedFilter.current?.(filterableEvents) ?? filtered).filter(event =>
     (!registrationOnly || event.registrationOnly) &&
     (browsePeriod === 'nearby' || matchesEventPeriod(event, browsePeriod))
     && (!browseCategory || eventBrowseType(event) === browseCategory));

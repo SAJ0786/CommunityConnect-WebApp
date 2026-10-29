@@ -1,5 +1,5 @@
 import EventPosterPicker from './EventPosterPicker';
-import React, { useEffect, useId, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import ReciterFields from './ReciterFields';
 import HijriDatePicker from './HijriDatePicker';
 import AddressAutocomplete from './AddressAutocomplete';
@@ -22,10 +22,12 @@ const EMPTY_EVENTS = [];
 export default function EventForm({
   initialEvent, onSubmit, submitLabel = null,
   user, profile, existingEvents = EMPTY_EVENTS,
-  seriesMode = false, saving = false, onCancel = null, initialDate = '',
+  seriesMode = false, saving = false, submitDisabled = false, onCancel = null, initialDate = '',
   registrationMode = false, posterControls = null, registrationSections = {}, notesMaxLength = 500
 }) {
   const id = useId();
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
   const userName  = profile?.fullName  || user?.displayName || user?.email?.split('@')[0] || '';
   const userPhone = profile?.phone     || '';
 
@@ -272,6 +274,7 @@ export default function EventForm({
 
   const submit = async e => {
     e.preventDefault();
+    if (saving || submitDisabled || submittingRef.current) return;
     const addressText = typeof form.address === 'string'
       ? form.address.trim()
       : String(form.address?.fullAddress || '').trim();
@@ -293,39 +296,43 @@ export default function EventForm({
       }, 0);
       return;
     }
-    setValidationErrors({});
-    // Resolve the display event type
-    const resolvedType = isCustom && form.customEventType.trim()
-      ? form.customEventType.trim()
-      : form.eventType;
+    submittingRef.current = true;
+    setSubmitting(true);
+    try {
+      setValidationErrors({});
+      // Resolve the display event type
+      const resolvedType = isCustom && form.customEventType.trim()
+        ? form.customEventType.trim()
+        : form.eventType;
 
-    // Upload the photo first if a new one was picked
-    let imageUrl = form.imageUrl || '';
-    let imagePath = form.imagePath || '';
-    if (pendingFile && !registrationMode) {
-      setUploadingImg(true);
-      try {
-        const eventId = initialEvent?.id || `${user?.uid || 'anon'}_${Date.now()}`;
-        const res = await uploadEventImage(pendingFile, eventId, user?.uid);
-        imageUrl = res.url;
-        imagePath = res.path;
-      } catch (err) {
-        console.error('Image upload failed:', err);
-        // Continue without image — fallback logo will be used
+      // Upload the photo first if a new one was picked
+      let imageUrl = form.imageUrl || '';
+      let imagePath = form.imagePath || '';
+      if (pendingFile && !registrationMode) {
+        setUploadingImg(true);
+        try {
+          const eventId = initialEvent?.id || `${user?.uid || 'anon'}_${Date.now()}`;
+          const res = await uploadEventImage(pendingFile, eventId, user?.uid);
+          imageUrl = res.url;
+          imagePath = res.path;
+        } catch (err) {
+          console.error('Image upload failed:', err);
+          // Continue without image — fallback logo will be used
+        }
+        setUploadingImg(false);
       }
-      setUploadingImg(false);
-    }
 
-    onSubmit({
-      ...form,
-      hostName: getCentreName(form.organiserType) || form.hostName,
-      organiserName: getCentreName(form.organiserType) || form.organiserName || '',
-      imageUrl,
-      imagePath,
-      eventTypeDisplay: resolvedType,    // human-readable label (e.g. "Aqeeqa")
-      speakerName: showReligious || registrationMode ? form.speakerName : '',
-      reciters:    showReligious || registrationMode ? (form.reciters || []).filter(r => r.name?.trim()) : [],
-    });
+      await onSubmit({
+        ...form,
+        hostName: getCentreName(form.organiserType) || form.hostName,
+        organiserName: getCentreName(form.organiserType) || form.organiserName || '',
+        imageUrl,
+        imagePath,
+        eventTypeDisplay: resolvedType,    // human-readable label (e.g. "Aqeeqa")
+        speakerName: showReligious || registrationMode ? form.speakerName : '',
+        reciters:    showReligious || registrationMode ? (form.reciters || []).filter(r => r.name?.trim()) : [],
+      });
+    } finally { submittingRef.current = false; setSubmitting(false); }
   };
 
   const venueControls = <><label>{registrationMode ? 'Private venue address *' : 'Address *'}</label>
@@ -353,7 +360,7 @@ export default function EventForm({
       )}
 
       {/* ── Event Poster ── */}
-      {registrationMode ? posterControls : <EventPosterPicker uri={imagePreview} onChange={handlePhotoPick} onRemove={removePhoto} disabled={saving || uploadingImg} />}
+      {registrationMode ? posterControls : <EventPosterPicker uri={imagePreview} onChange={handlePhotoPick} onRemove={removePhoto} disabled={saving || submitting || uploadingImg} />}
 
       {/* On behalf of */}
       <label className="checkbox" style={{ marginBottom: 10 }}>
@@ -670,12 +677,12 @@ export default function EventForm({
 
       {registrationMode && registrationSections.settings}
       {onCancel && (
-        <button type="button" className="btn-muted" onClick={onCancel} style={{ marginRight: 8 }}>
+        <button type="button" className="btn-muted" disabled={saving || submitting} onClick={onCancel} style={{ marginRight: 8 }}>
           Cancel
         </button>
       )}
-      <button type="submit" disabled={saving || uploadingImg}>
-        {uploadingImg ? 'Uploading photo…' : saving ? 'Saving…' : submitLabel || (initialEvent?.id ? 'Update Event' : 'Add Event')}
+      <button type="submit" disabled={submitDisabled || saving || submitting || uploadingImg}>
+        {uploadingImg ? 'Uploading photo…' : saving || submitting ? 'Saving…' : submitLabel || (initialEvent?.id ? 'Update Event' : 'Add Event')}
       </button>
     </form>
   );

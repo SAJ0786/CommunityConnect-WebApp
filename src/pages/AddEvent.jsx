@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import EventForm from '../components/EventForm';
 import AddRecurringEvent from './AddRecurringEvent';
 import { createEvent } from '../services/eventService';
@@ -9,6 +9,8 @@ import '../styles/add-event.css';
 export default function AddEvent({ user, profile, onSaved, setPage, events = [], initialEvent = null }) {
   const [mode, setMode] = useState(initialEvent ? 'single' : '');
   const [saving, setSaving] = useState(false);
+  const pending = useRef(false), committed = useRef(false);
+  const [saved, setSaved] = useState(false);
   const canCreateRecurring = isAdminRole(profile?.role);
 
   useEffect(() => {
@@ -25,16 +27,20 @@ export default function AddEvent({ user, profile, onSaved, setPage, events = [],
   }, [initialEvent, mode]);
 
   const submit = async event => {
-    if (saving) return;
-    setSaving(true);
+    if (pending.current || committed.current) return;
+    pending.current = true; setSaving(true);
     try {
       await createEvent(event, user, profile);
-      await onSaved('Event added successfully.');
+      committed.current = true; setSaved(true);
     } catch (e) {
       alert('Error saving event: ' + e.message);
-      setSaving(false);
+    } finally { pending.current = false; setSaving(false); }
+    if (committed.current) {
+      try { await onSaved?.('Event added successfully.'); }
+      catch (error) { console.error('Event saved; could not return to Home:', error); }
     }
   };
+  if (saved) return <div className="card" role="status"><h2>Event added successfully</h2><p>Your event has been saved. You do not need to submit it again.</p><button onClick={() => setPage('home')}>Back to Home</button></div>;
 
   if (!mode) {
     return (

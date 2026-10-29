@@ -20,11 +20,6 @@ export default function EventFilters({ events, onChange, upcomingOnlyOnEmpty = f
   const hostNames = useMemo(() => [...new Set(events.map(e => e.hostName).filter(Boolean))].sort(), [events]);
   const eventTypes = useMemo(() => availableEventTypes(events).sort((a, b) => a.localeCompare(b)), [events]);
 
-  const today    = localDateStr();
-  const yesterday = localDateStr(-1);
-  const weekEnd  = localDateStr(7);
-  const monthEnd = localDateStr(30);
-
   // Count live events for badge
   const liveCount = useMemo(() => events.filter(e => e.isLive).length, [events]);
 
@@ -38,42 +33,46 @@ export default function EventFilters({ events, onChange, upcomingOnlyOnEmpty = f
     const lo = overrides.liveOnly     ?? liveOnly;
     const sb = overrides.sortBy       ?? sortBy;
 
-    let filtered = [...events];
+    const select = source => {
+      const today = localDateStr(), yesterday = localDateStr(-1), weekEnd = localDateStr(7), monthEnd = localDateStr(30);
+      let filtered = [...source];
 
-    if (lo)  filtered = filtered.filter(e => e.isLive);
-    if (o)   filtered = filtered.filter(e => e.organiserType === o);
-    if (s)   filtered = filtered.filter(e => e.address?.suburb === s);
-    if (h)   filtered = filtered.filter(e => e.hostName === h);
-    if (et)  filtered = filtered.filter(e => eventBrowseType(e) === et);
-    if (at)  filtered = filtered.filter(e => {
-      const stored = e.audienceType || '';
-      // "Family Event" and legacy "Mixed Audience" are the same — match both
-      if (at === 'Family Event') return stored === 'Family Event' || stored === 'Mixed Audience';
-      if (at === 'Mixed Audience') return stored === 'Family Event' || stored === 'Mixed Audience';
-      return stored === at;
-    });
-    // Never strand a host when a live stream crosses midnight. Active streams
-    // remain visible until they are explicitly ended.
-    if (!p && upcomingOnlyOnEmpty) filtered = filtered.filter(e => e.isLive || e.eventDate >= today);
-    if (p === 'yesterday') filtered = filtered.filter(e => e.eventDate === yesterday);
-    if (p === 'today')  filtered = filtered.filter(e => e.isLive || e.eventDate === today);
-    if (p === 'week')   filtered = filtered.filter(e => e.isLive || (e.eventDate >= today && e.eventDate <= weekEnd));
-    if (p === 'month')  filtered = filtered.filter(e => e.isLive || (e.eventDate >= today && e.eventDate <= monthEnd));
+      if (lo)  filtered = filtered.filter(e => e.isLive);
+      if (o)   filtered = filtered.filter(e => e.organiserType === o);
+      if (s)   filtered = filtered.filter(e => e.address?.suburb === s);
+      if (h)   filtered = filtered.filter(e => e.hostName === h);
+      if (et)  filtered = filtered.filter(e => eventBrowseType(e) === et);
+      if (at)  filtered = filtered.filter(e => {
+        const stored = e.audienceType || '';
+        // "Family Event" and legacy "Mixed Audience" are the same — match both
+        if (at === 'Family Event') return stored === 'Family Event' || stored === 'Mixed Audience';
+        if (at === 'Mixed Audience') return stored === 'Family Event' || stored === 'Mixed Audience';
+        return stored === at;
+      });
+      // Never strand a host when a live stream crosses midnight. Active streams
+      // remain visible until they are explicitly ended.
+      if (!p && upcomingOnlyOnEmpty) filtered = filtered.filter(e => e.isLive || e.eventDate >= today);
+      if (p === 'yesterday') filtered = filtered.filter(e => e.eventDate === yesterday);
+      if (p === 'today')  filtered = filtered.filter(e => e.isLive || e.eventDate === today);
+      if (p === 'week')   filtered = filtered.filter(e => e.isLive || (e.eventDate >= today && e.eventDate <= weekEnd));
+      if (p === 'month')  filtered = filtered.filter(e => e.isLive || (e.eventDate >= today && e.eventDate <= monthEnd));
 
-    filtered.sort((a, b) => {
-      // Live events always first regardless of sort
-      if (a.isLive && !b.isLive) return -1;
-      if (!a.isLive && b.isLive) return 1;
-      if (sb === 'added') {
-        const ta = a.createdAt?.toDate?.()?.getTime() || 0;
-        const tb = b.createdAt?.toDate?.()?.getTime() || 0;
-        return tb - ta;
-      }
-      if (sb === 'live') return 0; // already sorted above
-      return compareEventsByDateTime(a, b);
-    });
+      filtered.sort((a, b) => {
+        // Live events always first regardless of sort
+        if (a.isLive && !b.isLive) return -1;
+        if (!a.isLive && b.isLive) return 1;
+        if (sb === 'added') {
+          const ta = a.createdAt?.toDate?.()?.getTime() || 0;
+          const tb = b.createdAt?.toDate?.()?.getTime() || 0;
+          return tb - ta;
+        }
+        if (sb === 'live') return 0; // already sorted above
+        return compareEventsByDateTime(a, b);
+      });
 
-    onChange(filtered);
+      return filtered;
+    };
+    onChange(select(events), select);
   };
 
   const set = (key, val, setter) => { setter(val); apply({ [key]: val }); };

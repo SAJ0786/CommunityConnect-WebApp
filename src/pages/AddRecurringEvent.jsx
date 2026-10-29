@@ -1,6 +1,6 @@
 import BackControl from '../components/BackControl';
-import React, { useEffect, useMemo, useState } from 'react';
-import { collection, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { collection, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import EventForm from '../components/EventForm';
 import { db } from '../firebase/firebase';
 import { getHijriParts, HIJRI_MONTHS } from '../services/hijriService';
@@ -86,6 +86,7 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [doneCount, setDoneCount] = useState(0);
   const [error, setError] = useState('');
+  const pending = useRef(false), completed = useRef(false), prepared = useRef(null);
 
   useEffect(() => {
     getHijriSettings()
@@ -143,56 +144,59 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
   const previewError = previewResult.error;
 
   const saveRecurringEvents = async eventDataFromForm => {
-    if (!occurrences.length) {
+    if (pending.current || completed.current) return;
+    if (!prepared.current && !occurrences.length) {
       setError(previewError || 'Please set a valid recurrence schedule.');
       return;
     }
     try {
-      validateRequiredEventFields({ ...eventDataFromForm, eventDate: occurrences[0].eventDate });
+      if (!prepared.current) validateRequiredEventFields({ ...eventDataFromForm, eventDate: occurrences[0].eventDate });
     } catch (validationError) {
       setError(validationError.message);
       return;
     }
 
+    pending.current = true;
     setSaving(true);
     setError('');
+    let saved = false;
     try {
-      const seriesId = typeof crypto !== 'undefined' && crypto.randomUUID
-        ? crypto.randomUUID()
-        : `recurring_${user.uid}_${Date.now()}`;
-      const start = occurrences[0].eventDate;
-      const end = occurrences[occurrences.length - 1].eventDate;
-      const sharedEventData = {
-        ...eventDataFromForm,
-        metroArea: classifyMetroArea(eventDataFromForm.address),
-        createdByUserId: user.uid,
-        createdByName: profile?.fullName || '',
-        createdByUserEmail: user?.email || profile?.email || '',
-        submittedByName: profile?.fullName || user?.displayName || user?.email || '',
-        submittedByRole: profile?.role || 'user',
-        status: 'active',
-        hidden: false,
-        isSeries: true,
-        isRecurring: true,
-        seriesId,
-        recurringSeriesId: seriesId,
-        seriesStartDate: start,
-        seriesEndDate: end,
-        recurrenceRuleSnapshot: {
-          calendarType,
-          frequency,
-          repeatEvery: Number(repeatEvery),
-          endMode,
-          endDate: endMode === 'date' ? (calendarType === 'hijri' ? null : endDate) : null,
-          endHijri: endMode === 'date' && calendarType === 'hijri' ? hijriEnd : null,
-          occurrenceCount: endMode === 'count' ? Number(occurrenceCount) : null,
-        },
-      };
+      if (!prepared.current) {
+        const seriesId = typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `recurring_${user.uid}_${Date.now()}`;
+        const start = occurrences[0].eventDate;
+        const end = occurrences[occurrences.length - 1].eventDate;
+        const sharedEventData = {
+          ...eventDataFromForm,
+          metroArea: classifyMetroArea(eventDataFromForm.address),
+          createdByUserId: user.uid,
+          createdByName: profile?.fullName || '',
+          createdByUserEmail: user?.email || profile?.email || '',
+          submittedByName: profile?.fullName || user?.displayName || user?.email || '',
+          submittedByRole: profile?.role || 'user',
+          status: 'active',
+          hidden: false,
+          isSeries: true,
+          isRecurring: true,
+          seriesId,
+          recurringSeriesId: seriesId,
+          seriesStartDate: start,
+          seriesEndDate: end,
+          recurrenceRuleSnapshot: {
+            calendarType,
+            frequency,
+            repeatEvery: Number(repeatEvery),
+            endMode,
+            endDate: endMode === 'date' ? (calendarType === 'hijri' ? null : endDate) : null,
+            endHijri: endMode === 'date' && calendarType === 'hijri' ? hijriEnd : null,
+            occurrenceCount: endMode === 'count' ? Number(occurrenceCount) : null,
+          },
+        };
 
-      for (let offset = 0; offset < occurrences.length; offset += 450) {
-        const batch = writeBatch(db);
-        occurrences.slice(offset, offset + 450).forEach((occurrence, indexInChunk) => {
-          const index = offset + indexInChunk;
+        // Recurrence is capped at 370 dates. One atomic batch prevents partial series.
+        if (occurrences.length > 450) throw new Error('Too many occurrences for one save.');
+        const entries = occurrences.map((occurrence, index) => {
           const prayerTimes = eventDataFromForm.timeMode === 'prayer'
             ? calculatePrayerTimes(occurrence.eventDate, eventDataFromForm.address)
             : null;
@@ -202,7 +206,7 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
             ? applyPrayerOffset(prayerTimes[prayerName], prayerOffsetMinutes)
             : eventDataFromForm.startTime;
           const eventRef = doc(collection(db, 'events'));
-          batch.set(eventRef, {
+          return { ref: eventRef, data: {
             ...sharedEventData,
             eventDate: occurrence.eventDate,
             startTime: occurrenceStartTime,
@@ -218,45 +222,37 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
             recurrenceTotal: occurrences.length,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
-          });
+          } };
         });
-        await batch.commit();
+        prepared.current = { entries, count: occurrences.length };
       }
-
-      await setDoc(doc(db, 'recurringEventSeries', seriesId), {
-        id: seriesId,
-        ownerUid: user.uid,
-        ownerName: profile?.fullName || '',
-        ownerEmail: user?.email || profile?.email || '',
-        title: `${eventDataFromForm.eventTypeDisplay || eventDataFromForm.eventType || 'Event'} - ${eventDataFromForm.hostName || ''}`.trim(),
-        status: 'active',
-        startDate: start,
-        endDate: end,
-        totalEvents: occurrences.length,
-        rule: sharedEventData.recurrenceRuleSnapshot,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      if (onSaved) {
-        await onSaved(`${occurrences.length} recurring event${occurrences.length === 1 ? '' : 's'} added successfully.`);
-      } else {
-        setDoneCount(occurrences.length);
-      }
+      const batch = writeBatch(db);
+      prepared.current.entries.forEach(({ref, data}) => batch.set(ref, data));
+      await batch.commit();
+      // Event documents contain the series identity/rule. Do not follow a successful
+      // save with a client write to the server-only recurringEventSeries collection.
+      completed.current = true;
+      setDoneCount(prepared.current.count);
+      saved = true;
     } catch (err) {
-      setError(`Error saving recurring events: ${err.message}`);
+      setError(`Save could not be confirmed: ${err.message}. Retry this save to use the same event references, or check My Events before starting again.`);
     } finally {
+      pending.current = false;
       setSaving(false);
+    }
+    if (saved) {
+      // A refresh/navigation failure must never turn committed events back into a form.
+      try { await onSaved?.(`${prepared.current.count} recurring event${prepared.current.count === 1 ? '' : 's'} added successfully.`); }
+      catch (err) { console.error('Events saved; could not return to Home:', err); }
     }
   };
 
   if (doneCount > 0) {
     return (
-      <div className="card center" style={{ marginTop: 32 }}>
+      <div className="card center" role="status" style={{ marginTop: 32 }}>
         <div style={{ fontSize: '3rem', marginBottom: 12 }}>✅</div>
         <BackControl onClick={() => {
-          if (onSaved) onSaved();
-          else setPage('home');
+          setPage('home');
         }} label="Back to Home"/><h3 style={{ margin: '0 0 8px' }}>Recurring Events Created</h3>
         <p className="small" style={{ color: 'var(--muted)', marginBottom: 16 }}>
           {doneCount} event{doneCount === 1 ? '' : 's'} added successfully.
@@ -268,7 +264,7 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
 
   return (
     <>
-      <div className="card">
+      <fieldset disabled={saving || !!prepared.current} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}><div className="card">
         <p className="small" style={{ margin: '0 0 16px', color: 'var(--muted)' }}>
           Create repeating events from one shared set of details. Dates are previewed before saving.
         </p>
@@ -364,7 +360,6 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
         </p>
 
         {previewError && <div className="error" style={{ marginTop: 12 }}>{previewError}</div>}
-        {error && <div className="error" style={{ marginTop: 12 }}>{error}</div>}
         <DatePreview occurrences={occurrences} calendarType={calendarType} />
       </div>
 
@@ -375,13 +370,15 @@ export default function AddRecurringEvent({ user, profile, setPage, onSaved }) {
           initialDate={occurrences[0].eventDate}
           seriesMode={true}
           saving={saving}
+          submitDisabled={!!prepared.current}
           onSubmit={saveRecurringEvents}
           onCancel={() => setPage('home')}
           submitLabel={saving
             ? `Creating ${occurrences.length} events...`
             : `Create ${occurrences.length} recurring event${occurrences.length === 1 ? '' : 's'}`}
         />
-      )}
+      )}</fieldset>
+      {error && <div className="card error" role="alert">{error}{prepared.current && <button disabled={saving} onClick={() => saveRecurringEvents({})}>{saving ? 'Saving…' : 'Retry same save'}</button>}</div>}
     </>
   );
 }

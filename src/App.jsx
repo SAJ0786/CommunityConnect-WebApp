@@ -165,6 +165,7 @@ export default function App() {
     if (target) { setRegistrationTarget(target); setRegistrationAction('card'); setPage('registration'); }
   }, [user?.uid, profileVerified]);
   const [events, setEvents]             = useState([]);
+  const [eventSaveNotice, setEventSaveNotice] = useState('');
   const [eventsLoading, setEventsLoading] = useState(true);
   const [offlineMode, setOfflineMode]   = useState(() => typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [editingEvent, setEditingEvent] = useState(null);
@@ -221,6 +222,7 @@ export default function App() {
 
   const processingUidRef       = useRef(null);
   const eventsRequestRef        = useRef(0);
+  const eventsInFlightRef = useRef(null);
   const authStateSettledRef     = useRef(false);
 
   useEffect(() => {
@@ -243,33 +245,46 @@ export default function App() {
     return () => window.removeEventListener('community-events-native-push-token', saveToken);
   }, [user?.uid, profileVerified, profile?.pushNotificationsEnabled, profile?.reminderEmailEnabled, profile]);
 
-  const loadEvents = useCallback(async (guestMode = authMode === 'guest') => {
-    const requestId = ++eventsRequestRef.current;
-    const uid = guestMode ? 'guest' : auth.currentUser?.uid;
-    const cached = readEventCache(guestMode, uid);
-    if (cached?.events?.length) {
-      setEvents(cached.events);
-      setOfflineMode(typeof navigator !== 'undefined' ? !navigator.onLine : false);
-    }
-    setEventsLoading(true);
-    try {
-      const latest = await getActiveEvents(guestMode);
-      if (requestId !== eventsRequestRef.current) return;
-      setEvents(latest);
-      writeEventCache(guestMode, uid, latest);
-      setOfflineMode(false);
-    } catch (e) {
-      if (requestId !== eventsRequestRef.current) return;
-      console.error('Failed to load events:', e);
-      setOfflineMode(true);
-      if (!cached?.events?.length) setEvents([]);
-    } finally {
-      if (requestId === eventsRequestRef.current) setEventsLoading(false);
-    }
+  const loadEvents = useCallback((guestMode = authMode === 'guest', { silent = false } = {}) => {
+    const key = guestMode ? 'guest' : auth.currentUser?.uid;
+    if (eventsInFlightRef.current?.key === key) return eventsInFlightRef.current.promise;
+    const promise = (async () => {
+      const requestId = ++eventsRequestRef.current;
+      const uid = guestMode ? 'guest' : auth.currentUser?.uid;
+      const cached = readEventCache(guestMode, uid);
+      if (!silent && cached?.events?.length) {
+        setEvents(cached.events);
+        setOfflineMode(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+      }
+      if (!silent) setEventsLoading(true);
+      try {
+        const latest = await getActiveEvents(guestMode);
+        if (requestId !== eventsRequestRef.current) return;
+        setEvents(latest);
+        writeEventCache(guestMode, uid, latest);
+        setOfflineMode(false);
+      } catch (e) {
+        if (requestId !== eventsRequestRef.current) return;
+        console.error('Failed to load events:', e);
+        setOfflineMode(true);
+        if (!silent && !cached?.events?.length) setEvents([]);
+      } finally {
+        if (requestId === eventsRequestRef.current) setEventsLoading(false);
+      }
+    })();
+    eventsInFlightRef.current = { key, promise };
+    void promise.finally(() => { if (eventsInFlightRef.current?.promise === promise) eventsInFlightRef.current = null; });
+    return promise;
   }, [authMode]);
+  const refreshHomeEvents = useCallback((reason) => {
+    if (reason === 'enter') setRegistrationRevision(value => value + 1);
+    return loadEvents(authMode === 'guest', { silent: true });
+  }, [loadEvents, authMode]);
 
   const resetAuthState = useCallback(() => {
     eventsRequestRef.current += 1;
+    eventsInFlightRef.current = null;
+    setEventSaveNotice('');
     profileRequestRef.current += 1;
     processingUidRef.current = null;
     setProfileLoading(false);
@@ -328,13 +343,6 @@ export default function App() {
     }
   }, [authMode, activeStream, events, eventsLoading, registrationApi, registrationFeed.events, registrationFeed.loading, registrationFeed.error]);
 
-  useEffect(() => {
-    if (authMode !== 'guest') return undefined;
-    const timer = window.setInterval(() => {
-      loadEvents(true);
-    }, 60000);
-    return () => window.clearInterval(timer);
-  }, [authMode, loadEvents]);
 
   useEffect(() => {
     const updateOnlineState = () => {
@@ -579,8 +587,11 @@ export default function App() {
     setPage('add');
   };
 
-  const afterSave = async (message = 'Event saved successfully.') => {
-    await loadEvents();
+  const afterSave = (message = 'Event saved successfully.') => {
+    // Confirm immediately; feed refresh must not hold the creation form open.
+    eventsRequestRef.current += 1;
+    eventsInFlightRef.current = null;
+    setEventSaveNotice(message);
     setEditingEvent(null);
     setPage('home');
     window.showToast?.(message, 'success');
@@ -679,7 +690,7 @@ export default function App() {
     setRegistrationTarget(event.id); setRegistrationAction(action); setPage('registration');
   };
   const unifiedEvents = mergePublicEvents(events, registrationFeed.events);
-  const shared     = { user, profile, events: unifiedEvents, eventsLoading: eventsLoading || registrationFeed.loading, offlineMode, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId, selectedCity, setSelectedCity };
+  const shared     = { user, profile, events: unifiedEvents, eventsLoading: eventsLoading || registrationFeed.loading, offlineMode, setPage, setEditingEvent, handleDelete, handleCopy, isGuest, loadEvents, refreshHomeEvents, savedIds, onSaveToggle: handleSaveToggle, onStreamStart, focusEventId, setFocusEventId, selectedCity, setSelectedCity };
   const guestPage  = ['home','businesses','search','calendar','hijri-calendar','streams', ...(REGISTRATION_ENABLED ? ['registration'] : [])].includes(page) ? page : 'home';
   const activePage = isGuest ? guestPage : (page === 'series' ? 'add' : page);
 
@@ -821,6 +832,7 @@ export default function App() {
           {activePage === 'businesses' && (!isGuest && import.meta.env.VITE_DIRECTORY_WORKSPACE_ENABLED === 'true' && import.meta.env.VITE_READ_ONLY_PREVIEW !== 'true'
             ? <MemberDirectory key={`${user.uid}:${directoryRevision}`} user={user} profile={profile} initialCity={selectedCity} onRegisterNavigation={registerDirectoryNavigation} onOpenNotification={openRegistrationUpdate} renderProfile={() => <Profile user={user} profile={profile} setProfile={setProfile}/>} onSignOut={logoutFromDirectory}/>
             : <BusinessDirectory key={directoryRevision} selectedCity={selectedCity} setSelectedCity={setSelectedCity} />)}
+          {activePage === 'home' && eventSaveNotice && <div className="card" role="status"><p>{eventSaveNotice}</p><button className="btn-light" onClick={() => setEventSaveNotice('')}>Dismiss</button></div>}
           {activePage === 'home'      && <Home      {...shared} />}
           {activePage === 'search'    && <AISearch   {...shared} />}
           {activePage === 'streams'   && <StreamedVideos isGuest={isGuest} />}
